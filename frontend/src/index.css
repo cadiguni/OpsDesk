@@ -42,6 +42,29 @@
   --sla-ok: oklch(0.66 0.14 155);
   --sla-due-soon: oklch(0.75 0.15 85);
   --sla-overdue: oklch(0.58 0.23 25);
+
+  /* ----- Gráficos -----
+   *
+   * Cada gráfico do dashboard mostra **uma** medida (contagem de chamados) ao longo de
+   * categorias, e o rótulo do eixo é que identifica cada barra. Por isso a série é de cor
+   * única: dar uma cor por categoria seria codificar identidade que o eixo já dá, e
+   * gastaria a paleta categórica sem informar nada.
+   *
+   * Prioridade é a exceção: é ordinal, então recebe uma rampa sequencial de um só matiz,
+   * clara para escura conforme a severidade. Rampa validada com o script da skill de
+   * dataviz nos dois modos — banda de luminosidade, passo mínimo entre degraus, matiz
+   * único e contraste contra a superfície.
+   */
+  --chart-series: #276ed2;
+
+  --chart-ordinal-1: #7faee9;
+  --chart-ordinal-2: #5294e6;
+  --chart-ordinal-3: #2673df;
+  --chart-ordinal-4: #154fc3;
+
+  /* Grade e eixos recessivos: a informação é a barra, não a régua. */
+  --chart-grid: oklch(0.92 0.004 286.32);
+  --chart-axis: oklch(0.552 0.016 285.938);
 }
 
 .dark {
@@ -73,6 +96,20 @@
   --sla-ok: oklch(0.74 0.13 155);
   --sla-due-soon: oklch(0.82 0.14 85);
   --sla-overdue: oklch(0.7 0.19 25);
+
+  /* A rampa do modo escuro é escolhida, não invertida automaticamente: contra fundo
+   * escuro, severidade maior é a mais clara — é a que salta. Os degraus foram
+   * re-validados contra a superfície escura, que tem banda de luminosidade mais estreita
+   * e portanto não aceita os mesmos valores do modo claro. */
+  --chart-series: #5294e6;
+
+  --chart-ordinal-1: #1853c6;
+  --chart-ordinal-2: #276ed2;
+  --chart-ordinal-3: #4684d5;
+  --chart-ordinal-4: #6598d8;
+
+  --chart-grid: oklch(1 0 0 / 12%);
+  --chart-axis: oklch(0.705 0.015 286.067);
 }
 
 @theme inline {
@@ -109,6 +146,10 @@
   --color-sla-ok: var(--sla-ok);
   --color-sla-due-soon: var(--sla-due-soon);
   --color-sla-overdue: var(--sla-overdue);
+
+  --color-chart-series: var(--chart-series);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
 }
 
 @layer base {

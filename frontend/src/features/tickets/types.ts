@@ -1,4 +1,4 @@
-import type { TicketPriority, TicketSource, TicketStatus } from '@/domain/enums'
+import type { TicketPriority, TicketSource, TicketStatus, UserRole } from '@/domain/enums'
 
 export type TicketListItem = {
   id: string
@@ -73,4 +73,62 @@ export type TicketQuery = {
   sort?: TicketSort
   page?: number
   pageSize?: number
+}
+
+export type TicketComment = {
+  id: string
+  authorId: string
+  authorName: string
+  authorRole: UserRole
+  content: string
+  isInternal: boolean
+  createdAt: string
+}
+
+export type TicketHistoryAction =
+  | 'Created'
+  | 'StatusChanged'
+  | 'PriorityChanged'
+  | 'CategoryChanged'
+  | 'TechnicianAssigned'
+  | 'TechnicianUnassigned'
+  | 'CommentAdded'
+  | 'InternalCommentAdded'
+  | 'Resolved'
+  | 'Closed'
+  | 'Cancelled'
+
+export type TicketHistoryEntry = {
+  id: string
+  action: TicketHistoryAction
+  previousValue: string | null
+  newValue: string | null
+  changedById: string | null
+  changedByName: string | null
+  createdAt: string
+}
+
+export type StaffOption = {
+  id: string
+  name: string
+  role: UserRole
+}
+
+export type CountByLabel = {
+  label: string
+  count: number
+}
+
+export type DashboardSummary = {
+  total: number
+  open: number
+  inProgress: number
+  waitingOnRequester: number
+  resolved: number
+  overdueResponse: number
+  overdueResolution: number
+  byStatus: CountByLabel[]
+  byPriority: CountByLabel[]
+  byCategory: CountByLabel[]
+  byTechnician: CountByLabel[]
 }

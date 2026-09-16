@@ -3,8 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { TicketPriorityBadge, TicketStatusBadge } from '@/components/ticket-badges'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ticketSourceLabels, ticketStatusLabels } from '@/domain/enums'
-import { useTicket } from '@/features/tickets/queries'
+import { ticketSourceLabels } from '@/domain/enums'
+import { describeHistoryEntry } from '@/features/tickets/history-label'
+import { useHistory, useTicket } from '@/features/tickets/queries'
+import { TicketActions } from '@/features/tickets/ticket-actions'
+import { TicketConversation } from '@/features/tickets/ticket-conversation'
 import { errorMessage } from '@/lib/api'
 import { formatDateTime, formatDeadlineDistance } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -12,9 +15,9 @@ import { cn } from '@/lib/utils'
 /**
  * Detalhe do chamado (README, seção 13.5).
  *
- * Nesta etapa é somente leitura. Comentários, mudança de status e atribuição entram na
- * etapa de atendimento — as transições que o perfil pode fazer já vêm da API em
- * `allowedNextStatuses` e estão exibidas aqui como prévia do que virá.
+ * Reúne descrição, comentários, histórico e as ações que o perfil pode executar. As
+ * opções de status vêm prontas da API, calculadas pela máquina de estados — a tela não
+ * decide o que é transição válida.
  */
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
@@ -71,33 +74,33 @@ export function TicketDetail() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Andamento</CardTitle>
+              <CardTitle className="text-base">Comentários</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-muted-foreground">
-                Comentários e histórico entram na próxima etapa.
-              </p>
+            <CardContent>
+              <TicketConversation ticket={data} />
+            </CardContent>
+          </Card>
 
-              {data.allowedNextStatuses.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium">Transições disponíveis para você</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {data.allowedNextStatuses.map((status) => (
-                      <span
-                        key={status}
-                        className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
-                      >
-                        {ticketStatusLabels[status]}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Histórico</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TicketHistory ticketId={data.id} />
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Ações</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TicketActions ticket={data} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Dados</CardTitle>
@@ -181,5 +184,31 @@ function Deadline({
         {met ? `${metLabel} em ${formatDateTime(metAt!)}` : formatDeadlineDistance(dueAt)}
       </span>
     </div>
+  )
+}
+
+/** Linha do tempo do chamado, a partir do que o interceptor gravou. */
+function TicketHistory({ ticketId }: { ticketId: string }) {
+  const history = useHistory(ticketId)
+
+  if (history.isPending) {
+    return <p className="text-muted-foreground text-sm">Carregando…</p>
+  }
+
+  if (history.data?.length === 0) {
+    return <p className="text-muted-foreground text-sm">Sem eventos registrados.</p>
+  }
+
+  return (
+    <ol className="space-y-2 text-sm">
+      {history.data?.map((entry) => (
+        <li key={entry.id} className="flex flex-wrap items-baseline gap-2">
+          <span className="text-muted-foreground shrink-0 font-mono text-xs">
+            {formatDateTime(entry.createdAt)}
+          </span>
+          <span>{describeHistoryEntry(entry)}</span>
+        </li>
+      ))}
+    </ol>
   )
 }

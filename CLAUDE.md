@@ -12,20 +12,26 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 ## Estado atual
 
-Fundação e autenticação prontas e funcionando.
+**O MVP da versão 1 está completo e rodando.** Os nove critérios de sucesso da seção 19 do README estão atendidos.
 
-**Pronto:** domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática por interceptor, seed de dados de referência, autenticação completa (cadastro, login, refresh com rotação e detecção de reuso, logout, sessão atual) e o chamado em leitura e criação — abertura, listagem paginada com filtros e ordenação no backend, e tela de detalhe.
+**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo, chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico) e dashboard por consultas agregadas.
 
-**Endpoints existentes:**
+**Frontend:** login, cadastro, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, e dashboard com gráficos.
 
-* `/health`, `/openapi/v1.json`, `/swagger`
-* `POST /api/auth/{register,login,refresh,logout}`, `GET /api/auth/me`
-* `POST /api/tickets`, `GET /api/tickets` (filtros e paginação), `GET /api/tickets/{id}`
-* `GET /api/categories`
+**Endpoints:**
 
-**Ainda não existe:** comentários, mudança de status, atribuição de técnico e dashboard. O detalhe do chamado é somente leitura.
+```
+GET    /health  /openapi/v1.json  /swagger
+POST   /api/auth/{register,login,refresh,logout}      GET /api/auth/me
+POST   /api/tickets                                    GET /api/tickets  (filtros, paginação)
+GET    /api/tickets/{id}
+GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
+GET    /api/tickets/{id}/history
+POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
+GET    /api/categories               GET  /api/staff        GET /api/dashboard
+```
 
-Próximo passo: atendimento — comentários público e interno, mudança de status pela máquina de estados, atribuição de técnico.
+**Fora do escopo da versão 1, conforme o roadmap:** anexos, notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Perfis de técnico e gestor são definidos pelo seed ou direto no banco — não há tela para promover usuário.
 
 ## Documentação
 

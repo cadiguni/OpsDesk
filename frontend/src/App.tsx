@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { SessionProvider } from '@/features/auth/session'
 import { queryClient } from '@/lib/query-client'
 import { AppLayout } from '@/routes/app-layout'
+import { Dashboard } from '@/routes/dashboard'
 import { Login } from '@/routes/login'
 import { NewTicket } from '@/routes/new-ticket'
 import { NotFound } from '@/routes/not-found'
@@ -31,6 +32,7 @@ export function App() {
                 <Route path="/chamados" element={<TicketList />} />
                 <Route path="/chamados/novo" element={<NewTicket />} />
                 <Route path="/chamados/:id" element={<TicketDetail />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

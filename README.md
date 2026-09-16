@@ -37,9 +37,9 @@ A API aplica as migrations e popula o seed na subida, apenas em ambiente de dese
 
 ### Estado do código
 
-Fundação, autenticação e o chamado em leitura e criação: domínio, persistência com migration, SLA em horas úteis, auditoria automática, sessão completa, abertura de chamado, listagem paginada com filtros e ordenação no backend, e tela de detalhe.
+**O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
 
-**Ainda não existe:** comentários, mudança de status, atribuição de técnico e dashboard. A próxima etapa é o atendimento.
+Fora do escopo da versão 1, conforme o roadmap da seção 18: anexos, notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Perfis de técnico e gestor são definidos pelo seed ou direto no banco.
 
 ---
 

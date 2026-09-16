@@ -147,6 +147,29 @@ public class TicketService(IOpsDeskDbContext db, SlaClock sla, IClock clock)
         return row is null ? null : ToDetail(row, viewer);
     }
 
+    /// <summary>
+    /// Histórico do chamado, do mais antigo para o mais recente.
+    ///
+    /// Segue a visibilidade do chamado: lista vazia quando o chamado não é visível, o que é
+    /// indistinguível de um chamado sem histórico.
+    /// </summary>
+    public Task<List<TicketHistoryItem>> ListHistoryAsync(
+        Guid ticketId, TicketViewer viewer, CancellationToken cancellationToken = default) =>
+        db.TicketHistory
+            .AsNoTracking()
+            .Where(h => h.TicketId == ticketId)
+            .VisibleTo(viewer)
+            .OrderBy(h => h.CreatedAt)
+            .Select(h => new TicketHistoryItem(
+                h.Id,
+                h.Action,
+                h.PreviousValue,
+                h.NewValue,
+                h.ChangedById,
+                h.ChangedBy == null ? null : h.ChangedBy.Name,
+                h.CreatedAt))
+            .ToListAsync(cancellationToken);
+
     public Task<List<CategoryOption>> ListCategoriesAsync(CancellationToken cancellationToken = default) =>
         db.Categories
             .AsNoTracking()

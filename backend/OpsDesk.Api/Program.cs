@@ -130,6 +130,7 @@ try
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapAuthEndpoints();
     app.MapTicketEndpoints();
+    app.MapDashboardEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

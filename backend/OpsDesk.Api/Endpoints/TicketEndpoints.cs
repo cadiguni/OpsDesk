@@ -1,3 +1,4 @@
+using OpsDesk.Api.Authorization;
 using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Common;
@@ -32,10 +33,33 @@ public static class TicketEndpoints
         group.MapGet("/{id:guid}", Get)
             .WithSummary("Detalhe do chamado.");
 
+        group.MapGet("/{id:guid}/comments", ListComments)
+            .WithSummary("Comentarios visiveis para o usuario.");
+
+        group.MapPost("/{id:guid}/comments", AddComment)
+            .ValidatingBody<AddCommentRequest>()
+            .WithSummary("Registra um comentario publico ou interno.");
+
+        group.MapGet("/{id:guid}/history", ListHistory)
+            .WithSummary("Historico de alteracoes do chamado.");
+
+        group.MapPost("/{id:guid}/status", ChangeStatus)
+            .ValidatingBody<ChangeStatusRequest>()
+            .WithSummary("Move o chamado na maquina de estados.");
+
+        group.MapPost("/{id:guid}/assignment", Assign)
+            .RequireAuthorization(AuthorizationPolicies.Staff)
+            .WithSummary("Define ou remove o tecnico responsavel.");
+
         routes.MapGet("/api/categories", ListCategories)
             .RequireAuthorization()
             .WithTags("Categorias")
             .WithSummary("Categorias ativas, para os seletores da interface.");
+
+        routes.MapGet("/api/staff", ListStaff)
+            .RequireAuthorization(AuthorizationPolicies.Staff)
+            .WithTags("Usuarios")
+            .WithSummary("Tecnicos e gestores ativos, para o seletor de responsavel.");
 
         return routes;
     }
@@ -111,6 +135,112 @@ public static class TicketEndpoints
         // confirmaria que o chamado existe para quem estivesse testando identificadores.
         return ticket is null ? TypedResults.NotFound() : TypedResults.Ok(ticket);
     }
+
+    private static async Task<IResult> ListComments(
+        Guid id,
+        TicketCommentService comments,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await comments.ListAsync(id, currentUser.Viewer, cancellationToken));
+
+    private static async Task<IResult> AddComment(
+        Guid id,
+        AddCommentRequest request,
+        TicketCommentService comments,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await comments.AddAsync(id, request, currentUser.Viewer, cancellationToken);
+
+        return result switch
+        {
+            AddCommentResult.Added added => TypedResults.Created(
+                $"/api/tickets/{id}/comments/{added.Comment.Id}", added.Comment),
+
+            AddCommentResult.TicketNotFound => TypedResults.NotFound(),
+
+            AddCommentResult.InternalNotAllowed forbidden => TypedResults.Problem(
+                detail: forbidden.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Comentário interno não permitido"),
+
+            AddCommentResult.TicketClosed closed => TypedResults.Problem(
+                detail: closed.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Chamado encerrado"),
+
+            _ => throw new InvalidOperationException(
+                $"Resultado de comentário não tratado: {result.GetType().Name}.")
+        };
+    }
+
+    private static async Task<IResult> ListHistory(
+        Guid id,
+        TicketService tickets,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await tickets.ListHistoryAsync(id, currentUser.Viewer, cancellationToken));
+
+    private static async Task<IResult> ChangeStatus(
+        Guid id,
+        ChangeStatusRequest request,
+        TicketWorkflowService workflow,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await workflow.ChangeStatusAsync(id, request, currentUser.Viewer, cancellationToken);
+
+        return result switch
+        {
+            ChangeStatusResult.Changed changed => TypedResults.Ok(changed.Ticket),
+
+            ChangeStatusResult.TicketNotFound => TypedResults.NotFound(),
+
+            // 409 e não 400: o pedido está bem formado, mas conflita com o estado atual do
+            // chamado — que pode ter mudado entre a tela carregar e o clique.
+            ChangeStatusResult.TransitionRejected rejected => TypedResults.Problem(
+                detail: rejected.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Transição não permitida"),
+
+            _ => throw new InvalidOperationException(
+                $"Resultado de mudança de status não tratado: {result.GetType().Name}.")
+        };
+    }
+
+    private static async Task<IResult> Assign(
+        Guid id,
+        AssignRequest request,
+        TicketWorkflowService workflow,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await workflow.AssignAsync(id, request, currentUser.Viewer, cancellationToken);
+
+        return result switch
+        {
+            AssignResult.Assigned assigned => TypedResults.Ok(assigned.Ticket),
+
+            AssignResult.TicketNotFound => TypedResults.NotFound(),
+
+            AssignResult.NotAllowed notAllowed => TypedResults.Problem(
+                detail: notAllowed.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Atribuição não permitida"),
+
+            AssignResult.TechnicianInvalid invalid => TypedResults.Problem(
+                detail: invalid.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Responsável inválido"),
+
+            _ => throw new InvalidOperationException(
+                $"Resultado de atribuição não tratado: {result.GetType().Name}.")
+        };
+    }
+
+    private static async Task<IResult> ListStaff(
+        TicketWorkflowService workflow, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await workflow.ListStaffAsync(cancellationToken));
 
     private static async Task<IResult> ListCategories(
         TicketService tickets, CancellationToken cancellationToken) =>

@@ -1,12 +1,16 @@
 import { api } from '@/lib/api'
 import type {
   CategoryOption,
+  DashboardSummary,
   PagedResult,
+  StaffOption,
+  TicketComment,
   TicketDetail,
+  TicketHistoryEntry,
   TicketListItem,
   TicketQuery,
 } from '@/features/tickets/types'
-import type { TicketPriority } from '@/domain/enums'
+import type { TicketPriority, TicketStatus } from '@/domain/enums'
 
 export type CreateTicketInput = {
   title: string
@@ -40,6 +44,56 @@ export async function getTicket(id: string): Promise<TicketDetail> {
 
 export async function listCategories(): Promise<CategoryOption[]> {
   const { data } = await api.get<CategoryOption[]>('/api/categories')
+
+  return data
+}
+
+export async function listComments(ticketId: string): Promise<TicketComment[]> {
+  const { data } = await api.get<TicketComment[]>(`/api/tickets/${ticketId}/comments`)
+
+  return data
+}
+
+export async function addComment(
+  ticketId: string,
+  input: { content: string; isInternal: boolean },
+): Promise<TicketComment> {
+  const { data } = await api.post<TicketComment>(`/api/tickets/${ticketId}/comments`, input)
+
+  return data
+}
+
+export async function listHistory(ticketId: string): Promise<TicketHistoryEntry[]> {
+  const { data } = await api.get<TicketHistoryEntry[]>(`/api/tickets/${ticketId}/history`)
+
+  return data
+}
+
+export async function changeStatus(ticketId: string, status: TicketStatus): Promise<TicketDetail> {
+  const { data } = await api.post<TicketDetail>(`/api/tickets/${ticketId}/status`, { status })
+
+  return data
+}
+
+export async function assign(
+  ticketId: string,
+  technicianId: string | null,
+): Promise<TicketDetail> {
+  const { data } = await api.post<TicketDetail>(`/api/tickets/${ticketId}/assignment`, {
+    technicianId,
+  })
+
+  return data
+}
+
+export async function listStaff(): Promise<StaffOption[]> {
+  const { data } = await api.get<StaffOption[]>('/api/staff')
+
+  return data
+}
+
+export async function getDashboard(): Promise<DashboardSummary> {
+  const { data } = await api.get<DashboardSummary>('/api/dashboard')
 
   return data
 }

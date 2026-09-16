@@ -183,19 +183,31 @@ Essa interface existe por causa do sentido das dependências — os serviços mo
 
 **Por quê:** MediatR e AutoMapper passaram a licença comercial e, mesmo antes disso, resolviam problemas de escala que este projeto não tem. A projeção manual ainda gera SQL melhor, porque só traz as colunas usadas. O `DbContext` já é Unit of Work e já expõe `IQueryable`.
 
-### 4.10 Configuração é lida por DI, não durante a montagem do pipeline
+### 4.10 Atribuição não muda status
+
+Definir o responsável mexe só no responsável. A seção 10 do README diz que o status "poderá" mudar para "Em atendimento" ao assumir; optamos por não fazer isso implicitamente.
+
+**Por quê:** a máquina de estados é a única coisa no sistema que muda status, e uma ação que altera dois campos por conta própria torna o histórico mais difícil de ler — dois eventos aparecem sem que ninguém tenha pedido o segundo — e a operação mais difícil de prever. Assumir e iniciar atendimento são dois cliques, e cada um fica separado na trilha de auditoria.
+
+### 4.11 Reabrir chamado resolvido limpa `ResolvedAt`
+
+Quando um chamado volta de "Resolvido" para "Em atendimento", a data de resolução é apagada.
+
+**Por quê:** mantê-la faria o chamado nunca mais aparecer como vencido, por mais que a reabertura se arrastasse — `IsResolutionOverdue` depende de `ResolvedAt` ser nulo. A informação não se perde: a transição para "Resolvido" está no `TicketHistory` com data e autor, que é a trilha de auditoria de verdade. O campo na tabela é o estado atual, não o histórico.
+
+### 4.12 Configuração é lida por DI, não durante a montagem do pipeline
 
 `JwtOptions`, `RateLimitOptions` e a connection string são resolvidos de `IOptions<T>` ou do `IServiceProvider` no momento do uso, nunca por uma leitura direta de `IConfiguration` no `Program.cs`.
 
 **Por quê:** ler configuração enquanto o pipeline é montado captura o valor daquele instante e ignora fontes registradas depois. É exatamente o que acontece com `WebApplicationFactory`, que injeta a sua configuração após a execução do ponto de entrada: o teste configura um valor, a aplicação usa outro, e nada falha para indicar o problema. Descobrimos isso com a suíte de integração sendo estrangulada pelo rate limiting de produção mesmo tendo configurado um limite alto.
 
-### 4.11 Nomes do banco em snake_case
+### 4.13 Nomes do banco em snake_case
 
 Tabelas e colunas usam `snake_case`, aplicado pela convenção do `EFCore.NamingConventions`. As classes e propriedades continuam em `PascalCase`.
 
 **Por quê:** é a convenção do PostgreSQL, e identificador em `PascalCase` no Postgres obriga a citar tudo entre aspas em qualquer consulta manual — `SELECT "AssignedTechnicianId" FROM "Tickets"`. É o mesmo motivo de persistir enum como string: o banco precisa continuar legível para quem for investigar um chamado às duas da manhã.
 
-### 4.12 Migrations desde o primeiro commit
+### 4.14 Migrations desde o primeiro commit
 
 O schema evolui exclusivamente por migrations do EF Core, versionadas no repositório. Nada de alteração manual no banco, nem de `EnsureCreated`.
 
@@ -207,7 +219,7 @@ O schema evolui exclusivamente por migrations do EF Core, versionadas no reposit
 | --- | --- |
 | Paginação | paginação por cursor ou offset sempre no backend, com limite máximo de página |
 | Filtros | aplicados em SQL, nunca em memória |
-| Dashboard | consultas agregadas dedicadas, uma por indicador, sem carregar chamados |
+| Dashboard | consultas agregadas dedicadas, uma por indicador, sem carregar chamados. A ordenação por contagem acontece sobre o agregado, antes da projeção: ordenar pela propriedade de um record já projetado não traduz para SQL, e o EF Core recusa a query com uma mensagem que aponta para o `Join` da navegação, não para a ordenação |
 | Senhas | `PasswordHasher<T>`, nunca hash próprio |
 | Rate limiting | middleware nativo do ASP.NET Core, particionado por IP, com cota apertada para credencial (login e cadastro) e cota larga e separada para renovação de sessão |
 | Logs | estruturados, sem corpo de comentário nem dado pessoal desnecessário |

@@ -20,10 +20,8 @@ namespace OpsDesk.Tests.Integration;
 /// vazamento de dado.
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public class TicketEndpointsTests(PostgresFixture fixture)
+public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixture)
 {
-    private const string Password = "senha-de-teste-123";
-
     // ----- Abertura -----
 
     [Fact]
@@ -90,7 +88,7 @@ public class TicketEndpointsTests(PostgresFixture fixture)
         var response = await world.Requester.PostAsJsonAsync("/api/tickets", NewTicket(world.CategoryId));
         var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
 
-        await using var db = fixture.CreateContext();
+        await using var db = Fixture.CreateContext();
         var history = await db.TicketHistory.Where(h => h.TicketId == ticket!.Id).ToListAsync();
 
         var entry = Assert.Single(history);
@@ -114,7 +112,7 @@ public class TicketEndpointsTests(PostgresFixture fixture)
     {
         var world = await SetUpAsync();
 
-        await using var db = fixture.CreateContext();
+        await using var db = Fixture.CreateContext();
         await db.Categories
             .Where(c => c.Id == world.CategoryId)
             .ExecuteUpdateAsync(c => c.SetProperty(x => x.IsActive, false));
@@ -158,7 +156,7 @@ public class TicketEndpointsTests(PostgresFixture fixture)
     {
         var world = await SetUpAsync();
 
-        using var anonymous = fixture.Api.CreateBrowserClient();
+        using var anonymous = Fixture.Api.CreateBrowserClient();
         var response = await anonymous.PostAsJsonAsync("/api/tickets", NewTicket(world.CategoryId));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -319,7 +317,7 @@ public class TicketEndpointsTests(PostgresFixture fixture)
         var overdue = await OpenTicketAsync(world, "Vencido de verdade");
         var cancelled = await OpenTicketAsync(world, "Vencido mas cancelado");
 
-        await using var db = fixture.CreateContext();
+        await using var db = Fixture.CreateContext();
         var past = DateTimeOffset.UtcNow.AddDays(-5);
 
         await db.Tickets
@@ -438,78 +436,10 @@ public class TicketEndpointsTests(PostgresFixture fixture)
     {
         await SetUpAsync();
 
-        using var anonymous = fixture.Api.CreateBrowserClient();
+        using var anonymous = Fixture.Api.CreateBrowserClient();
         var response = await anonymous.GetAsync("/api/categories");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    // ----- Apoio -----
-
-    private static CreateTicketRequest NewTicket(
-        Guid categoryId, string title = "Impressora não imprime",
-        TicketPriority priority = TicketPriority.Medium) => new(
-        title, "O equipamento liga mas não puxa papel.", categoryId, priority);
-
-    private async Task<Guid> OpenTicketAsync(
-        World world, string title, TicketPriority priority = TicketPriority.Medium)
-    {
-        var response = await world.Requester.PostAsJsonAsync(
-            "/api/tickets", NewTicket(world.CategoryId, title, priority));
-
-        response.EnsureSuccessStatusCode();
-
-        var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
-
-        return ticket!.Id;
-    }
-
-    private static async Task<PagedResult<TicketListItem>> ListAsync(
-        HttpClient client, string query = "")
-    {
-        var response = await client.GetAsync($"/api/tickets{query}");
-
-        response.EnsureSuccessStatusCode();
-
-        return (await response.Content.ReadJsonAsync<PagedResult<TicketListItem>>())!;
-    }
-
-    private static async Task<TicketDetail> GetAsync(HttpClient client, Guid id)
-    {
-        var response = await client.GetAsync($"/api/tickets/{id}");
-
-        response.EnsureSuccessStatusCode();
-
-        return (await response.Content.ReadJsonAsync<TicketDetail>())!;
-    }
-
-    /// <summary>Um cliente autenticado por perfil, mais as categorias e políticas do seed.</summary>
-    private async Task<World> SetUpAsync()
-    {
-        await fixture.ResetAsync();
-
-        await using var db = fixture.CreateContext();
-
-        // Categorias e políticas de SLA são dados de referência: sem eles não há como
-        // abrir chamado. O seed é o mesmo que a API roda em desenvolvimento.
-        var seeder = new DatabaseSeeder(
-            db, new PasswordHasher<User>(), NullLogger<DatabaseSeeder>.Instance);
-        await seeder.SeedAsync(includeDevelopmentUsers: false);
-
-        var categoryId = await db.Categories.Where(c => c.Name == "VPN").Select(c => c.Id).SingleAsync();
-
-        var (requester, requesterId) = await SignInAsync(UserRole.Requester);
-        var (otherRequester, otherRequesterId) = await SignInAsync(UserRole.Requester);
-        var (technician, technicianId) = await SignInAsync(UserRole.Technician);
-        var (otherTechnician, otherTechnicianId) = await SignInAsync(UserRole.Technician);
-        var (manager, _) = await SignInAsync(UserRole.Manager);
-
-        return new World(
-            requester, requesterId,
-            otherRequester, otherRequesterId,
-            technician, technicianId,
-            otherTechnician, otherTechnicianId,
-            manager, categoryId);
     }
 
     /// <summary>
@@ -520,12 +450,11 @@ public class TicketEndpointsTests(PostgresFixture fixture)
         var world = await SetUpAsync();
 
         var own = await OpenTicketAsync(world, "Chamado do solicitante");
+        var unassigned = await OpenTicketAsync(world, "Sem responsável", client: world.OtherRequester);
+        var assigned = await OpenTicketAsync(world, "Atribuído ao técnico", client: world.OtherRequester);
+        var other = await OpenTicketAsync(world, "De outro técnico", client: world.OtherRequester);
 
-        var unassigned = await PostAsAsync(world.OtherRequester, world.CategoryId, "Sem responsável");
-        var assigned = await PostAsAsync(world.OtherRequester, world.CategoryId, "Atribuído ao técnico");
-        var other = await PostAsAsync(world.OtherRequester, world.CategoryId, "De outro técnico");
-
-        await using var db = fixture.CreateContext();
+        await using var db = Fixture.CreateContext();
 
         await db.Tickets
             .Where(t => t.Id == assigned)
@@ -537,65 +466,11 @@ public class TicketEndpointsTests(PostgresFixture fixture)
             .Where(t => t.Id == other)
             .ExecuteUpdateAsync(t => t.SetProperty(x => x.AssignedTechnicianId, world.OtherTechnicianId));
 
-        return world with { OwnTicketId = own, UnassignedTicketId = unassigned, OfOtherTechnicianId = other };
-    }
-
-    private static async Task<Guid> PostAsAsync(HttpClient client, Guid categoryId, string title)
-    {
-        var response = await client.PostAsJsonAsync("/api/tickets", NewTicket(categoryId, title));
-
-        response.EnsureSuccessStatusCode();
-
-        var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
-
-        return ticket!.Id;
-    }
-
-    /// <summary>Cria um usuário do perfil pedido e devolve um cliente já autenticado.</summary>
-    private async Task<(HttpClient Client, Guid UserId)> SignInAsync(UserRole role)
-    {
-        var email = $"{role}.{Guid.NewGuid():N}@empresa.com".ToLowerInvariant();
-
-        await using var db = fixture.CreateContext();
-
-        var hasher = new PasswordHasher<User>();
-        var user = new User { Name = $"Usuário {role}", Email = email, Role = role };
-        user.PasswordHash = hasher.HashPassword(user, Password);
-
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-
-        var client = fixture.Api.CreateBrowserClient();
-
-        var login = await client.PostAsJsonAsync(
-            "/api/auth/login", new Application.Auth.LoginRequest(email, Password));
-
-        login.EnsureSuccessStatusCode();
-
-        var session = await login.Content.ReadJsonAsync<AuthEndpoints.AuthResponse>();
-
-        client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session!.AccessToken);
-
-        return (client, user.Id);
-    }
-
-    private record World(
-        HttpClient Requester,
-        Guid RequesterId,
-        HttpClient OtherRequester,
-        Guid OtherRequesterId,
-        HttpClient Technician,
-        Guid TechnicianId,
-        HttpClient OtherTechnician,
-        Guid OtherTechnicianId,
-        HttpClient Manager,
-        Guid CategoryId)
-    {
-        public Guid OwnTicketId { get; init; }
-
-        public Guid UnassignedTicketId { get; init; }
-
-        public Guid OfOtherTechnicianId { get; init; }
+        return world with
+        {
+            OwnTicketId = own,
+            UnassignedTicketId = unassigned,
+            OfOtherTechnicianId = other
+        };
     }
 }
