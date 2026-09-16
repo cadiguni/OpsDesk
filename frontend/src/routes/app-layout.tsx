@@ -1,71 +1,54 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+﻿import type { ReactNode } from 'react'
+import { Headphones, LayoutDashboard, LogOut, Plus, Ticket } from 'lucide-react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
-import { Button } from '@/components/ui/button'
+import { ThemeSelect } from '@/components/theme-select'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { userRoleLabels } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
   const { user, signOut, role } = useSession()
+  const location = useLocation()
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <Link to="/" className="flex items-center gap-3">
-            <span className="grid size-7 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-              O
-            </span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold">OpsDesk</p>
-              <p className="text-muted-foreground text-xs">Chamados de TI</p>
-            </div>
-          </Link>
-
-          {user && (
-            <nav className="ml-4 flex items-center gap-1 text-sm">
-              <HeaderLink to="/chamados">Chamados</HeaderLink>
-
-              {/* O dashboard é do gestor. Esconder o link é conveniência: a API recusa
-                  o acesso de qualquer forma, pela política de rota. */}
-              {role === 'Manager' && <HeaderLink to="/dashboard">Dashboard</HeaderLink>}
-            </nav>
-          )}
-
-          {user && (
-            <div className="ml-auto flex items-center gap-4">
-              <div className="hidden text-right leading-tight sm:block">
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-muted-foreground text-xs">{userRoleLabels[user.role]}</p>
-              </div>
-
-              <Button variant="outline" size="sm" onClick={() => void signOut()}>
-                Sair
-              </Button>
-            </div>
-          )}
+    <div className="min-h-dvh bg-background md:pl-56">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:p-3">Pular para o conteúdo</a>
+      <aside className="border-b bg-card md:fixed md:inset-y-0 md:left-0 md:flex md:w-56 md:flex-col md:border-r md:border-b-0">
+        <Link to="/" className="flex items-center gap-3 px-5 py-5">
+          <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground"><Headphones className="size-5" /></span>
+          <div><p className="text-lg font-bold tracking-tight">OpsDesk</p><p className="text-xs text-muted-foreground">Central de atendimento</p></div>
+        </Link>
+        <nav aria-label="Navegação principal" className="flex gap-1 px-3 pb-3 md:flex-col md:pt-5">
+          <SidebarLink to="/chamados" icon={<Ticket className="size-4" />}>Chamados</SidebarLink>
+          {role === 'Manager' && <SidebarLink to="/dashboard" icon={<LayoutDashboard className="size-4" />}>Dashboard</SidebarLink>}
+        </nav>
+        {user && <div className="mt-auto hidden border-t p-4 md:block">
+          <p className="truncate text-sm font-semibold">{user.name}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{userRoleLabels[user.role]}</p>
+        </div>}
+      </aside>
+      <header className="border-b bg-card/95">
+        <div className="mx-auto flex min-h-16 max-w-screen-2xl flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
+          <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : 'Central de chamados'}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <ThemeSelect />
+            <Link to="/chamados/novo" className={cn(buttonVariants({ size: 'sm' }), 'hidden sm:inline-flex')}><Plus /> Novo chamado</Link>
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}><LogOut /> Sair</Button>
+          </div>
         </div>
       </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-screen-2xl px-4 py-6 outline-none lg:px-8 lg:py-8">
         <Outlet />
       </main>
     </div>
   )
 }
 
-function HeaderLink({ to, children }: { to: string; children: string }) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        cn(
-          'rounded-md px-2.5 py-1.5 transition-colors',
-          isActive ? 'bg-accent font-medium' : 'text-muted-foreground hover:text-foreground',
-        )
-      }
-    >
-      {children}
-    </NavLink>
-  )
+function SidebarLink({ to, icon, children }: { to: string; icon: ReactNode; children: string }) {
+  return <NavLink to={to} className={({ isActive }) => cn(
+    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+    isActive ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+  )}>{icon}{children}</NavLink>
 }

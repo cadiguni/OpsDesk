@@ -70,7 +70,7 @@ public class TicketWorkflowService(
     /// Efeitos da transição sobre o relógio de SLA e sobre as datas do chamado.
     /// Regras da seção 8.2 e 8.3 do README.
     /// </summary>
-    private void ApplySlaEffects(Ticket ticket, TicketStatus from, TicketStatus to, DateTimeOffset now)
+    internal void ApplySlaEffects(Ticket ticket, TicketStatus from, TicketStatus to, DateTimeOffset now)
     {
         // Sair de "Aguardando usuário" empurra o prazo de resolução pelo tempo útil que o
         // chamado passou esperando. Vem primeiro: resolver um chamado pausado precisa
@@ -92,6 +92,7 @@ public class TicketWorkflowService(
                 break;
 
             case TicketStatus.Closed:
+                ticket.ResolvedAt ??= now;
                 ticket.ClosedAt = now;
                 break;
 

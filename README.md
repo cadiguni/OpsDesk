@@ -13,6 +13,7 @@ Este documento é a especificação funcional do produto. Os detalhes técnicos 
 | Documento | Conteúdo |
 | --- | --- |
 | `README.md` (este arquivo) | escopo, perfis, regras de negócio, entidades, telas, roadmap |
+| [docs/atendimento-e-aparencia.md](docs/atendimento-e-aparencia.md) | enviar e fechar, interface de atendimento, temas e roteiro de validação |
 | [docs/arquitetura.md](docs/arquitetura.md) | stack, estrutura do repositório, decisões de arquitetura e justificativas |
 | [docs/integracao-email.md](docs/integracao-email.md) | ingestão de chamados por e-mail e caixa de SPAM (versão 2.0) |
 | [CLAUDE.md](CLAUDE.md) | instruções para agentes de IA que trabalham no repositório |
@@ -271,10 +272,10 @@ O ciclo de vida não é um campo livre: cada status tem um conjunto fechado de d
 
 | De | Para |
 | --- | --- |
-| Aberto | Em triagem, Em atendimento, Cancelado |
-| Em triagem | Em atendimento, Aguardando usuário, Cancelado |
-| Em atendimento | Em triagem, Aguardando usuário, Resolvido, Cancelado |
-| Aguardando usuário | Em atendimento, Resolvido, Cancelado |
+| Aberto | Em triagem, Em atendimento, Fechado, Cancelado |
+| Em triagem | Em atendimento, Aguardando usuário, Fechado, Cancelado |
+| Em atendimento | Em triagem, Aguardando usuário, Resolvido, Fechado, Cancelado |
+| Aguardando usuário | Em atendimento, Resolvido, Fechado, Cancelado |
 | Resolvido | Fechado, Em atendimento |
 | Fechado | — |
 | Cancelado | — |
@@ -282,6 +283,7 @@ O ciclo de vida não é um campo livre: cada status tem um conjunto fechado de d
 Observações:
 
 * **Aberto não vai direto para Resolvido.** Resolver sem passar por atendimento deixaria o chamado sem responsável e sem marco de resposta, e o indicador de SLA não teria o que medir.
+* **Fechamento direto pela equipe:** técnicos e gestores podem fechar qualquer chamado não terminal ao qual tenham acesso, inclusive com “Enviar e fechar”. O fechamento preenche `ResolvedAt` se ainda não houver resolução e encerra eventual pausa de SLA. O solicitante só fecha chamados já resolvidos.
 * **Resolvido volta para Em atendimento** quando a solução não resolveu. É o caminho de retrabalho antes do fechamento.
 * **Fechado e Cancelado são terminais na versão 1.** A reabertura de chamado fechado está no roadmap e abrirá essa transição quando existir.
 
@@ -426,7 +428,7 @@ Justificativa: sem essa pausa, o indicador de chamados vencidos passa a medir a 
 ### 8.3 Marcos que encerram cada prazo
 
 * **SLA de resposta**: encerrado no primeiro comentário público de um técnico ou gestor no chamado. O instante é gravado em `FirstRespondedAt`.
-* **SLA de resolução**: encerrado quando o chamado entra em "Resolvido". O instante é gravado em `ResolvedAt`.
+* **SLA de resolução**: encerrado quando o chamado entra em "Resolvido". O instante é gravado em `ResolvedAt`. No fechamento direto pela equipe, a resolução é registrada junto com o fechamento; se já existia uma data de resolução, ela é preservada.
 
 Chamados cancelados não entram nos indicadores de SLA.
 

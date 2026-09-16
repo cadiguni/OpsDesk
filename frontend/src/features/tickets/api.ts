@@ -56,7 +56,7 @@ export async function listComments(ticketId: string): Promise<TicketComment[]> {
 
 export async function addComment(
   ticketId: string,
-  input: { content: string; isInternal: boolean },
+  input: { content: string; isInternal: boolean; closeTicket?: boolean },
 ): Promise<TicketComment> {
   const { data } = await api.post<TicketComment>(`/api/tickets/${ticketId}/comments`, input)
 

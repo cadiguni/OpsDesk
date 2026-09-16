@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CheckCheck, LockKeyhole, MessageSquare, Send } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,20 +31,24 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
 
   const closed = ticket.status === 'Closed' || ticket.status === 'Cancelled'
 
-  async function submit() {
-    if (content.trim().length === 0) {
+  async function submit(closeTicket = false) {
+    if (addComment.isPending || content.trim().length === 0) {
       return
     }
 
-    await addComment.mutateAsync({ content, isInternal })
-
-    setContent('')
-    setIsInternal(false)
+    try {
+      await addComment.mutateAsync({ content, isInternal, closeTicket })
+      setContent('')
+      setIsInternal(false)
+    } catch {
+      // A mensagem aparece abaixo; mantenha o rascunho para uma nova tentativa.
+    }
   }
 
   return (
     <div className="space-y-4">
       {comments.isPending && <p className="text-muted-foreground text-sm">Carregando…</p>}
+      {comments.isError && <p role="alert" className="text-destructive text-sm">Não foi possível carregar a conversa.</p>}
 
       {comments.data?.length === 0 && (
         <p className="text-muted-foreground text-sm">Nenhum comentário ainda.</p>
@@ -54,7 +59,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
           <li
             key={comment.id}
             className={cn(
-              'rounded-lg border p-3 text-sm',
+              'rounded-xl border bg-background/40 p-4 text-sm leading-relaxed',
               comment.isInternal && 'border-sla-due-soon/40 bg-sla-due-soon/5',
             )}
           >
@@ -74,7 +79,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
               )}
             </div>
 
-            <p className="whitespace-pre-wrap">{comment.content}</p>
+            <p className="whitespace-pre-wrap break-words">{comment.content}</p>
           </li>
         ))}
       </ul>
@@ -84,40 +89,48 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
           Este chamado está encerrado e não aceita novos comentários.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className={cn('overflow-hidden rounded-xl border bg-card', isInternal && 'border-sla-due-soon/50 bg-sla-due-soon/5')}>
+          <div className="flex flex-wrap gap-2 border-b bg-muted/40 p-3" role="group" aria-label="Visibilidade do comentário">
+            <Button size="sm" variant={isInternal ? 'ghost' : 'secondary'} aria-pressed={!isInternal} disabled={addComment.isPending} onClick={() => setIsInternal(false)}>
+              <MessageSquare className="size-4" /> Resposta pública
+            </Button>
+            {isStaff && <Button size="sm" variant={isInternal ? 'secondary' : 'ghost'} aria-pressed={isInternal} disabled={addComment.isPending} onClick={() => setIsInternal(true)}>
+              <LockKeyhole className="size-4" /> Nota interna
+            </Button>}
+          </div>
+          <p className="px-4 pt-3 text-xs text-muted-foreground">
+            {isInternal ? 'Visível apenas para técnicos e gestores.' : 'Esta resposta ficará visível para o solicitante.'}
+          </p>
           <Textarea
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder={
               isInternal ? 'Observação interna da equipe…' : 'Escreva uma resposta…'
             }
-            rows={4}
+            rows={6}
+            maxLength={10000}
+            disabled={addComment.isPending}
             aria-label="Novo comentário"
-            className={cn(isInternal && 'border-sla-due-soon/40')}
+            className="rounded-none border-0 bg-transparent p-4 shadow-none"
           />
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/30 p-3">
             <Button
               onClick={() => void submit()}
               disabled={addComment.isPending || content.trim().length === 0}
             >
-              {addComment.isPending ? 'Enviando…' : 'Comentar'}
+              <Send className="size-4" /> {addComment.isPending ? 'Enviando…' : 'Enviar'}
             </Button>
 
-            {isStaff && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isInternal}
-                  onChange={(event) => setIsInternal(event.target.checked)}
-                />
-                Comentário interno
-              </label>
+            {ticket.allowedNextStatuses.includes('Closed') && (
+              <Button variant="outline" onClick={() => void submit(true)} disabled={addComment.isPending || content.trim().length === 0}>
+                <CheckCheck className="size-4" /> Enviar e fechar
+              </Button>
             )}
           </div>
 
           {addComment.isError && (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive p-3 text-sm">
               {errorMessage(addComment.error, 'Não foi possível enviar o comentário.')}
             </p>
           )}

@@ -1,3 +1,4 @@
+import { ThemeSelect } from '@/components/theme-select'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -40,6 +41,7 @@ export function Login() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
+      <div className="mb-5 flex justify-end"><ThemeSelect /></div>
       <Card>
         <CardHeader>
           <CardTitle>Entrar no OpsDesk</CardTitle>

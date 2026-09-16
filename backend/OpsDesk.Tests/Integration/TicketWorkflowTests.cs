@@ -18,6 +18,110 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
 {
     // ----- Comentários -----
 
+    [Theory]
+    [InlineData(TicketStatus.Open, false)]
+    [InlineData(TicketStatus.Triage, false)]
+    [InlineData(TicketStatus.InProgress, false)]
+    [InlineData(TicketStatus.WaitingOnRequester, false)]
+    [InlineData(TicketStatus.Resolved, false)]
+    [InlineData(TicketStatus.Open, true)]
+    [InlineData(TicketStatus.WaitingOnRequester, true)]
+    public async Task Enviar_e_fechar_grava_comentario_status_sla_e_historico(TicketStatus from, bool isInternal)
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        if (from == TicketStatus.Triage)
+            await ChangeStatusAsync(world.Technician, ticket, from);
+        else if (from != TicketStatus.Open)
+        {
+            await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
+            if (from != TicketStatus.InProgress)
+                await ChangeStatusAsync(world.Technician, ticket, from);
+        }
+
+        var before = await GetAsync(world.Manager, ticket);
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Atendimento concluído.", isInternal, CloseTicket: true));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var after = await GetAsync(world.Manager, ticket);
+        Assert.Equal(TicketStatus.Closed, after.Status);
+        Assert.NotNull(after.ClosedAt);
+        Assert.NotNull(after.ResolvedAt);
+        Assert.False(after.SlaPaused);
+        Assert.Equal(before.ResolvedAt ?? after.ClosedAt, after.ResolvedAt);
+        Assert.Equal(isInternal, after.FirstRespondedAt is null);
+        Assert.Single(await CommentsAsync(world.Manager, ticket));
+        var visible = await CommentsAsync(world.Requester, ticket);
+        Assert.Equal(isInternal ? 0 : 1, visible.Count);
+        var history = await HistoryAsync(world.Manager, ticket);
+        Assert.Contains(history, h => h.Action == TicketHistoryAction.Closed);
+        Assert.Contains(history, h => h.Action == TicketHistoryAction.StatusChanged && h.NewValue == "Closed" && h.PreviousValue == from.ToString());
+        Assert.Contains(history, h => h.Action == (isInternal ? TicketHistoryAction.InternalCommentAdded : TicketHistoryAction.CommentAdded));
+    }
+
+    [Fact]
+    public async Task Enviar_e_fechar_recusado_nao_grava_comentario_nem_altera_sla()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        var response = await world.Requester.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Fechar indevidamente.", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Empty(await CommentsAsync(world.Manager, ticket));
+        var after = await GetAsync(world.Manager, ticket);
+        Assert.Equal(TicketStatus.Open, after.Status);
+        Assert.Null(after.ResolvedAt);
+        Assert.Null(after.ClosedAt);
+        Assert.Null(after.FirstRespondedAt);
+    }
+
+    [Fact]
+    public async Task Solicitante_envia_confirmacao_e_fecha_chamado_resolvido()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.Resolved);
+        var response = await world.Requester.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Funcionou, obrigado.", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(TicketStatus.Closed, (await GetAsync(world.Manager, ticket)).Status);
+    }
+
+    [Theory]
+    [InlineData(TicketStatus.Closed)]
+    [InlineData(TicketStatus.Cancelled)]
+    public async Task Enviar_e_fechar_recusa_terminais_sem_gravar(TicketStatus status)
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        await ChangeStatusAsync(world.Manager, ticket, status);
+        var response = await world.Manager.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Tarde demais.", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Empty(await CommentsAsync(world.Manager, ticket));
+    }
+
+    [Fact]
+    public async Task Enviar_e_fechar_valida_texto_e_visibilidade_antes_de_gravar()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        var empty = await world.Manager.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest(" ", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        var hidden = await world.OtherRequester.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Indevido.", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
+        var forbidden = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Indevido.", CloseTicket: true));
+        Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
+        Assert.Empty(await CommentsAsync(world.Manager, ticket));
+        Assert.Equal(TicketStatus.Open, (await GetAsync(world.Manager, ticket)).Status);
+    }
+
     [Fact]
     public async Task Tecnico_comenta_e_o_solicitante_ve()
     {

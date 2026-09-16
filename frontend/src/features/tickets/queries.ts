@@ -98,7 +98,7 @@ export function useAddComment(ticketId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: { content: string; isInternal: boolean }) =>
+    mutationFn: (input: { content: string; isInternal: boolean; closeTicket?: boolean }) =>
       ticketsApi.addComment(ticketId, input),
     onSuccess: () => {
       // O comentário público da equipe pode ter encerrado o SLA de resposta e gerou
@@ -106,6 +106,8 @@ export function useAddComment(ticketId: string) {
       void queryClient.invalidateQueries({ queryKey: keys.comments(ticketId) })
       void queryClient.invalidateQueries({ queryKey: keys.history(ticketId) })
       void queryClient.invalidateQueries({ queryKey: keys.detail(ticketId) })
+      void queryClient.invalidateQueries({ queryKey: keys.lists })
+      void queryClient.invalidateQueries({ queryKey: keys.dashboard })
     },
   })
 }

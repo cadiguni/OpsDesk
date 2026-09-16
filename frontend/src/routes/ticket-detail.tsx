@@ -47,7 +47,7 @@ export function TicketDetail() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="text-muted-foreground font-mono text-xs">{data.code}</p>
-          <h1 className="text-xl font-semibold tracking-tight">{data.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight break-words">{data.title}</h1>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <TicketStatusBadge status={data.status} />
             <TicketPriorityBadge priority={data.priority} />
@@ -59,8 +59,8 @@ export function TicketDetail() {
         </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Descrição</CardTitle>
@@ -68,13 +68,13 @@ export function TicketDetail() {
             <CardContent>
               {/* whitespace-pre-wrap preserva as quebras de linha do que o solicitante
                   digitou, que costuma ser log colado. */}
-              <p className="text-sm whitespace-pre-wrap">{data.description}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{data.description}</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Comentários</CardTitle>
+              <CardTitle className="text-base">Conversa</CardTitle>
             </CardHeader>
             <CardContent>
               <TicketConversation ticket={data} />
@@ -94,7 +94,7 @@ export function TicketDetail() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Ações</CardTitle>
+              <CardTitle className="text-base">Gerenciar chamado</CardTitle>
             </CardHeader>
             <CardContent>
               <TicketActions ticket={data} />
@@ -103,7 +103,7 @@ export function TicketDetail() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Dados</CardTitle>
+              <CardTitle className="text-base">Propriedades</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm">
               <Row label="Categoria" value={data.categoryName} />
@@ -200,7 +200,7 @@ function TicketHistory({ ticketId }: { ticketId: string }) {
   }
 
   return (
-    <ol className="space-y-2 text-sm">
+    <ol className="space-y-4 border-l-2 border-primary/20 pl-4 text-sm">
       {history.data?.map((entry) => (
         <li key={entry.id} className="flex flex-wrap items-baseline gap-2">
           <span className="text-muted-foreground shrink-0 font-mono text-xs">

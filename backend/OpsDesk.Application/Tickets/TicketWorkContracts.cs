@@ -12,7 +12,7 @@ namespace OpsDesk.Application.Tickets;
 /// interno é recusado em vez de silenciosamente convertido em público — converter esconderia
 /// um erro de cliente e publicaria para o solicitante um texto que alguém quis restringir.
 /// </summary>
-public record AddCommentRequest(string Content, bool IsInternal = false);
+public record AddCommentRequest(string Content, bool IsInternal = false, bool CloseTicket = false);
 
 public record TicketCommentItem(
     Guid Id,
@@ -25,6 +25,8 @@ public record TicketCommentItem(
 
 public abstract record AddCommentResult
 {
+    public sealed record ClosingNotAllowed : AddCommentResult;
+
     public sealed record Added(TicketCommentItem Comment) : AddCommentResult;
 
     /// <summary>Chamado inexistente ou fora da visibilidade de quem pediu.</summary>

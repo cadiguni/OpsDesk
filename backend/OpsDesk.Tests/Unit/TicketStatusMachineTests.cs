@@ -15,15 +15,15 @@ public class TicketStatusMachineTests
     /// <summary>O grafo esperado, escrito à mão a partir do README.</summary>
     private static readonly Dictionary<TicketStatus, TicketStatus[]> Expected = new()
     {
-        [TicketStatus.Open] = [TicketStatus.Triage, TicketStatus.InProgress, TicketStatus.Cancelled],
-        [TicketStatus.Triage] = [TicketStatus.InProgress, TicketStatus.WaitingOnRequester, TicketStatus.Cancelled],
+        [TicketStatus.Open] = [TicketStatus.Triage, TicketStatus.InProgress, TicketStatus.Closed, TicketStatus.Cancelled],
+        [TicketStatus.Triage] = [TicketStatus.InProgress, TicketStatus.WaitingOnRequester, TicketStatus.Closed, TicketStatus.Cancelled],
         [TicketStatus.InProgress] =
         [
-            TicketStatus.Triage, TicketStatus.WaitingOnRequester, TicketStatus.Resolved, TicketStatus.Cancelled
+            TicketStatus.Triage, TicketStatus.WaitingOnRequester, TicketStatus.Resolved, TicketStatus.Closed, TicketStatus.Cancelled
         ],
         [TicketStatus.WaitingOnRequester] =
         [
-            TicketStatus.InProgress, TicketStatus.Resolved, TicketStatus.Cancelled
+            TicketStatus.InProgress, TicketStatus.Resolved, TicketStatus.Closed, TicketStatus.Cancelled
         ],
         [TicketStatus.Resolved] = [TicketStatus.Closed, TicketStatus.InProgress],
         [TicketStatus.Closed] = [],
@@ -89,6 +89,18 @@ public class TicketStatusMachineTests
     }
 
     // ----- Permissão por perfil -----
+
+    [Theory]
+    [InlineData(TicketStatus.Open)]
+    [InlineData(TicketStatus.Triage)]
+    [InlineData(TicketStatus.InProgress)]
+    [InlineData(TicketStatus.WaitingOnRequester)]
+    public void Apenas_equipe_fecha_diretamente_chamado_ativo(TicketStatus from)
+    {
+        Assert.True(TicketStatusMachine.IsAllowedForRole(from, TicketStatus.Closed, UserRole.Technician));
+        Assert.True(TicketStatusMachine.IsAllowedForRole(from, TicketStatus.Closed, UserRole.Manager));
+        Assert.False(TicketStatusMachine.IsAllowedForRole(from, TicketStatus.Closed, UserRole.Requester));
+    }
 
     [Theory]
     [InlineData(UserRole.Manager, true)]

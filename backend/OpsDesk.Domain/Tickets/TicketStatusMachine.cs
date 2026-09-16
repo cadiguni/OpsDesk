@@ -15,16 +15,19 @@ public static class TicketStatusMachine
         [
             TicketStatus.Triage,
             TicketStatus.InProgress,
+            TicketStatus.Closed,
             TicketStatus.Cancelled
         ],
         [TicketStatus.Triage] =
         [
+            TicketStatus.Closed,
             TicketStatus.InProgress,
             TicketStatus.WaitingOnRequester,
             TicketStatus.Cancelled
         ],
         [TicketStatus.InProgress] =
         [
+            TicketStatus.Closed,
             TicketStatus.Triage,
             TicketStatus.WaitingOnRequester,
             TicketStatus.Resolved,
@@ -32,6 +35,7 @@ public static class TicketStatusMachine
         ],
         [TicketStatus.WaitingOnRequester] =
         [
+            TicketStatus.Closed,
             TicketStatus.InProgress,
             TicketStatus.Resolved,
             TicketStatus.Cancelled

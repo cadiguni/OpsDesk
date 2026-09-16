@@ -99,7 +99,7 @@ export function TicketList() {
         </Link>
       </div>
 
-      <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
         <label className="grid gap-1.5 text-xs font-medium">
           Buscar
           <Input
@@ -209,19 +209,19 @@ export function TicketList() {
       )}
 
       {tickets.data && tickets.data.items.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground text-xs">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Código</th>
-                <th className="px-4 py-2 text-left font-medium">Título</th>
-                <th className="px-4 py-2 text-left font-medium">Status</th>
-                <th className="px-4 py-2 text-left font-medium">Prioridade</th>
-                <th className="px-4 py-2 text-left font-medium">Categoria</th>
-                {isStaff && <th className="px-4 py-2 text-left font-medium">Solicitante</th>}
-                <th className="px-4 py-2 text-left font-medium">Responsável</th>
-                <th className="px-4 py-2 text-left font-medium">Resolução</th>
-                <th className="px-4 py-2 text-left font-medium">Aberto em</th>
+                <th className="px-4 py-3 text-left font-medium">Código</th>
+                <th className="px-4 py-3 text-left font-medium">Título</th>
+                <th className="px-4 py-3 text-left font-medium">Status</th>
+                <th className="px-4 py-3 text-left font-medium">Prioridade</th>
+                <th className="px-4 py-3 text-left font-medium">Categoria</th>
+                {isStaff && <th className="px-4 py-3 text-left font-medium">Solicitante</th>}
+                <th className="px-4 py-3 text-left font-medium">Responsável</th>
+                <th className="px-4 py-3 text-left font-medium">Resolução</th>
+                <th className="px-4 py-3 text-left font-medium">Aberto em</th>
               </tr>
             </thead>
 
@@ -231,40 +231,40 @@ export function TicketList() {
                   new Date(ticket.slaResolutionDueAt) < new Date()
 
                 return (
-                  <tr key={ticket.id} className="border-t">
-                    <td className="px-4 py-2 font-mono text-xs">
+                  <tr key={ticket.id} className="border-t transition-colors hover:bg-muted/50">
+                    <td className="px-4 py-3 font-mono text-xs">
                       <Link to={`/chamados/${ticket.id}`} className="text-primary hover:underline">
                         {ticket.code}
                       </Link>
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       <Link to={`/chamados/${ticket.id}`} className="hover:underline">
                         {ticket.title}
                       </Link>
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       <TicketStatusBadge status={ticket.status} />
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       <TicketPriorityBadge priority={ticket.priority} />
                     </td>
-                    <td className="text-muted-foreground px-4 py-2">{ticket.categoryName}</td>
+                    <td className="text-muted-foreground px-4 py-3">{ticket.categoryName}</td>
                     {isStaff && (
-                      <td className="text-muted-foreground px-4 py-2">{ticket.requesterName}</td>
+                      <td className="text-muted-foreground px-4 py-3">{ticket.requesterName}</td>
                     )}
-                    <td className="text-muted-foreground px-4 py-2">
+                    <td className="text-muted-foreground px-4 py-3">
                       {ticket.assignedTechnicianName ?? '—'}
                     </td>
                     <td
                       className={
-                        overdueResolution ? 'text-sla-overdue px-4 py-2 font-medium' : 'px-4 py-2'
+                        overdueResolution ? 'text-sla-overdue px-4 py-3 font-medium' : 'px-4 py-3'
                       }
                     >
                       {ticket.resolvedAt
                         ? 'resolvido'
                         : formatDeadlineDistance(ticket.slaResolutionDueAt)}
                     </td>
-                    <td className="text-muted-foreground px-4 py-2 whitespace-nowrap">
+                    <td className="text-muted-foreground px-4 py-3 whitespace-nowrap">
                       {formatDateTime(ticket.createdAt)}
                     </td>
                   </tr>

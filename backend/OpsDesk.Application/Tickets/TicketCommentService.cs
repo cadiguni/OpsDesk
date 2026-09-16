@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Domain.Entities;
+using OpsDesk.Domain.Enums;
+using OpsDesk.Domain.Tickets;
 
 namespace OpsDesk.Application.Tickets;
 
@@ -13,7 +15,7 @@ namespace OpsDesk.Application.Tickets;
 /// fora da equipe crie comentário interno; e na leitura, pelo filtro de visibilidade, que
 /// corta por <c>IsInternal</c> dentro do SQL.
 /// </summary>
-public class TicketCommentService(IOpsDeskDbContext db, IClock clock)
+public class TicketCommentService(IOpsDeskDbContext db, IClock clock, TicketWorkflowService workflow)
 {
     public async Task<AddCommentResult> AddAsync(
         Guid ticketId,
@@ -45,6 +47,17 @@ public class TicketCommentService(IOpsDeskDbContext db, IClock clock)
         }
 
         var now = clock.UtcNow;
+
+        if (request.CloseTicket)
+        {
+            if (!TicketStatusMachine.IsAllowedForRole(ticket.Status, TicketStatus.Closed, author.Role))
+            {
+                return new AddCommentResult.ClosingNotAllowed();
+            }
+
+            workflow.ApplySlaEffects(ticket, ticket.Status, TicketStatus.Closed, now);
+            ticket.Status = TicketStatus.Closed;
+        }
 
         var comment = new TicketComment
         {

@@ -159,6 +159,11 @@ public static class TicketEndpoints
 
             AddCommentResult.TicketNotFound => TypedResults.NotFound(),
 
+            AddCommentResult.ClosingNotAllowed => TypedResults.Problem(
+                detail: "Seu perfil não permite fechar o chamado neste status. O comentário não foi enviado.",
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Fechamento não permitido"),
+
             AddCommentResult.InternalNotAllowed forbidden => TypedResults.Problem(
                 detail: forbidden.Message,
                 statusCode: StatusCodes.Status403Forbidden,
