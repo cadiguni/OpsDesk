@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Auth;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Domain.Enums;
 
@@ -12,9 +12,7 @@ namespace OpsDesk.Api.Authentication;
 public class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {
     public Guid? UserId =>
-        Guid.TryParse(accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
-            ? id
-            : null;
+        Guid.TryParse(Claim(OpsDeskClaims.Subject), out var id) ? id : null;
 
     public bool IsAuthenticated => accessor.HttpContext?.User.Identity?.IsAuthenticated == true;
 
@@ -36,7 +34,7 @@ public class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     }
 
     private UserRole? Role =>
-        Enum.TryParse<UserRole>(accessor.HttpContext?.User.FindFirstValue(ClaimTypes.Role), out var role)
-            ? role
-            : null;
+        Enum.TryParse<UserRole>(Claim(OpsDeskClaims.Role), out var role) ? role : null;
+
+    private string? Claim(string type) => accessor.HttpContext?.User.FindFirst(type)?.Value;
 }

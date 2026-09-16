@@ -37,7 +37,9 @@ A API aplica as migrations e popula o seed na subida, apenas em ambiente de dese
 
 ### Estado do código
 
-A fundação está pronta e roda: domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática do chamado, seed e SPA com roteamento. **Nenhum endpoint de negócio existe ainda** — a próxima etapa é a fatia de autenticação.
+Fundação e autenticação prontas: domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática do chamado, seed, e o fluxo de sessão completo — cadastro, login, refresh com rotação, logout, telas e rota protegida.
+
+**Ainda não existe:** abertura e listagem de chamados, comentários, mudança de status, atribuição, painel do técnico e dashboard. A próxima etapa é o chamado.
 
 ---
 

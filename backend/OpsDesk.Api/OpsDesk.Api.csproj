@@ -20,6 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- O WebApplicationFactory precisa alcançar a classe Program, que os top-level
+         statements geram como internal. -->
+    <InternalsVisibleTo Include="OpsDesk.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OpsDesk.Application\OpsDesk.Application.csproj" />
     <ProjectReference Include="..\OpsDesk.Infrastructure\OpsDesk.Infrastructure.csproj" />
     <ProjectReference Include="..\OpsDesk.Domain\OpsDesk.Domain.csproj" />

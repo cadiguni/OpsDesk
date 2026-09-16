@@ -12,11 +12,15 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 ## Estado atual
 
-A fundação está de pé e roda: solution com os quatro projetos mais testes, entidades do domínio, `DbContext` com as configurações de mapeamento, interceptor de histórico, `IBusinessCalendar`, primeira migration, seed de dados de referência e SPA com roteamento e cliente HTTP. `docker compose up` sobe PostgreSQL e API, aplica a migration e popula o seed.
+Fundação e autenticação prontas e funcionando.
 
-O que **não** existe ainda: endpoint de negócio nenhum. Não há autenticação em uso, nem CRUD de chamado, nem dashboard. A API expõe `/health`, `/openapi/v1.json` e `/swagger`. O JWT está configurado para validar token, mas nada emite token ainda.
+**Pronto:** domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática do chamado por interceptor, seed de dados de referência, e o fluxo de autenticação ponta a ponta — cadastro, login, refresh com rotação e detecção de reuso, logout, sessão atual, telas de login e cadastro, rota protegida e renovação automática de token no cliente HTTP.
 
-Próximo passo natural: fatia vertical de autenticação (register, login, refresh em cookie `httpOnly`, tela de login).
+**Endpoints existentes:** `/health`, `/openapi/v1.json`, `/swagger`, e `POST /api/auth/{register,login,refresh,logout}` mais `GET /api/auth/me`.
+
+**Ainda não existe:** CRUD de chamado, comentários, mudança de status, atribuição, painel do técnico e dashboard. A `Home` do frontend é provisória.
+
+Próximo passo: chamados — abertura, listagem paginada com filtros no backend e tela de detalhe.
 
 ## Documentação
 
@@ -141,6 +145,9 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Trocar para `DateTimeOffset` não basta:** o Npgsql só aceita deslocamento **zero** em `timestamptz`. Um `DateTimeOffset` com `-03:00` é recusado na escrita, mesmo sendo o instante correto. Por isso o `IBusinessCalendar` faz a conta no fuso do expediente mas devolve o prazo em UTC. Há teste fixando os dois lados disso (`Npgsql_recusa_data_com_deslocamento_diferente_de_utc` e `O_prazo_volta_em_UTC_porque_e_assim_que_o_banco_aceita`).
 * O expediente tem **dez** horas (08:00–18:00), então "1 dia útil" do README são 10 horas úteis, não 8. A tradução de dias para horas está no `DatabaseSeeder`, não espalhada.
 * A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
+* **O JSON da API serializa enum como texto**, configurado por `ConfigureHttpJsonOptions`. Sem isso o padrão é inteiro, e `role: 1` chega ao frontend onde o TypeScript espera `'Technician'` — o rótulo sai vazio e nada acusa o erro em tempo de compilação. Há teste de contrato fixando isso.
+* **Ler `IConfiguration` durante a montagem do pipeline congela o valor daquele instante.** Fontes registradas depois — como as de um `WebApplicationFactory` em teste — são ignoradas em silêncio. Por isso `JwtOptions`, `RateLimitOptions` e a connection string são resolvidos por DI, e não lidos direto no `Program.cs`.
+* O cookie de refresh é `Secure`. Chrome e Firefox aceitam cookie `Secure` sobre HTTP em `localhost`; **o Safari não**. Em Mac com Safari, a sessão não sobrevive ao reload em desenvolvimento.
 * Os binários nativos do Vite e do oxlint declaram `engines: ^20.19 || >=22.12`. Em Node fora dessa faixa o npm **omite o binário em silêncio**: `npm install` termina com sucesso e o build estoura por binding ausente. O `frontend/.npmrc` liga `engine-strict` justamente para transformar isso em erro na instalação.
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
 * Chamado cancelado fica fora dos indicadores de SLA.

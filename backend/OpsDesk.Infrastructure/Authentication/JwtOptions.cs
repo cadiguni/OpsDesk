@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace OpsDesk.Api.Authentication;
+namespace OpsDesk.Infrastructure.Authentication;
 
 /// <summary>
 /// Parâmetros do JWT de acesso e do refresh token (decisão 4.6 de docs/arquitetura.md).

@@ -26,15 +26,34 @@ public class PostgresFixture : IAsyncLifetime
         .WithPassword("opsdesk")
         .Build();
 
+    private OpsDeskApiFactory? _api;
+
+    /// <summary>Connection string do container, para quem precisa de uma API própria.</summary>
+    public string ConnectionString => _container.GetConnectionString();
+
+    /// <summary>API em memória sobre o mesmo banco, para os testes que exercitam HTTP.</summary>
+    public OpsDeskApiFactory Api => _api
+        ?? throw new InvalidOperationException("A fixture ainda não foi inicializada.");
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
 
         await using var db = CreateContext();
         await db.Database.MigrateAsync();
+
+        _api = new OpsDeskApiFactory(_container.GetConnectionString());
     }
 
-    public async Task DisposeAsync() => await _container.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        if (_api is not null)
+        {
+            await _api.DisposeAsync();
+        }
+
+        await _container.DisposeAsync();
+    }
 
     /// <summary>
     /// Contexto com os mesmos interceptors da API. Rodar sem eles provaria só que o EF

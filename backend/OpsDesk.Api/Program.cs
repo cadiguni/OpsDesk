@@ -1,12 +1,18 @@
 using System.Text;
+using System.Text.Json.Serialization;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpsDesk.Api.Authentication;
 using OpsDesk.Api.Authorization;
+using OpsDesk.Api.Endpoints;
+using OpsDesk.Api.RateLimiting;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Auth;
 using OpsDesk.Infrastructure;
+using OpsDesk.Infrastructure.Authentication;
 using OpsDesk.Infrastructure.Persistence;
 using OpsDesk.Infrastructure.Persistence.Seed;
 using Serilog;
@@ -26,26 +32,32 @@ try
         .ReadFrom.Services(services)
         .Enrich.FromLogContext());
 
-    builder.Services
-        .AddOptions<JwtOptions>()
-        .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
-        .ValidateDataAnnotations()
-        // Chave de assinatura ausente derruba a subida, não a primeira requisição de login.
-        .ValidateOnStart();
-
     builder.Services.AddOpsDeskInfrastructure(builder.Configuration);
 
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
-    var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
-        ?? throw new InvalidOperationException("Seção 'Jwt' não configurada.");
+    // Os validators vivem na Application; o registro varre aquele assembly.
+    builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
 
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+
+    // O JwtOptions vem por DI, e não de uma leitura direta do IConfiguration aqui.
+    // Ler configuração durante a montagem do pipeline captura o valor daquele instante e
+    // ignora fontes registradas depois — é o que faz a configuração de um teste de
+    // integração não surtir efeito, sem nenhum erro para indicar o problema.
     builder.Services
-        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
+        .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+        .Configure<IOptions<JwtOptions>>((bearer, jwtOptions) =>
         {
-            options.TokenValidationParameters = new TokenValidationParameters
+            var jwt = jwtOptions.Value;
+
+            // Sem remapeamento de nomes de claim. Com ele ligado, "sub" viraria a URI
+            // longa do ClaimTypes na entrada e a leitura por nome curto falharia em
+            // silêncio — é a causa clássica de "a claim está no token mas não chega".
+            bearer.MapInboundClaims = false;
+
+            bearer.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
                 ValidateAudience = true,
@@ -54,6 +66,11 @@ try
                 ValidIssuer = jwt.Issuer,
                 ValidAudience = jwt.Audience,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)),
+
+                // Os nomes que o RequireRole e o User.Identity.Name vão procurar.
+                NameClaimType = OpsDeskClaims.Name,
+                RoleClaimType = OpsDeskClaims.Role,
+
                 // Token de acesso é curto; tolerar cinco minutos de desvio anularia isso.
                 ClockSkew = TimeSpan.FromSeconds(30)
             };
@@ -61,26 +78,27 @@ try
 
     builder.Services.AddAuthorizationBuilder().AddOpsDeskPolicies();
 
-    // Rate limiting nos endpoints anônimos, em especial no login: é onde a força bruta bate.
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        options.AddFixedWindowLimiter(RateLimitPolicies.Anonymous, limiter =>
-        {
-            limiter.PermitLimit = 20;
-            limiter.Window = TimeSpan.FromMinutes(1);
-            limiter.QueueLimit = 0;
-        });
-    });
+    builder.Services
+        .AddOptions<RateLimitOptions>()
+        .Bind(builder.Configuration.GetSection(RateLimitOptions.SectionName));
 
-    var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    builder.Services.AddRateLimiter(options => options.AddOpsDeskPolicies());
 
     builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
-        .WithOrigins(corsOrigins)
+        .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
         .AllowAnyHeader()
         .AllowAnyMethod()
         // O refresh token viaja em cookie httpOnly, e cookie entre origens exige isto.
         .AllowCredentials()));
+
+    // Enum como texto no JSON, e não como inteiro.
+    //
+    // Mesma razão de persistir enum como string no banco: "Technician" se lê, 1 não. E
+    // tem consequência prática — os tipos do frontend são gerados do schema OpenAPI, e com
+    // inteiro o TypeScript receberia `role: number`, perdendo a união fechada de valores
+    // que hoje garante em tempo de compilação que todo perfil tem rótulo na interface.
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
     builder.Services.AddOpenApi();
 
@@ -108,6 +126,7 @@ try
     app.UseAuthorization();
 
     app.MapHealthChecks("/health").AllowAnonymous();
+    app.MapAuthEndpoints();
 
     if (app.Environment.IsDevelopment())
     {
@@ -128,12 +147,6 @@ catch (Exception ex)
 finally
 {
     await Log.CloseAndFlushAsync();
-}
-
-/// <summary>Nomes das políticas de rate limiting.</summary>
-internal static class RateLimitPolicies
-{
-    public const string Anonymous = "anonymous";
 }
 
 internal static class StartupTasks

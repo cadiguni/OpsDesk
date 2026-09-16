@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using OpsDesk.Application.Abstractions;
 using OpsDesk.Domain.Entities;
 
 namespace OpsDesk.Infrastructure.Persistence;
 
-public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options) : DbContext(options)
+public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
+    : DbContext(options), IOpsDeskDbContext
 {
     /// <summary>Sequence que gera <c>Ticket.Code</c>. Ver invariante 5 do CLAUDE.md.</summary>
     public const string TicketCodeSequence = "ticket_code_seq";

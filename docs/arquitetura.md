@@ -63,19 +63,24 @@ Não há biblioteca de estado global. O que o TanStack Query guarda é cache de 
 ```
 backend/
 ├── OpsDesk.Api/              endpoints, autenticação, middlewares, DI
-│   ├── Authentication/       JwtOptions, ICurrentUser sobre HttpContext
-│   └── Authorization/        políticas por perfil
+│   ├── Authentication/       ICurrentUser sobre HttpContext, cookie de refresh
+│   ├── Authorization/        políticas por perfil
+│   ├── Endpoints/            grupos de minimal API
+│   ├── RateLimiting/         política dos endpoints anônimos
+│   └── Validation/           filtro de endpoint do FluentValidation
 ├── OpsDesk.Domain/           entidades, enums, regras invariantes
 │   ├── Common/               interfaces de timestamp
 │   ├── Entities/
 │   ├── Enums/
 │   └── Tickets/              máquina de estados
 ├── OpsDesk.Application/      serviços de caso de uso, DTOs, validators
-│   ├── Abstractions/         IClock, IBusinessCalendar, ICurrentUser
+│   ├── Abstractions/         IClock, IBusinessCalendar, ICurrentUser, IOpsDeskDbContext
+│   ├── Auth/                 AuthService, contratos, validators, claims
 │   ├── Authorization/        filtro de visibilidade no IQueryable
 │   ├── Common/               paginação
 │   └── Sla/                  SlaClock
 ├── OpsDesk.Infrastructure/   DbContext, migrations, interceptors, integrações
+│   ├── Authentication/       JwtOptions, emissão de JWT, refresh token
 │   ├── Persistence/
 │   │   ├── Configurations/
 │   │   ├── Interceptors/
@@ -84,7 +89,7 @@ backend/
 │   └── Time/                 BusinessCalendar, feriados, relógio
 └── OpsDesk.Tests/
     ├── Unit/                 domínio, SLA, horas úteis, visibilidade
-    └── Integration/          PostgreSQL real via Testcontainers
+    └── Integration/          PostgreSQL real via Testcontainers, API por HTTP
 ```
 
 Quatro projetos são o suficiente. A regra prática: se uma classe nova não tem onde morar entre esses quatro, o problema provavelmente é a classe, não a estrutura.
@@ -135,9 +140,17 @@ Uma única abstração responde: "somando N horas úteis a partir deste instante
 
 ### 4.6 JWT curto, refresh em cookie `httpOnly`
 
-O token de acesso é curto e trafega em `Authorization`. O refresh token vive em cookie `httpOnly`, `Secure` e `SameSite=Strict`, é rotacionado a cada uso e revogável no banco.
+O token de acesso vale quinze minutos e trafega em `Authorization`, guardado apenas em memória no navegador. O refresh token vive em cookie `httpOnly`, `Secure` e `SameSite=Strict`, com `Path=/api/auth`, é rotacionado a cada uso e revogável no banco.
 
 **Por quê:** token de acesso em `localStorage` é legível por qualquer XSS. O sistema ser interno reduz a exposição, não o impacto.
+
+Detalhes que a implementação acrescenta:
+
+* **Só o hash do refresh token é persistido**, em SHA-256. Um dump do banco não permite assumir sessão de ninguém. O hash é SHA-256 e não `PasswordHasher` de propósito: a invariante 8 trata de senha, segredo de baixa entropia que precisa de KDF lento contra dicionário; este token é 256 bits aleatórios, e pagar PBKDF2 a cada renovação só adicionaria latência.
+* **Rotação com detecção de reuso.** Cada refresh token vale um uso. Apresentar um token já rotacionado é sinal de vazamento ou de repetição de tráfego — o cliente legítimo descarta o antigo —, e a resposta é revogar todas as sessões daquele usuário. `ReplacedByTokenHash` mantém a cadeia auditável.
+* **Uma renovação por vez no cliente.** Sem isso, uma tela que dispara várias consultas com o token expirado abriria várias renovações simultâneas; como o token é de uso único, a primeira invalidaria as demais e o backend interpretaria o resto como reuso, derrubando a sessão. O sintoma seria logout aleatório ao abrir telas pesadas.
+* **Toda recusa de login devolve a mesma resposta.** E-mail inexistente, senha errada, conta desativada e conta sem senha são indistinguíveis em status, mensagem e tempo de resposta — este último garantido comparando contra um hash descartável quando não há o que comparar. Diferenciar transformaria o login em consulta de "esta pessoa trabalha aqui".
+* **Rate limiting particionado por IP** nos endpoints anônimos. Um limitador global seria pior do que nenhum: quem testasse senhas consumiria a cota de todos e trancaria os usuários legítimos para fora.
 
 ### 4.7 Tipos do frontend são gerados do OpenAPI
 
@@ -151,7 +164,9 @@ Os testes de integração sobem um PostgreSQL efêmero com Testcontainers e exer
 
 **Por quê:** o provider InMemory do EF Core não tem as semânticas que este projeto usa, entre elas sequences, `timestamptz` e comportamento transacional. Teste que passa nele e falha no Postgres é pior do que não ter teste.
 
-Enquanto não há endpoint, os testes de integração exercitam o `DbContext` com os mesmos interceptors da API — é o que prova sequence, `timestamptz`, índice único e histórico automático. Os testes por `WebApplicationFactory` entram junto com os endpoints.
+Os testes de integração vêm em dois níveis, sobre o mesmo container: os que exercitam o `DbContext` com os mesmos interceptors da API, provando sequence, `timestamptz`, índice único e histórico automático; e os que exercitam a API por HTTP com `WebApplicationFactory`, provando status, corpo, atributos de cookie e autorização.
+
+O cliente HTTP de teste guarda cookie entre requisições e usa base `https`, porque o transporte do `TestServer` é em memória — o suporte nativo a cookie não entra no caminho — e porque um `CookieContainer` se recusa a devolver cookie `Secure` em requisição `http`. Com base `http`, o teste de renovação de sessão passaria sem testar nada.
 
 O que precisa de cobertura obrigatória:
 
@@ -162,17 +177,25 @@ O que precisa de cobertura obrigatória:
 
 ### 4.9 Sem MediatR, AutoMapper ou repositório genérico
 
-Casos de uso são classes de serviço injetadas por DI. O mapeamento para DTO é feito com `Select` direto no `IQueryable`. O acesso a dados usa o `DbContext`.
+Casos de uso são classes de serviço injetadas por DI. O mapeamento para DTO é feito com `Select` direto no `IQueryable`. O acesso a dados usa o `DbContext`, exposto à camada de aplicação pela interface `IOpsDeskDbContext`.
+
+Essa interface existe por causa do sentido das dependências — os serviços moram na Application, o contexto mora na Infrastructure, e é a Infrastructure que referencia a Application. Ela **não** é o repositório genérico que esta decisão descarta: expõe os mesmos `DbSet<T>` do contexto real, então os serviços continuam escrevendo LINQ com `Where`, `Include` e projeção, e o filtro de visibilidade continua sendo aplicado no `IQueryable`. Um repositório genérico trocaria isso por `GetAll` e `FindBy`, e é justamente aí que a query se esconde.
 
 **Por quê:** MediatR e AutoMapper passaram a licença comercial e, mesmo antes disso, resolviam problemas de escala que este projeto não tem. A projeção manual ainda gera SQL melhor, porque só traz as colunas usadas. O `DbContext` já é Unit of Work e já expõe `IQueryable`.
 
-### 4.10 Nomes do banco em snake_case
+### 4.10 Configuração é lida por DI, não durante a montagem do pipeline
+
+`JwtOptions`, `RateLimitOptions` e a connection string são resolvidos de `IOptions<T>` ou do `IServiceProvider` no momento do uso, nunca por uma leitura direta de `IConfiguration` no `Program.cs`.
+
+**Por quê:** ler configuração enquanto o pipeline é montado captura o valor daquele instante e ignora fontes registradas depois. É exatamente o que acontece com `WebApplicationFactory`, que injeta a sua configuração após a execução do ponto de entrada: o teste configura um valor, a aplicação usa outro, e nada falha para indicar o problema. Descobrimos isso com a suíte de integração sendo estrangulada pelo rate limiting de produção mesmo tendo configurado um limite alto.
+
+### 4.11 Nomes do banco em snake_case
 
 Tabelas e colunas usam `snake_case`, aplicado pela convenção do `EFCore.NamingConventions`. As classes e propriedades continuam em `PascalCase`.
 
 **Por quê:** é a convenção do PostgreSQL, e identificador em `PascalCase` no Postgres obriga a citar tudo entre aspas em qualquer consulta manual — `SELECT "AssignedTechnicianId" FROM "Tickets"`. É o mesmo motivo de persistir enum como string: o banco precisa continuar legível para quem for investigar um chamado às duas da manhã.
 
-### 4.11 Migrations desde o primeiro commit
+### 4.12 Migrations desde o primeiro commit
 
 O schema evolui exclusivamente por migrations do EF Core, versionadas no repositório. Nada de alteração manual no banco, nem de `EnsureCreated`.
 
