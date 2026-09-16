@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restaurar
+        run: |
+          dotnet restore backend/OpsDesk.slnx
+          dotnet tool restore
+
+      - name: Compilar
+        run: dotnet build backend/OpsDesk.slnx --configuration Release --no-restore
+
+      # Os testes de integração sobem PostgreSQL por Testcontainers, usando o Docker
+      # que já existe no runner. Não há serviço de banco declarado aqui de propósito:
+      # quem controla o ciclo de vida do container é o teste.
+      - name: Testar
+        run: dotnet test backend/OpsDesk.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      # Schema divergente do modelo é a falha que só aparece no deploy. Se alguém mudou
+      # uma entidade e esqueceu a migration, o snapshot gerado difere do versionado.
+      - name: Verificar migration pendente
+        run: |
+          dotnet dotnet-ef migrations has-pending-model-changes \
+            --project backend/OpsDesk.Infrastructure \
+            --startup-project backend/OpsDesk.Api
+
+      - name: Publicar resultado dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: '**/test-results.trx'
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Lido do .nvmrc para não haver duas versões de Node definidas no repositório.
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Compilar
+        run: npm run build
+
+  docker:
+    name: Imagem da API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Só constrói, não publica: garante que o Dockerfile não quebrou junto com o código.
+      - name: Construir imagem
+        run: docker build -f backend/OpsDesk.Api/Dockerfile backend

@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csproj,slnx,props,targets}]
+indent_size = 4
+
+[*.cs]
+# Convenções de código do backend
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_sort_system_directives_first = true
+
+# Erro, não aviso: async sem await e CancellationToken esquecido são bugs
+# que aparecem só sob carga.
+dotnet_diagnostic.CS1998.severity = error
+dotnet_diagnostic.CS4014.severity = error
+
+[*.{ts,tsx,js,jsx,json,jsonc,yml,yaml,css,html,md}]
+indent_size = 2
+
+[*.{yml,yaml}]
+end_of_line = lf
+
+[*.md]
+trim_trailing_whitespace = false

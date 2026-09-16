@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage/
+*.coverage
+*.trx
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Ambiente
+.env
+.env.*
+!.env.example
+!frontend/.env.development
+appsettings.*.local.json
+
+# Editores
+.idea/
+*.swp
+.DS_Store

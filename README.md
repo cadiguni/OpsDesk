@@ -17,6 +17,28 @@ Este documento é a especificação funcional do produto. Os detalhes técnicos 
 | [docs/integracao-email.md](docs/integracao-email.md) | ingestão de chamados por e-mail e caixa de SPAM (versão 2.0) |
 | [CLAUDE.md](CLAUDE.md) | instruções para agentes de IA que trabalham no repositório |
 
+### Como executar
+
+Pré-requisitos: **.NET 10 SDK**, **Node `^20.19` ou `>=22.12`** (ver `frontend/.nvmrc`) e **Docker**.
+
+```bash
+docker compose up -d                 # PostgreSQL + API
+cd frontend && npm ci && npm run dev # SPA
+```
+
+| Onde | Endereço |
+| --- | --- |
+| SPA | http://localhost:5173 |
+| API | http://localhost:8080 |
+| Swagger | http://localhost:8080/swagger |
+| Health check | http://localhost:8080/health |
+
+A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
+
+### Estado do código
+
+A fundação está pronta e roda: domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática do chamado, seed e SPA com roteamento. **Nenhum endpoint de negócio existe ainda** — a próxima etapa é a fatia de autenticação.
+
 ---
 
 ## 2. Objetivo do sistema
@@ -241,6 +263,38 @@ Exemplo:
 
 ---
 
+### 5.8 Transições permitidas
+
+O ciclo de vida não é um campo livre: cada status tem um conjunto fechado de destinos, e a regra vive em um lugar só (`TicketStatusMachine`, no domínio).
+
+| De | Para |
+| --- | --- |
+| Aberto | Em triagem, Em atendimento, Cancelado |
+| Em triagem | Em atendimento, Aguardando usuário, Cancelado |
+| Em atendimento | Em triagem, Aguardando usuário, Resolvido, Cancelado |
+| Aguardando usuário | Em atendimento, Resolvido, Cancelado |
+| Resolvido | Fechado, Em atendimento |
+| Fechado | — |
+| Cancelado | — |
+
+Observações:
+
+* **Aberto não vai direto para Resolvido.** Resolver sem passar por atendimento deixaria o chamado sem responsável e sem marco de resposta, e o indicador de SLA não teria o que medir.
+* **Resolvido volta para Em atendimento** quando a solução não resolveu. É o caminho de retrabalho antes do fechamento.
+* **Fechado e Cancelado são terminais na versão 1.** A reabertura de chamado fechado está no roadmap e abrirá essa transição quando existir.
+
+Quem pode mover o chamado:
+
+| Perfil | Transições |
+| --- | --- |
+| Gestor | qualquer uma da tabela acima |
+| Técnico | qualquer uma da tabela acima |
+| Usuário | cancelar o próprio chamado; fechar um chamado já resolvido, confirmando a solução |
+
+O perfil autoriza a *transição*; o filtro de visibilidade é que decide *em qual chamado*. São verificações independentes, e as duas acontecem.
+
+---
+
 ## 6. Prioridades
 
 O sistema terá quatro prioridades iniciais.
@@ -325,6 +379,15 @@ A versão 1 terá um SLA simples baseado na prioridade do chamado.
 | Crítica    |       1 hora útil |      4 horas úteis |
 
 O prazo é calculado uma única vez, na criação do chamado, e gravado em `SlaResponseDueAt` e `SlaResolutionDueAt`. Não existe processo em segundo plano recalculando prazos: um chamado está vencido quando `now() > prazo` e o chamado ainda não atingiu o marco correspondente.
+
+Os prazos são sempre armazenados em **horas úteis**, inclusive os expressos em dias na tabela acima. Um dia útil é o expediente inteiro da seção 8.1, ou seja dez horas — 08:00 às 18:00. A conversão é única e fica no seed das políticas:
+
+| Prioridade | Resposta | Resolução |
+| ---------- | -------: | --------: |
+| Baixa      |     24 h |      50 h |
+| Média      |      8 h |      30 h |
+| Alta       |      4 h |      10 h |
+| Crítica    |      1 h |       4 h |
 
 ---
 
@@ -768,6 +831,38 @@ Campos:
 * IsActive;
 * CreatedAt;
 * UpdatedAt.
+
+---
+
+### Holiday
+
+Feriado excluído da contagem de horas úteis. A data é local ao fuso do expediente, por isso é uma data e não um instante.
+
+Campos:
+
+* Id;
+* Date;
+* Name.
+
+O seed popula os feriados nacionais do ano corrente e dos dois seguintes, calculando as datas móveis a partir da Páscoa. Carnaval e Corpus Christi entram na lista: são ponto facultativo federal, mas a equipe de suporte não está de plantão, e SLA contando hora útil em dia sem ninguém atendendo é indicador mentiroso.
+
+---
+
+### RefreshToken
+
+Refresh token revogável, ligado a um usuário. Só o hash é armazenado; o valor em claro vive no cookie `httpOnly` do navegador e é rotacionado a cada uso.
+
+Campos:
+
+* Id;
+* UserId;
+* TokenHash;
+* ExpiresAt;
+* CreatedAt;
+* RevokedAt;
+* ReplacedByTokenHash.
+
+`ReplacedByTokenHash` mantém a cadeia de rotação auditável: dá para reconstruir qual token substituiu qual.
 
 ---
 

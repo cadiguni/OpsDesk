@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="OpsDesk.Api/OpsDesk.Api.csproj" />
+  <Project Path="OpsDesk.Application/OpsDesk.Application.csproj" />
+  <Project Path="OpsDesk.Domain/OpsDesk.Domain.csproj" />
+  <Project Path="OpsDesk.Infrastructure/OpsDesk.Infrastructure.csproj" />
+  <Project Path="OpsDesk.Tests/OpsDesk.Tests.csproj" />
+</Solution>

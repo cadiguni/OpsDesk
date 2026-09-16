@@ -1,0 +1,52 @@
+# Ambiente local do OpsDesk: PostgreSQL + API.
+# O frontend roda fora do compose (vite dev) até ser containerizado.
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: opsdesk-postgres
+    environment:
+      POSTGRES_DB: opsdesk
+      POSTGRES_USER: opsdesk
+      POSTGRES_PASSWORD: opsdesk
+      # Fuso do container em UTC: o banco guarda timestamptz e a conversão para
+      # America/Sao_Paulo acontece na aplicação e na interface.
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      # O PostgreSQL 18 quer o volume um nível acima do PGDATA, em /var/lib/postgresql.
+      # Montar direto em .../data faz a imagem recusar a subida, porque quebraria um
+      # pg_upgrade --link futuro na fronteira do mount.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsdesk -d opsdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: OpsDesk.Api/Dockerfile
+    container_name: opsdesk-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__OpsDesk: "Host=postgres;Port=5432;Database=opsdesk;Username=opsdesk;Password=opsdesk"
+      # Chave de desenvolvimento. Em qualquer outro ambiente vem de variável de
+      # ambiente do orquestrador ou do Azure Key Vault, nunca deste arquivo.
+      Jwt__SigningKey: "desenvolvimento-apenas-troque-esta-chave-em-qualquer-outro-ambiente"
+      Cors__AllowedOrigins__0: "http://localhost:5173"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres-data:

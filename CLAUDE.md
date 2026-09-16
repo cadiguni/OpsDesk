@@ -12,7 +12,11 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 ## Estado atual
 
-O repositório contém apenas documentação. Nenhum código foi escrito ainda, e nenhum comando de build, teste ou execução existe. Ao criar o primeiro código, atualize a seção "Comandos" abaixo com o que passar a existir de verdade.
+A fundação está de pé e roda: solution com os quatro projetos mais testes, entidades do domínio, `DbContext` com as configurações de mapeamento, interceptor de histórico, `IBusinessCalendar`, primeira migration, seed de dados de referência e SPA com roteamento e cliente HTTP. `docker compose up` sobe PostgreSQL e API, aplica a migration e popula o seed.
+
+O que **não** existe ainda: endpoint de negócio nenhum. Não há autenticação em uso, nem CRUD de chamado, nem dashboard. A API expõe `/health`, `/openapi/v1.json` e `/swagger`. O JWT está configurado para validar token, mas nada emite token ainda.
+
+Próximo passo natural: fatia vertical de autenticação (register, login, refresh em cookie `httpOnly`, tela de login).
 
 ## Documentação
 
@@ -36,7 +40,67 @@ Se uma mudança de código contrariar um desses documentos, atualize o documento
 
 ## Comandos
 
-Ainda não existem. Serão preenchidos quando o código for criado.
+Pré-requisitos: .NET 10 SDK, Node `^20.19 || >=22.12` (ver `frontend/.nvmrc`), Docker.
+
+### Ambiente local
+
+```bash
+docker compose up -d          # PostgreSQL + API em http://localhost:8080
+docker compose logs -f api
+docker compose down           # -v também descarta o volume do banco
+```
+
+A API aplica migration e roda o seed na subida, **apenas em Development**. Em outros ambientes o schema sobe como etapa explícita do deploy.
+
+### Backend
+
+```bash
+dotnet restore backend/OpsDesk.slnx
+dotnet build backend/OpsDesk.slnx
+dotnet test backend/OpsDesk.slnx                                  # unidade + integração
+dotnet test backend/OpsDesk.slnx --filter FullyQualifiedName~Unit # só unidade, sem Docker
+dotnet run --project backend/OpsDesk.Api                          # usa o Postgres do compose
+```
+
+Os testes de integração sobem PostgreSQL por Testcontainers e **exigem Docker rodando**.
+
+### Migrations
+
+`dotnet-ef` está fixado no manifesto de ferramentas; rode `dotnet tool restore` uma vez.
+
+```bash
+dotnet dotnet-ef migrations add NomeDescritivoNoImperativo \
+  --project backend/OpsDesk.Infrastructure \
+  --startup-project backend/OpsDesk.Api \
+  --output-dir Persistence/Migrations
+
+dotnet dotnet-ef migrations has-pending-model-changes \
+  --project backend/OpsDesk.Infrastructure \
+  --startup-project backend/OpsDesk.Api
+```
+
+O `OpsDeskDbContextFactory` atende as ferramentas de design-time. Para apontar para outro banco, defina `OPSDESK_MIGRATIONS_CONNECTION`.
+
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run dev        # http://localhost:5173
+npm run typecheck
+npm run lint
+npm run build
+```
+
+### Usuários de desenvolvimento
+
+Criados pelo seed só em Development, senha `OpsDesk@123`:
+
+| E-mail | Perfil |
+| --- | --- |
+| `gestor@opsdesk.local` | Gestor |
+| `tecnico@opsdesk.local` | Técnico |
+| `usuario@opsdesk.local` | Usuário |
 
 ## Invariantes
 
@@ -74,6 +138,10 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 ## Armadilhas conhecidas
 
 * O Npgsql rejeita `DateTime` com `Kind = Unspecified` em coluna `timestamptz`. Use `DateTimeOffset` ou `DateTime` em UTC explícito.
+* **Trocar para `DateTimeOffset` não basta:** o Npgsql só aceita deslocamento **zero** em `timestamptz`. Um `DateTimeOffset` com `-03:00` é recusado na escrita, mesmo sendo o instante correto. Por isso o `IBusinessCalendar` faz a conta no fuso do expediente mas devolve o prazo em UTC. Há teste fixando os dois lados disso (`Npgsql_recusa_data_com_deslocamento_diferente_de_utc` e `O_prazo_volta_em_UTC_porque_e_assim_que_o_banco_aceita`).
+* O expediente tem **dez** horas (08:00–18:00), então "1 dia útil" do README são 10 horas úteis, não 8. A tradução de dias para horas está no `DatabaseSeeder`, não espalhada.
+* A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
+* Os binários nativos do Vite e do oxlint declaram `engines: ^20.19 || >=22.12`. Em Node fora dessa faixa o npm **omite o binário em silêncio**: `npm install` termina com sucesso e o build estoura por binding ausente. O `frontend/.npmrc` liga `engine-strict` justamente para transformar isso em erro na instalação.
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.

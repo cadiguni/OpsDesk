@@ -10,11 +10,13 @@ O OpsDesk é um monorepo com dois artefatos executáveis e um banco relacional:
 
 ```
 opsdesk/
-├── backend/            API ASP.NET Core
-├── frontend/           SPA React + Vite
-├── docs/               documentação técnica
-├── docker-compose.yml  Postgres + API (+ Mailpit a partir da 2.0)
-└── README.md           especificação funcional
+├── backend/             API ASP.NET Core (OpsDesk.slnx)
+├── frontend/            SPA React + Vite
+├── docs/                documentação técnica
+├── .github/workflows/   CI
+├── docker-compose.yml   Postgres + API (+ Mailpit a partir da 2.0)
+├── dotnet-tools.json    dotnet-ef fixado por versão
+└── README.md            especificação funcional
 ```
 
 Não há microsserviços, fila ou cache distribuído na versão 1. O volume de um service desk interno não justifica, e cada peça adicional é uma peça a mais para operar.
@@ -61,10 +63,28 @@ Não há biblioteca de estado global. O que o TanStack Query guarda é cache de 
 ```
 backend/
 ├── OpsDesk.Api/              endpoints, autenticação, middlewares, DI
+│   ├── Authentication/       JwtOptions, ICurrentUser sobre HttpContext
+│   └── Authorization/        políticas por perfil
 ├── OpsDesk.Domain/           entidades, enums, regras invariantes
-├── OpsDesk.Infrastructure/   DbContext, migrations, interceptors, integrações
+│   ├── Common/               interfaces de timestamp
+│   ├── Entities/
+│   ├── Enums/
+│   └── Tickets/              máquina de estados
 ├── OpsDesk.Application/      serviços de caso de uso, DTOs, validators
-└── OpsDesk.Tests/            testes de unidade e de integração
+│   ├── Abstractions/         IClock, IBusinessCalendar, ICurrentUser
+│   ├── Authorization/        filtro de visibilidade no IQueryable
+│   ├── Common/               paginação
+│   └── Sla/                  SlaClock
+├── OpsDesk.Infrastructure/   DbContext, migrations, interceptors, integrações
+│   ├── Persistence/
+│   │   ├── Configurations/
+│   │   ├── Interceptors/
+│   │   ├── Migrations/
+│   │   └── Seed/
+│   └── Time/                 BusinessCalendar, feriados, relógio
+└── OpsDesk.Tests/
+    ├── Unit/                 domínio, SLA, horas úteis, visibilidade
+    └── Integration/          PostgreSQL real via Testcontainers
 ```
 
 Quatro projetos são o suficiente. A regra prática: se uma classe nova não tem onde morar entre esses quatro, o problema provavelmente é a classe, não a estrutura.
@@ -105,6 +125,8 @@ Todas as colunas de data e hora são `timestamptz`, gravadas em UTC. A conversã
 
 **Por quê:** o Npgsql é rígido com `DateTime.Kind` e rejeita `Unspecified` em `timestamptz`. Definir a regra antes da primeira migration evita uma refatoração de dados depois.
 
+Há uma sutileza que só aparece na primeira gravação: trocar `DateTime` por `DateTimeOffset` **não** resolve sozinho. O Npgsql aceita apenas deslocamento zero em `timestamptz` — um `DateTimeOffset` com `-03:00` é recusado na escrita, mesmo representando o instante correto. Por isso o `IBusinessCalendar` faz a conta no fuso do expediente e devolve o prazo em UTC, e não em horário local. Os dois lados dessa regra têm teste.
+
 ### 4.5 Horas úteis ficam isoladas em `IBusinessCalendar`
 
 Uma única abstração responde: "somando N horas úteis a partir deste instante, qual é o prazo?" e "quantos minutos úteis existem entre A e B?". Expediente e feriados são dados, não código.
@@ -129,6 +151,8 @@ Os testes de integração sobem um PostgreSQL efêmero com Testcontainers e exer
 
 **Por quê:** o provider InMemory do EF Core não tem as semânticas que este projeto usa, entre elas sequences, `timestamptz` e comportamento transacional. Teste que passa nele e falha no Postgres é pior do que não ter teste.
 
+Enquanto não há endpoint, os testes de integração exercitam o `DbContext` com os mesmos interceptors da API — é o que prova sequence, `timestamptz`, índice único e histórico automático. Os testes por `WebApplicationFactory` entram junto com os endpoints.
+
 O que precisa de cobertura obrigatória:
 
 * cada transição da máquina de estados do chamado;
@@ -142,7 +166,13 @@ Casos de uso são classes de serviço injetadas por DI. O mapeamento para DTO é
 
 **Por quê:** MediatR e AutoMapper passaram a licença comercial e, mesmo antes disso, resolviam problemas de escala que este projeto não tem. A projeção manual ainda gera SQL melhor, porque só traz as colunas usadas. O `DbContext` já é Unit of Work e já expõe `IQueryable`.
 
-### 4.10 Migrations desde o primeiro commit
+### 4.10 Nomes do banco em snake_case
+
+Tabelas e colunas usam `snake_case`, aplicado pela convenção do `EFCore.NamingConventions`. As classes e propriedades continuam em `PascalCase`.
+
+**Por quê:** é a convenção do PostgreSQL, e identificador em `PascalCase` no Postgres obriga a citar tudo entre aspas em qualquer consulta manual — `SELECT "AssignedTechnicianId" FROM "Tickets"`. É o mesmo motivo de persistir enum como string: o banco precisa continuar legível para quem for investigar um chamado às duas da manhã.
+
+### 4.11 Migrations desde o primeiro commit
 
 O schema evolui exclusivamente por migrations do EF Core, versionadas no repositório. Nada de alteração manual no banco, nem de `EnsureCreated`.
 
@@ -171,10 +201,10 @@ O seed inicial cria as categorias da seção 7 do README, as políticas de SLA d
 
 ## 7. CI
 
-GitHub Actions, em todo push e pull request:
+GitHub Actions (`.github/workflows/ci.yml`), em todo push e pull request, em três jobs paralelos:
 
-1. build do backend;
-2. testes de unidade e de integração;
-3. verificação de que não há migration pendente sem gerar;
-4. build e typecheck do frontend;
-5. lint.
+**Backend:** restore, build em Release, testes de unidade e de integração, e `ef migrations has-pending-model-changes` — que falha se alguém mudou uma entidade e esqueceu de gerar a migration. Os testes de integração usam o Docker do próprio runner, via Testcontainers; não há serviço de banco declarado no workflow, porque o ciclo de vida do container é do teste.
+
+**Frontend:** `npm ci`, typecheck, lint e build. A versão do Node vem do `frontend/.nvmrc`, para não existirem duas fontes de verdade sobre isso no repositório.
+
+**Imagem da API:** `docker build` do Dockerfile, sem publicar. Serve para o Dockerfile não apodrecer em silêncio junto com o código.
