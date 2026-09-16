@@ -1,5 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
+import type { UserRole } from '@/domain/enums'
+
 /**
  * Cliente HTTP da API.
  *
@@ -16,7 +18,7 @@ export const api = axios.create({
   },
 })
 
-export const REFRESH_PATH = '/api/auth/refresh'
+const REFRESH_PATH = '/api/auth/refresh'
 
 let accessToken: string | null = null
 let onSessionLost: (() => void) | null = null
@@ -46,33 +48,55 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-/**
- * Uma renovação por vez.
- *
- * Sem isto, uma tela que dispara quatro consultas em paralelo com o token expirado
- * abriria quatro renovações simultâneas. Como o refresh token é de uso único e rotaciona,
- * a primeira invalidaria as outras três — e o backend interpretaria as tentativas
- * seguintes como reuso de token, derrubando todas as sessões do usuário. O bug apareceria
- * como logout aleatório ao abrir uma tela pesada.
- */
-let inFlightRefresh: Promise<string | null> | null = null
+export type RefreshedSession = {
+  accessToken: string
+  expiresAt: string
+  user: {
+    id: string
+    name: string
+    email: string
+    role: UserRole
+  }
+}
 
-async function refreshAccessToken(): Promise<string | null> {
+/**
+ * Uma renovação por vez, em todo o aplicativo.
+ *
+ * Isto não é otimização, é correção. O refresh token é de uso único e rotaciona a cada
+ * uso, então duas renovações concorrentes com o mesmo cookie fazem a segunda apresentar um
+ * token já rotacionado — e o servidor, fora da janela de tolerância, trata isso como
+ * vazamento e derruba todas as sessões do usuário.
+ *
+ * As duas formas de isso acontecer sozinho:
+ *
+ * - o `StrictMode` do React executa o efeito duas vezes em desenvolvimento, então a
+ *   restauração de sessão dispara duas vezes por carregamento de página;
+ * - uma tela que faz várias consultas em paralelo com o token expirado recebe vários 401
+ *   ao mesmo tempo.
+ *
+ * Ambas passam por aqui, e por isso só a primeira chamada vai à rede: as outras aguardam
+ * a mesma promessa. O sintoma que isso evita é logout aparentemente aleatório.
+ */
+let inFlightRefresh: Promise<RefreshedSession | null> | null = null
+
+export function refreshSession(): Promise<RefreshedSession | null> {
   inFlightRefresh ??= (async () => {
     try {
-      const { data } = await api.post<{ accessToken: string }>(REFRESH_PATH, null, {
-        // Evita recursão: a própria renovação não passa pelo tratamento de 401.
+      const { data } = await api.post<RefreshedSession>(REFRESH_PATH, null, {
+        // Evita recursão: o 401 da própria renovação não dispara outra renovação.
         skipAuthRefresh: true,
-      } as InternalAxiosRequestConfig)
+      })
 
       setAccessToken(data.accessToken)
 
-      return data.accessToken
+      return data
     } catch {
       setAccessToken(null)
 
       return null
     } finally {
+      // Liberado apenas depois de a promessa resolver, para que quem chegar durante a
+      // renovação reaproveite o resultado em vez de abrir uma segunda.
       inFlightRefresh = null
     }
   })()
@@ -83,7 +107,7 @@ async function refreshAccessToken(): Promise<string | null> {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const request = error.config as (InternalAxiosRequestConfig & AuthRetryFlags) | undefined
+    const request = error.config as InternalAxiosRequestConfig | undefined
 
     const shouldRefresh =
       error.response?.status === 401 &&
@@ -95,9 +119,9 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const token = await refreshAccessToken()
+    const refreshed = await refreshSession()
 
-    if (!token) {
+    if (!refreshed) {
       onSessionLost?.()
 
       return Promise.reject(error)
@@ -105,16 +129,11 @@ api.interceptors.response.use(
 
     // Uma única repetição, marcada para não entrar em laço se o 401 persistir.
     request.isAuthRetry = true
-    request.headers.Authorization = `Bearer ${token}`
+    request.headers.Authorization = `Bearer ${refreshed.accessToken}`
 
     return api.request(request)
   },
 )
-
-type AuthRetryFlags = {
-  skipAuthRefresh?: boolean
-  isAuthRetry?: boolean
-}
 
 declare module 'axios' {
   export interface AxiosRequestConfig {

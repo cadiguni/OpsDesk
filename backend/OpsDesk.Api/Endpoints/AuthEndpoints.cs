@@ -26,18 +26,18 @@ public static class AuthEndpoints
 
         group.MapPost("/register", Register)
             .ValidatingBody<RegisterRequest>()
-            .RequireRateLimiting(RateLimitPolicies.Anonymous)
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
             .AllowAnonymous()
             .WithSummary("Cria uma conta de solicitante e abre a sessão.");
 
         group.MapPost("/login", Login)
             .ValidatingBody<LoginRequest>()
-            .RequireRateLimiting(RateLimitPolicies.Anonymous)
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
             .AllowAnonymous()
             .WithSummary("Autentica e abre a sessão.");
 
         group.MapPost("/refresh", Refresh)
-            .RequireRateLimiting(RateLimitPolicies.Anonymous)
+            .RequireRateLimiting(RateLimitPolicies.Refresh)
             .AllowAnonymous()
             .WithSummary("Renova o token de acesso a partir do cookie de refresh.");
 

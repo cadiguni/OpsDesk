@@ -1,4 +1,4 @@
-import { api, REFRESH_PATH, setAccessToken } from '@/lib/api'
+import { api, refreshSession, setAccessToken } from '@/lib/api'
 import type { UserRole } from '@/domain/enums'
 
 export type SessionUser = {
@@ -45,23 +45,15 @@ export async function register(input: RegisterInput): Promise<SessionUser> {
 /**
  * Restaura a sessão a partir do cookie de refresh.
  *
- * `skipAuthRefresh` evita que o 401 desta chamada — o caso normal de quem não está
- * autenticado — dispare o interceptor e vire uma segunda tentativa de renovação.
+ * Delega para `refreshSession`, que garante uma renovação por vez. Chamar o endpoint
+ * direto daqui era um bug: o `StrictMode` executa o efeito duas vezes, saíam duas
+ * renovações concorrentes, e a segunda apresentava um token já rotacionado — o que o
+ * servidor lê como vazamento e responde derrubando todas as sessões.
  */
 export async function restoreSession(): Promise<SessionUser | null> {
-  try {
-    const { data } = await api.post<AuthResponse>(REFRESH_PATH, null, {
-      skipAuthRefresh: true,
-    })
+  const refreshed = await refreshSession()
 
-    setAccessToken(data.accessToken)
-
-    return data.user
-  } catch {
-    setAccessToken(null)
-
-    return null
-  }
+  return refreshed?.user ?? null
 }
 
 export async function logout(): Promise<void> {

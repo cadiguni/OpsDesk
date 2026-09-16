@@ -147,10 +147,10 @@ O token de acesso vale quinze minutos e trafega em `Authorization`, guardado ape
 Detalhes que a implementação acrescenta:
 
 * **Só o hash do refresh token é persistido**, em SHA-256. Um dump do banco não permite assumir sessão de ninguém. O hash é SHA-256 e não `PasswordHasher` de propósito: a invariante 8 trata de senha, segredo de baixa entropia que precisa de KDF lento contra dicionário; este token é 256 bits aleatórios, e pagar PBKDF2 a cada renovação só adicionaria latência.
-* **Rotação com detecção de reuso.** Cada refresh token vale um uso. Apresentar um token já rotacionado é sinal de vazamento ou de repetição de tráfego — o cliente legítimo descarta o antigo —, e a resposta é revogar todas as sessões daquele usuário. `ReplacedByTokenHash` mantém a cadeia auditável.
+* **Rotação com detecção de reuso, e uma janela de tolerância.** Cada refresh token vale um uso. Apresentar um token já rotacionado **depois** da janela é sinal de vazamento, e a resposta é revogar todas as sessões daquele usuário; `ReplacedByTokenHash` mantém a cadeia auditável. **Dentro** da janela — trinta segundos por padrão — um novo token é emitido em vez disso, porque ali a causa provável é concorrência do próprio cliente: duas abas recarregando juntas, uma requisição repetida por queda de rede, ou o efeito executado duas vezes pelo `StrictMode` do React. Sem essa tolerância, a rotação de uso único é estrita demais para o mundo real e o cliente legítimo derruba a própria sessão. É o mesmo desenho que as boas práticas do OAuth 2.0 chamam de *leeway*.
 * **Uma renovação por vez no cliente.** Sem isso, uma tela que dispara várias consultas com o token expirado abriria várias renovações simultâneas; como o token é de uso único, a primeira invalidaria as demais e o backend interpretaria o resto como reuso, derrubando a sessão. O sintoma seria logout aleatório ao abrir telas pesadas.
 * **Toda recusa de login devolve a mesma resposta.** E-mail inexistente, senha errada, conta desativada e conta sem senha são indistinguíveis em status, mensagem e tempo de resposta — este último garantido comparando contra um hash descartável quando não há o que comparar. Diferenciar transformaria o login em consulta de "esta pessoa trabalha aqui".
-* **Rate limiting particionado por IP** nos endpoints anônimos. Um limitador global seria pior do que nenhum: quem testasse senhas consumiria a cota de todos e trancaria os usuários legítimos para fora.
+* **Rate limiting particionado por IP, com cotas separadas.** Um limitador global seria pior do que nenhum: quem testasse senhas consumiria a cota de todos e trancaria os usuários legítimos para fora. Login e cadastro dividem uma cota apertada — são as duas portas que aceitam senha. A renovação de sessão tem cota própria e bem mais larga, porque a interface renova a cada carregamento de página: com cota compartilhada, algumas recargas gastavam as tentativas de credencial e o usuário recebia "muitas tentativas" na primeira vez que digitava a senha, sem nunca ter errado nada.
 
 ### 4.7 Tipos do frontend são gerados do OpenAPI
 
@@ -209,7 +209,7 @@ O schema evolui exclusivamente por migrations do EF Core, versionadas no reposit
 | Filtros | aplicados em SQL, nunca em memória |
 | Dashboard | consultas agregadas dedicadas, uma por indicador, sem carregar chamados |
 | Senhas | `PasswordHasher<T>`, nunca hash próprio |
-| Rate limiting | no login e nos endpoints anônimos, via middleware nativo do ASP.NET Core |
+| Rate limiting | middleware nativo do ASP.NET Core, particionado por IP, com cota apertada para credencial (login e cadastro) e cota larga e separada para renovação de sessão |
 | Logs | estruturados, sem corpo de comentário nem dado pessoal desnecessário |
 
 ---

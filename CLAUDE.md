@@ -14,13 +14,18 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 Fundação e autenticação prontas e funcionando.
 
-**Pronto:** domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática do chamado por interceptor, seed de dados de referência, e o fluxo de autenticação ponta a ponta — cadastro, login, refresh com rotação e detecção de reuso, logout, sessão atual, telas de login e cadastro, rota protegida e renovação automática de token no cliente HTTP.
+**Pronto:** domínio, persistência com migration, cálculo de SLA em horas úteis, auditoria automática por interceptor, seed de dados de referência, autenticação completa (cadastro, login, refresh com rotação e detecção de reuso, logout, sessão atual) e o chamado em leitura e criação — abertura, listagem paginada com filtros e ordenação no backend, e tela de detalhe.
 
-**Endpoints existentes:** `/health`, `/openapi/v1.json`, `/swagger`, e `POST /api/auth/{register,login,refresh,logout}` mais `GET /api/auth/me`.
+**Endpoints existentes:**
 
-**Ainda não existe:** CRUD de chamado, comentários, mudança de status, atribuição, painel do técnico e dashboard. A `Home` do frontend é provisória.
+* `/health`, `/openapi/v1.json`, `/swagger`
+* `POST /api/auth/{register,login,refresh,logout}`, `GET /api/auth/me`
+* `POST /api/tickets`, `GET /api/tickets` (filtros e paginação), `GET /api/tickets/{id}`
+* `GET /api/categories`
 
-Próximo passo: chamados — abertura, listagem paginada com filtros no backend e tela de detalhe.
+**Ainda não existe:** comentários, mudança de status, atribuição de técnico e dashboard. O detalhe do chamado é somente leitura.
+
+Próximo passo: atendimento — comentários público e interno, mudança de status pela máquina de estados, atribuição de técnico.
 
 ## Documentação
 
@@ -145,6 +150,9 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Trocar para `DateTimeOffset` não basta:** o Npgsql só aceita deslocamento **zero** em `timestamptz`. Um `DateTimeOffset` com `-03:00` é recusado na escrita, mesmo sendo o instante correto. Por isso o `IBusinessCalendar` faz a conta no fuso do expediente mas devolve o prazo em UTC. Há teste fixando os dois lados disso (`Npgsql_recusa_data_com_deslocamento_diferente_de_utc` e `O_prazo_volta_em_UTC_porque_e_assim_que_o_banco_aceita`).
 * O expediente tem **dez** horas (08:00–18:00), então "1 dia útil" do README são 10 horas úteis, não 8. A tradução de dias para horas está no `DatabaseSeeder`, não espalhada.
 * A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
+* **Rotação de refresh token de uso único é estrita demais sem janela de tolerância.** Duas abas recarregando, ou o `StrictMode` do React executando o efeito duas vezes, produzem duas renovações concorrentes com o mesmo cookie — e a segunda parece reuso. `JwtOptions.RefreshTokenGraceSeconds` cobre isso no servidor, e no cliente `refreshSession` garante uma renovação por vez. Os dois lados são necessários: um sozinho não resolve.
+* **Não misture cota de rate limiting entre login e renovação de sessão.** A interface renova a cada carregamento de página; com cota compartilhada, recarregar algumas vezes gastava as tentativas de credencial e o login legítimo recebia 429 na primeira tentativa.
+* **Corpo de requisição malformado estoura como `BadHttpRequestException`** e, sem tratamento, sai como 500 — o que significa "defeito nosso" e alimenta alerta de produção. O `MalformedRequestHandler` traduz para 400.
 * **O JSON da API serializa enum como texto**, configurado por `ConfigureHttpJsonOptions`. Sem isso o padrão é inteiro, e `role: 1` chega ao frontend onde o TypeScript espera `'Technician'` — o rótulo sai vazio e nada acusa o erro em tempo de compilação. Há teste de contrato fixando isso.
 * **Ler `IConfiguration` durante a montagem do pipeline congela o valor daquele instante.** Fontes registradas depois — como as de um `WebApplicationFactory` em teste — são ignoradas em silêncio. Por isso `JwtOptions`, `RateLimitOptions` e a connection string são resolvidos por DI, e não lidos direto no `Program.cs`.
 * O cookie de refresh é `Secure`. Chrome e Firefox aceitam cookie `Secure` sobre HTTP em `localhost`; **o Safari não**. Em Mac com Safari, a sessão não sobrevive ao reload em desenvolvimento.

@@ -363,6 +363,70 @@ public class AuthEndpointsTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task Renovacoes_concorrentes_nao_derrubam_a_sessao()
+    {
+        // O bug que este teste fixa: o StrictMode do React executa o efeito de restauração
+        // duas vezes, e duas abas abertas fazem o mesmo em produção. Duas renovações
+        // paralelas com o mesmo cookie levavam a segunda a apresentar um token já
+        // rotacionado, o servidor lia como vazamento e derrubava todas as sessões — logout
+        // aparentemente aleatório, provocado pelo próprio cliente legítimo.
+        await fixture.ResetAsync();
+
+        var cookies = new CookieHandler();
+        using var client = fixture.Api.CreateDefaultClient(cookies);
+        client.BaseAddress = new Uri("https://localhost");
+
+        await client.PostAsJsonAsync("/api/auth/register", NewRegistration());
+        var shared = cookies["opsdesk_refresh"];
+
+        // Duas renovações com o mesmo token, como duas abas recarregando juntas.
+        var first = await Refresh(shared);
+        var second = await Refresh(shared);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        // E a sessão continua utilizável depois disso.
+        var body = await second.Content.ReadJsonAsync<AuthEndpoints.AuthResponse>();
+        var latest = SentCookie(second);
+
+        var third = await Refresh(latest);
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+        Assert.False(string.IsNullOrWhiteSpace(body!.AccessToken));
+    }
+
+    [Fact]
+    public async Task Fora_da_janela_de_tolerancia_o_reuso_volta_a_derrubar_tudo()
+    {
+        // A tolerância é curta de propósito: ela cobre concorrência do próprio cliente,
+        // não um token guardado para usar depois.
+        await fixture.ResetAsync();
+
+        await using var api = new OpsDeskApiFactory(
+            fixture.ConnectionString, refreshGraceSeconds: 0);
+
+        var cookies = new CookieHandler();
+        using var client = api.CreateDefaultClient(cookies);
+        client.BaseAddress = new Uri("https://localhost");
+
+        await client.PostAsJsonAsync("/api/auth/register", NewRegistration());
+        var stolen = cookies["opsdesk_refresh"];
+
+        await client.PostAsync("/api/auth/refresh", null);
+
+        using var attacker = api.CreateDefaultClient();
+        attacker.BaseAddress = new Uri("https://localhost");
+        attacker.DefaultRequestHeaders.Add("Cookie", $"opsdesk_refresh={stolen}");
+
+        var replay = await attacker.PostAsync("/api/auth/refresh", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
+
+        await using var db = fixture.CreateContext();
+        Assert.False(await db.RefreshTokens.AnyAsync(t => t.RevokedAt == null));
+    }
+
+    [Fact]
     public async Task Reusar_um_refresh_token_ja_rotacionado_derruba_todas_as_sessoes()
     {
         // Apresentar um token já usado só acontece se o cookie vazou ou se alguém está
@@ -370,8 +434,12 @@ public class AuthEndpointsTests(PostgresFixture fixture)
         // único jeito de expulsar quem roubou o token.
         await fixture.ResetAsync();
 
+        // Janela de tolerância desligada: aqui o cenário é vazamento, não concorrência.
+        await using var api = new OpsDeskApiFactory(
+            fixture.ConnectionString, refreshGraceSeconds: 0);
+
         var cookies = new CookieHandler();
-        using var client = fixture.Api.CreateDefaultClient(cookies);
+        using var client = api.CreateDefaultClient(cookies);
         client.BaseAddress = new Uri("https://localhost");
 
         await client.PostAsJsonAsync("/api/auth/register", NewRegistration());
@@ -382,7 +450,7 @@ public class AuthEndpointsTests(PostgresFixture fixture)
         var legitimate = cookies["opsdesk_refresh"];
 
         // O atacante tenta usar o token antigo.
-        using var attacker = fixture.Api.CreateDefaultClient();
+        using var attacker = api.CreateDefaultClient();
         attacker.BaseAddress = new Uri("https://localhost");
         attacker.DefaultRequestHeaders.Add("Cookie", $"opsdesk_refresh={stolen}");
 
@@ -390,7 +458,7 @@ public class AuthEndpointsTests(PostgresFixture fixture)
         Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
 
         // E o token do cliente legítimo também deixou de valer.
-        using var victim = fixture.Api.CreateDefaultClient();
+        using var victim = api.CreateDefaultClient();
         victim.BaseAddress = new Uri("https://localhost");
         victim.DefaultRequestHeaders.Add("Cookie", $"opsdesk_refresh={legitimate}");
 
@@ -571,6 +639,24 @@ public class AuthEndpointsTests(PostgresFixture fixture)
 
         return registration with { Email = registration.Email.Trim().ToLowerInvariant() };
     }
+
+    /// <summary>Renovação apresentando um token específico, sem depender de cookie guardado.</summary>
+    private async Task<HttpResponseMessage> Refresh(string? token)
+    {
+        using var client = fixture.Api.CreateDefaultClient();
+        client.BaseAddress = new Uri("https://localhost");
+        client.DefaultRequestHeaders.Add("Cookie", $"opsdesk_refresh={token}");
+
+        return await client.PostAsync("/api/auth/refresh", null);
+    }
+
+    private static string? SentCookie(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? values
+                .FirstOrDefault(c => c.StartsWith("opsdesk_refresh="))
+                ?.Split(';')[0]
+                .Split('=', 2)[1]
+            : null;
 
     private static async Task<string?> Detail(HttpResponseMessage response)
     {

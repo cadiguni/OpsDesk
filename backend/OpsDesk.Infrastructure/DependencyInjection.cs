@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Sla;
+using OpsDesk.Application.Tickets;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Infrastructure.Authentication;
 using OpsDesk.Infrastructure.Persistence;
@@ -53,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<IAccessTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<AuthService>();
+        services.AddScoped<TicketService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
         services.AddScoped<DatabaseSeeder>();

@@ -9,6 +9,7 @@ using OpsDesk.Api.Authentication;
 using OpsDesk.Api.Authorization;
 using OpsDesk.Api.Endpoints;
 using OpsDesk.Api.RateLimiting;
+using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Auth;
 using OpsDesk.Infrastructure;
@@ -107,6 +108,7 @@ try
         .AddDbContextCheck<OpsDeskDbContext>("postgres");
 
     builder.Services.AddProblemDetails();
+    builder.Services.AddExceptionHandler<MalformedRequestHandler>();
 
     var app = builder.Build();
 
@@ -127,6 +129,7 @@ try
 
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapAuthEndpoints();
+    app.MapTicketEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

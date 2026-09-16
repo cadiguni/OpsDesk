@@ -60,15 +60,37 @@ public class RefreshTokenStore(
 
         var now = clock.UtcNow;
 
-        if (existing.RevokedAt is not null)
+        if (existing.RevokedAt is { } revokedAt)
         {
-            // Token já usado sendo apresentado de novo. O cliente legítimo nunca faz isso,
-            // porque descarta o antigo na rotação. Ou houve vazamento do cookie, ou alguém
-            // está reproduzindo tráfego — nos dois casos derrubamos todas as sessões do
-            // usuário, que é o único jeito de cortar o acesso de quem roubou o token.
+            var sinceRotation = now - revokedAt;
+
+            if (sinceRotation <= TimeSpan.FromSeconds(_options.RefreshTokenGraceSeconds))
+            {
+                // Dentro da janela de tolerância: duas renovações concorrentes do próprio
+                // cliente. Emitimos um token novo em vez de tratar como vazamento.
+                //
+                // O vínculo de substituição do token apresentado não é reescrito: ele
+                // registra a primeira rotação, que é o que realmente aconteceu primeiro.
+                var concurrent = Create(existing.UserId);
+
+                db.RefreshTokens.Add(concurrent.Entity);
+                await db.SaveChangesAsync(cancellationToken);
+
+                logger.LogDebug(
+                    "Renovação concorrente dentro da tolerância para o usuário {UserId}.",
+                    existing.UserId);
+
+                return new RefreshTokenRotation.Rotated(existing.UserId, concurrent.Token);
+            }
+
+            // Fora da janela: o cliente legítimo já descartou este token há tempo. Ou o
+            // cookie vazou, ou alguém está reproduzindo tráfego — nos dois casos derrubamos
+            // todas as sessões, que é o único jeito de cortar o acesso de quem o roubou.
             logger.LogWarning(
-                "Reuso de refresh token detectado para o usuário {UserId}. Revogando todas as sessões.",
-                existing.UserId);
+                "Reuso de refresh token detectado para o usuário {UserId} " +
+                "{Elapsed} após a rotação. Revogando todas as sessões.",
+                existing.UserId,
+                sinceRotation);
 
             await RevokeAllForUserAsync(existing.UserId, cancellationToken);
 

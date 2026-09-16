@@ -22,7 +22,7 @@ public class AuthRateLimitTests(PostgresFixture fixture)
         await fixture.ResetAsync();
 
         await using var api = new OpsDeskApiFactory(
-            fixture.ConnectionString, anonymousPermitsPerMinute: Limit);
+            fixture.ConnectionString, credentialAttemptsPerMinute: Limit);
 
         using var client = api.CreateBrowserClient();
 
@@ -42,6 +42,41 @@ public class AuthRateLimitTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task A_renovacao_de_sessao_nao_consome_a_cota_de_login()
+    {
+        // A falha que este teste fixa: com cota compartilhada, recarregar a página algumas
+        // vezes gastava as tentativas de credencial, e o usuário legítimo recebia "muitas
+        // tentativas" na primeira vez que digitava a senha, sem nunca ter errado nada.
+        await fixture.ResetAsync();
+
+        await using var api = new OpsDeskApiFactory(
+            fixture.ConnectionString,
+            credentialAttemptsPerMinute: Limit,
+            refreshAttemptsPerMinute: 100);
+
+        using var client = api.CreateBrowserClient();
+
+        var registration = new RegisterRequest(
+            "Bruno Lima", "bruno.cota@empresa.com", "senha-de-teste-123", "senha-de-teste-123");
+
+        await client.PostAsJsonAsync("/api/auth/register", registration);
+
+        // Muito mais renovações do que a cota de credencial permitiria.
+        for (var i = 0; i < Limit * 3; i++)
+        {
+            var refresh = await client.PostAsync("/api/auth/refresh", null);
+
+            Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+        }
+
+        // E o login continua disponível.
+        var login = await client.PostAsJsonAsync(
+            "/api/auth/login", new LoginRequest(registration.Email, "senha-de-teste-123"));
+
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
+
+    [Fact]
     public async Task O_limite_nao_alcanca_endpoint_autenticado()
     {
         // /me é do usuário já autenticado e não entra na cota anônima. Se entrasse, uma
@@ -49,7 +84,7 @@ public class AuthRateLimitTests(PostgresFixture fixture)
         await fixture.ResetAsync();
 
         await using var api = new OpsDeskApiFactory(
-            fixture.ConnectionString, anonymousPermitsPerMinute: Limit);
+            fixture.ConnectionString, credentialAttemptsPerMinute: Limit);
 
         using var client = api.CreateBrowserClient();
 

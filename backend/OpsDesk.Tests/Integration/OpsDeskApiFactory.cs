@@ -13,8 +13,11 @@ namespace OpsDesk.Tests.Integration;
 /// inicialização não rodem: migration e seed são responsabilidade da fixture, que precisa
 /// controlar exatamente o que existe no banco em cada teste.
 /// </summary>
-public class OpsDeskApiFactory(string connectionString, int anonymousPermitsPerMinute = 10_000)
-    : WebApplicationFactory<Program>
+public class OpsDeskApiFactory(
+    string connectionString,
+    int credentialAttemptsPerMinute = 10_000,
+    int refreshAttemptsPerMinute = 10_000,
+    int refreshGraceSeconds = 30) : WebApplicationFactory<Program>
 {
     /// <summary>
     /// Chave de assinatura só deste processo de teste. Não reaproveitamos a de
@@ -35,13 +38,17 @@ public class OpsDeskApiFactory(string connectionString, int anonymousPermitsPerM
                 ["Jwt:Audience"] = "opsdesk-tests",
                 ["Cors:AllowedOrigins:0"] = "https://localhost",
 
-                // O limite real é vinte por minuto e por IP. No TestServer todas as
-                // requisições vêm sem endereço de origem, portanto caem na mesma partição:
-                // com o valor de produção, a suíte se estrangularia sozinha e os testes
-                // passariam a depender da ordem de execução. Um teste dedicado sobe uma
-                // fábrica própria com limite baixo para verificar o 429.
-                ["RateLimiting:AnonymousPermitsPerMinute"] =
-                    anonymousPermitsPerMinute.ToString(),
+                // Os limites reais são vinte tentativas de credencial e cento e vinte
+                // renovações por minuto, por IP. No TestServer todas as requisições vêm sem
+                // endereço de origem, portanto caem na mesma partição: com os valores de
+                // produção, a suíte se estrangularia sozinha e os testes passariam a
+                // depender da ordem de execução. Os testes de rate limiting sobem fábricas
+                // próprias com limite baixo.
+                ["RateLimiting:CredentialAttemptsPerMinute"] =
+                    credentialAttemptsPerMinute.ToString(),
+                ["RateLimiting:RefreshAttemptsPerMinute"] =
+                    refreshAttemptsPerMinute.ToString(),
+                ["Jwt:RefreshTokenGraceSeconds"] = refreshGraceSeconds.ToString(),
             }));
     }
 
