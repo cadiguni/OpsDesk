@@ -19,7 +19,7 @@ Este documento é a especificação funcional do produto. Os detalhes técnicos 
 
 ### Como executar
 
-Pré-requisitos: **.NET 10 SDK**, **Node `^20.19` ou `>=22.12`** (ver `frontend/.nvmrc`) e **Docker**.
+Pré-requisitos: **.NET 10 SDK**, **Node 24 LTS** (`frontend/.nvmrc`; a faixa aceita é `^20.19` ou `>=22.12`) e **Docker**.
 
 ```bash
 docker compose up -d                 # PostgreSQL + API

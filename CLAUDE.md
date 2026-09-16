@@ -40,7 +40,7 @@ Se uma mudança de código contrariar um desses documentos, atualize o documento
 
 ## Comandos
 
-Pré-requisitos: .NET 10 SDK, Node `^20.19 || >=22.12` (ver `frontend/.nvmrc`), Docker.
+Pré-requisitos: .NET 10 SDK, Node 24 LTS (`frontend/.nvmrc`; a faixa aceita é `^20.19 || >=22.12`), Docker.
 
 ### Ambiente local
 
