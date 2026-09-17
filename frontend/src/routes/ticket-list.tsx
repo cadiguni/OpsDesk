@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { AlarmClock, Search, UserX, X } from 'lucide-react'
 
-import { TicketPriorityBadge, TicketStatusBadge } from '@/components/ticket-badges'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -14,9 +15,10 @@ import {
 } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
 import { useCategories, useTickets } from '@/features/tickets/queries'
+import { TicketCard, TicketCardSkeleton } from '@/features/tickets/ticket-card'
 import type { TicketSort } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
-import { formatDateTime, formatDeadlineDistance } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 const sortLabels: Record<TicketSort, string> = {
   CreatedAtDescending: 'Mais recentes',
@@ -82,6 +84,44 @@ export function TicketList() {
     setParams(next, { replace: true })
   }
 
+  /** Status é multisseleção: a fila de trabalho raramente é um status só. */
+  function toggleStatus(value: TicketStatus) {
+    update({
+      status: status.includes(value) ? status.filter((item) => item !== value) : [...status, value],
+    })
+  }
+
+  const activeFilters = [
+    ...status.map((value) => ({
+      key: `status-${value}`,
+      label: ticketStatusLabels[value],
+      clear: () => toggleStatus(value),
+    })),
+    ...priority.map((value) => ({
+      key: `priority-${value}`,
+      label: ticketPriorityLabels[value],
+      clear: () => update({ priority: [] }),
+    })),
+    ...(categoryId
+      ? [
+          {
+            key: 'category',
+            label: categories.data?.find((item) => item.id === categoryId)?.name ?? 'Categoria',
+            clear: () => update({ categoryId: null }),
+          },
+        ]
+      : []),
+    ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => update({ search: null }) }] : []),
+    ...(unassigned
+      ? [{ key: 'unassigned', label: 'Sem responsável', clear: () => update({ unassigned: null }) }]
+      : []),
+    ...(overdue ? [{ key: 'overdue', label: 'Vencidos', clear: () => update({ overdue: null }) }] : []),
+  ]
+
+  function clearAll() {
+    setParams(new URLSearchParams(), { replace: true })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -99,99 +139,135 @@ export function TicketList() {
         </Link>
       </div>
 
-      <div className="grid gap-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-        <label className="grid gap-1.5 text-xs font-medium">
-          Buscar
-          <Input
-            defaultValue={search}
-            placeholder="Código ou título"
-            onBlur={(event) => update({ search: event.target.value })}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                update({ search: event.currentTarget.value })
-              }
+      <div className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
+        {/* Busca e ordenação ficam sempre visíveis: são o que se usa a cada visita. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <form
+            className="relative min-w-60 flex-1"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const field = event.currentTarget.elements.namedItem('search')
+              update({ search: field instanceof HTMLInputElement ? field.value : null })
             }}
-          />
-        </label>
-
-        <label className="grid gap-1.5 text-xs font-medium">
-          Status
-          <Select
-            value={status[0] ?? ''}
-            onChange={(event) => update({ status: event.target.value ? [event.target.value] : [] })}
           >
-            <option value="">Todos</option>
-            {ticketStatuses.map((value) => (
-              <option key={value} value={value}>
-                {ticketStatusLabels[value]}
-              </option>
+            <Search
+              aria-hidden
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            />
+            <Input
+              name="search"
+              defaultValue={search}
+              key={search}
+              placeholder="Buscar por código ou título"
+              aria-label="Buscar chamados"
+              className="pl-9"
+              onBlur={(event) => update({ search: event.target.value })}
+            />
+          </form>
+
+          <label className="grid gap-1.5 text-xs font-medium">
+            Ordenar por
+            <Select value={sort} onChange={(event) => update({ sort: event.target.value })}>
+              {Object.entries(sortLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <label className="grid gap-1.5 text-xs font-medium">
+            Prioridade
+            <Select
+              value={priority[0] ?? ''}
+              onChange={(event) =>
+                update({ priority: event.target.value ? [event.target.value] : [] })
+              }
+            >
+              <option value="">Todas</option>
+              {ticketPriorities.map((value) => (
+                <option key={value} value={value}>
+                  {ticketPriorityLabels[value]}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <label className="grid gap-1.5 text-xs font-medium">
+            Categoria
+            <Select
+              value={categoryId ?? ''}
+              onChange={(event) => update({ categoryId: event.target.value })}
+            >
+              <option value="">Todas</option>
+              {categories.data?.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+
+        {/* Status vira faixa de alternadores em vez de select: são sete valores, a
+            combinação é comum, e assim o estado do filtro fica visível sem abrir nada. */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por status">
+          <FilterChip active={status.length === 0} onClick={() => update({ status: [] })}>
+            Todos
+          </FilterChip>
+
+          {ticketStatuses.map((value) => (
+            <FilterChip
+              key={value}
+              active={status.includes(value)}
+              onClick={() => toggleStatus(value)}
+            >
+              {ticketStatusLabels[value]}
+            </FilterChip>
+          ))}
+
+          {/* Sem responsável e vencidos são as duas filas que o painel do técnico usa. */}
+          {isStaff && (
+            <>
+              <span aria-hidden className="bg-border mx-1 h-5 w-px" />
+
+              <FilterChip
+                active={unassigned}
+                onClick={() => update({ unassigned: unassigned ? null : 'true' })}
+              >
+                <UserX className="size-3.5" /> Sem responsável
+              </FilterChip>
+
+              <FilterChip
+                active={overdue}
+                onClick={() => update({ overdue: overdue ? null : 'true' })}
+              >
+                <AlarmClock className="size-3.5" /> Vencidos
+              </FilterChip>
+            </>
+          )}
+        </div>
+
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-xs">
+            <span className="text-muted-foreground">Filtros ativos:</span>
+
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={filter.clear}
+                className="bg-muted hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1 font-medium"
+              >
+                {filter.label}
+                <X className="size-3" />
+                <span className="sr-only">Remover filtro</span>
+              </button>
             ))}
-          </Select>
-        </label>
 
-        <label className="grid gap-1.5 text-xs font-medium">
-          Prioridade
-          <Select
-            value={priority[0] ?? ''}
-            onChange={(event) =>
-              update({ priority: event.target.value ? [event.target.value] : [] })
-            }
-          >
-            <option value="">Todas</option>
-            {ticketPriorities.map((value) => (
-              <option key={value} value={value}>
-                {ticketPriorityLabels[value]}
-              </option>
-            ))}
-          </Select>
-        </label>
-
-        <label className="grid gap-1.5 text-xs font-medium">
-          Ordenar por
-          <Select value={sort} onChange={(event) => update({ sort: event.target.value })}>
-            {Object.entries(sortLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </label>
-
-        <label className="grid gap-1.5 text-xs font-medium">
-          Categoria
-          <Select
-            value={categoryId ?? ''}
-            onChange={(event) => update({ categoryId: event.target.value })}
-          >
-            <option value="">Todas</option>
-            {categories.data?.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-
-        {/* Sem responsável e vencidos são as duas filas que o painel do técnico usa. */}
-        {isStaff && (
-          <div className="flex items-end gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={unassigned}
-                onChange={(event) => update({ unassigned: event.target.checked ? 'true' : null })}
-              />
-              Sem responsável
-            </label>
-
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={overdue}
-                onChange={(event) => update({ overdue: event.target.checked ? 'true' : null })}
-              />
-              Vencidos
-            </label>
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={clearAll}>
+              Limpar tudo
+            </Button>
           </div>
         )}
       </div>
@@ -202,76 +278,37 @@ export function TicketList() {
         </p>
       )}
 
+      {tickets.isPending && (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {Array.from({ length: 6 }, (_, index) => (
+            <TicketCardSkeleton key={index} />
+          ))}
+        </div>
+      )}
+
       {tickets.data?.items.length === 0 && (
-        <p className="text-muted-foreground rounded-lg border p-8 text-center text-sm">
-          Nenhum chamado encontrado com esses filtros.
-        </p>
+        <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
+          <p>Nenhum chamado encontrado com esses filtros.</p>
+          {activeFilters.length > 0 && (
+            <Button variant="outline" size="sm" className="mt-3" onClick={clearAll}>
+              Limpar filtros
+            </Button>
+          )}
+        </div>
       )}
 
       {tickets.data && tickets.data.items.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-muted-foreground text-xs">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Código</th>
-                <th className="px-4 py-3 text-left font-medium">Título</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Prioridade</th>
-                <th className="px-4 py-3 text-left font-medium">Categoria</th>
-                {isStaff && <th className="px-4 py-3 text-left font-medium">Solicitante</th>}
-                <th className="px-4 py-3 text-left font-medium">Responsável</th>
-                <th className="px-4 py-3 text-left font-medium">Resolução</th>
-                <th className="px-4 py-3 text-left font-medium">Aberto em</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {tickets.data.items.map((ticket) => {
-                const overdueResolution = !ticket.resolvedAt &&
-                  new Date(ticket.slaResolutionDueAt) < new Date()
-
-                return (
-                  <tr key={ticket.id} className="border-t transition-colors hover:bg-muted/50">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <Link to={`/chamados/${ticket.id}`} className="text-primary hover:underline">
-                        {ticket.code}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link to={`/chamados/${ticket.id}`} className="hover:underline">
-                        {ticket.title}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <TicketStatusBadge status={ticket.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <TicketPriorityBadge priority={ticket.priority} />
-                    </td>
-                    <td className="text-muted-foreground px-4 py-3">{ticket.categoryName}</td>
-                    {isStaff && (
-                      <td className="text-muted-foreground px-4 py-3">{ticket.requesterName}</td>
-                    )}
-                    <td className="text-muted-foreground px-4 py-3">
-                      {ticket.assignedTechnicianName ?? '—'}
-                    </td>
-                    <td
-                      className={
-                        overdueResolution ? 'text-sla-overdue px-4 py-3 font-medium' : 'px-4 py-3'
-                      }
-                    >
-                      {ticket.resolvedAt
-                        ? 'resolvido'
-                        : formatDeadlineDistance(ticket.slaResolutionDueAt)}
-                    </td>
-                    <td className="text-muted-foreground px-4 py-3 whitespace-nowrap">
-                      {formatDateTime(ticket.createdAt)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div
+          className={cn(
+            'grid gap-3 lg:grid-cols-2',
+            // Enquanto a próxima página carrega, a atual continua na tela; o esmaecido
+            // avisa que o conteúdo está desatualizado sem tirar nada do lugar.
+            tickets.isPlaceholderData && 'opacity-60',
+          )}
+        >
+          {tickets.data.items.map((ticket) => (
+            <TicketCard key={ticket.id} ticket={ticket} showRequester={isStaff} />
+          ))}
         </div>
       )}
 
@@ -303,5 +340,32 @@ export function TicketList() {
         </div>
       )}
     </div>
+  )
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        'focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
+        active
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
   )
 }

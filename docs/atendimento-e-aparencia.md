@@ -29,9 +29,17 @@ Depois do envio, conversa, detalhe, histórico, filas e dashboard são invalidad
 
 ## Interface
 
-A experiência aproxima o atendimento de uma central de suporte: navegação lateral no desktop, navegação compacta no celular, cabeçalho com acesso rápido a novo chamado, superfícies de cartões sobre fundo suave e linhas da lista com destaque ao passar o mouse. O detalhe prioriza a conversa, com gerenciamento, propriedades e SLA ao lado em telas largas.
+A experiência aproxima o atendimento de uma central de suporte: navegação lateral no desktop, navegação compacta no celular, cabeçalho com acesso rápido a novo chamado e superfícies de cartões sobre fundo suave.
+
+**Listagem.** Cada chamado é um cartão, e o cartão inteiro é o link. A prioridade aparece duas vezes por decisão: no rótulo escrito e numa faixa colorida à esquerda, em posição fixa, para que a fila possa ser varrida pela borda. Abaixo dos metadados ficam os dois prazos de SLA, coloridos por estado — cumprido, a vencer, vencido —, e chamados fechados ou cancelados não mostram prazo, porque saem dos indicadores. Os filtros de status são alternadores de múltipla escolha, com os atalhos **Sem responsável** e **Vencidos** para a equipe; os filtros ativos são listados com remoção individual e um **Limpar tudo**. Tudo continua na URL.
+
+**Detalhe.** O cabeçalho reúne código, status, prioridade, título e a linha de quem abriu e quem atende. Conversa e histórico dividem o mesmo espaço em abas, em vez de empilhar cartões que empurram as ações para fora da tela. Gerenciamento, SLA e propriedades ficam ao lado em telas largas.
+
+A descrição de abertura é a primeira mensagem da conversa, marcada como abertura, e não um cartão separado acima dela: quem atende lê o chamado em ordem, num lugar só. Cada mensagem traz avatar com as iniciais do autor, colorido conforme o perfil, para que se veja de relance se a última palavra foi da equipe ou do solicitante.
 
 O editor oferece **Resposta pública** e **Nota interna**, com indicação explícita de quem poderá ler. A opção de nota interna só aparece para a equipe. Histórico recebe uma apresentação de linha do tempo, e textos longos da conversa e descrição quebram para caber na tela.
+
+As transições viram botões com o nome da ação — **Enviar para triagem**, **Iniciar atendimento**, **Aguardar solicitante**, **Marcar como resolvido** —, e não um seletor com o nome do estado. A lista de botões continua vindo de `allowedNextStatuses`. Fechar e cancelar pedem um segundo clique de confirmação no próprio botão.
 
 Trata-se de uma aproximação visual e do fluxo de atendimento, sem equivalência completa de funcionalidades ao Freshdesk. Respostas são comentários no portal; esta mudança não implementa envio de e-mail, anexos ou editor de texto rico.
 
