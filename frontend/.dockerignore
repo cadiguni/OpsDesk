@@ -1,0 +1,7 @@
+# O que não entra no contexto de build da imagem.
+node_modules
+dist
+.env
+.env.development
+.env.local
+.vite

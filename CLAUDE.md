@@ -66,7 +66,12 @@ Pré-requisitos: .NET 10 SDK, Node 24 LTS (`frontend/.nvmrc`; a faixa aceita é 
 ```bash
 docker compose up -d          # PostgreSQL + API em http://localhost:8080
 docker compose logs -f api
-docker compose down           # -v também descarta o volume do banco
+docker compose down           # -v também descarta o volume do banco e o dos anexos
+
+# Perfil `web`: acrescenta o SPA compilado, servido por nginx com /api repassado para a
+# API — tudo na mesma origem, em http://localhost:3000. É para **usar** o sistema; quem
+# está mexendo no frontend continua no `npm run dev`, que tem recarga imediata.
+docker compose --profile web up -d --build
 ```
 
 A API aplica migration e roda o seed na subida, **apenas em Development**. Em outros ambientes o schema sobe como etapa explícita do deploy.
@@ -167,6 +172,8 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Corpo de requisição malformado estoura como `BadHttpRequestException`** e, sem tratamento, sai como 500 — o que significa "defeito nosso" e alimenta alerta de produção. O `MalformedRequestHandler` traduz para 400.
 * **O JSON da API serializa enum como texto**, configurado por `ConfigureHttpJsonOptions`. Sem isso o padrão é inteiro, e `role: 1` chega ao frontend onde o TypeScript espera `'Technician'` — o rótulo sai vazio e nada acusa o erro em tempo de compilação. Há teste de contrato fixando isso.
 * **Ler `IConfiguration` durante a montagem do pipeline congela o valor daquele instante.** Fontes registradas depois — como as de um `WebApplicationFactory` em teste — são ignoradas em silêncio. Por isso `JwtOptions`, `RateLimitOptions` e a connection string são resolvidos por DI, e não lidos direto no `Program.cs`.
+* **Duas formas de servir o SPA, duas portas.** O dev server fica na 5173 e o contêiner do perfil `web` na 3000. Não unifique: com um `npm run dev` rodando, o Docker Desktop no Windows publica a porta ocupada **sem erro**, os dois escutam, o dev server atende, e o contêiner parece no ar servindo conteúdo que não é o dele — diagnosticar isso custa mais que a porta extra.
+* **A imagem do frontend é construída com `VITE_API_URL=/`**, para o cliente chamar caminho relativo e o nginx repassar `/api`. String vazia também funcionaria, mas o cliente resolve a base com `??`, que só cai no padrão em valor nulo: com `""` o literal do padrão continua no bundle e qualquer verificação textual passa a mentir sobre o que foi embutido.
 * O cookie de refresh é `Secure`. Chrome e Firefox aceitam cookie `Secure` sobre HTTP em `localhost`; **o Safari não**. Em Mac com Safari, a sessão não sobrevive ao reload em desenvolvimento.
 * Os binários nativos do Vite e do oxlint declaram `engines: ^20.19 || >=22.12`. Em Node fora dessa faixa o npm **omite o binário em silêncio**: `npm install` termina com sucesso e o build estoura por binding ausente. O `frontend/.npmrc` liga `engine-strict` justamente para transformar isso em erro na instalação.
 * **Volume do Docker herda o dono do caminho que existir na imagem.** A API roda como usuário sem privilégio (`USER $APP_UID`), e sem o `mkdir -p /var/opsdesk/attachments && chown` no Dockerfile o volume nasce pertencendo ao root: o envio de anexo falha com `UnauthorizedAccessException: Permission denied`. Só no container — `dotnet run` e os testes gravam em pasta do próprio usuário e passam. Trocar a raiz dos anexos exige repetir o `mkdir` com o dono certo, e recriar o volume (`docker compose down -v`), porque o dono é fixado no primeiro uso.

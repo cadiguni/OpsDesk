@@ -244,7 +244,9 @@ A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibi
 
 ## 6. Ambiente local
 
-`docker compose up` sobe PostgreSQL e API. O frontend roda em `vite dev` apontando para a API, até ser containerizado.
+`docker compose up` sobe PostgreSQL e API. O frontend tem dois modos: `vite dev` apontando para a API, que é o de desenvolvimento, e o perfil `web` do compose, que compila o SPA e o serve por nginx.
+
+No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e aproxima o desenho de produção, onde Front Door ou Application Gateway ficam na frente dos dois. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
 
 O seed inicial cria as categorias da seção 7 do README, as políticas de SLA da seção 8 e um usuário de cada perfil, exclusivamente em ambiente de desenvolvimento.
 

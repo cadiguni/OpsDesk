@@ -1,5 +1,7 @@
-# Ambiente local do OpsDesk: PostgreSQL + API.
-# O frontend roda fora do compose (vite dev) até ser containerizado.
+# Ambiente local do OpsDesk: PostgreSQL + API, e o SPA no perfil `web`.
+#
+#   docker compose up -d                      banco + API
+#   docker compose --profile web up -d        banco + API + SPA em http://localhost:3000
 services:
   postgres:
     image: postgres:18-alpine
@@ -39,6 +41,10 @@ services:
       # ambiente do orquestrador ou do Azure Key Vault, nunca deste arquivo.
       Jwt__SigningKey: "desenvolvimento-apenas-troque-esta-chave-em-qualquer-outro-ambiente"
       Cors__AllowedOrigins__0: "http://localhost:5173"
+      # O SPA do perfil `web` fala com a API pela mesma origem, via nginx, e não precisaria
+      # de CORS. A origem fica liberada de todo jeito para quem apontar o navegador
+      # direto na 8080 ou construir a imagem com URL absoluta.
+      Cors__AllowedOrigins__1: "http://localhost:3000"
       # Anexos ficam no volume, e não na imagem: um novo deploy não pode levar embora o
       # print que o solicitante mandou.
       AttachmentStorage__RootPath: "/var/opsdesk/attachments"
@@ -52,6 +58,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Perfil `web`: SPA compilado, servido por nginx, com /api repassado para a API.
+  #
+  #   docker compose --profile web up -d --build
+  #
+  # Fica em perfil, e não junto do resto, porque é a forma de **ver** o sistema rodando e
+  # não de desenvolver nele: o bundle é estático e cada alteração exige rebuild. Quem está
+  # mexendo no frontend continua usando `npm run dev`, com recarga imediata.
+  web:
+    build:
+      context: ./frontend
+    container_name: opsdesk-web
+    profiles: [web]
+    depends_on:
+      api:
+        condition: service_healthy
+    # Porta própria, e não a 5173 do dev server.
+    #
+    # Compartilhar a porta parecia elegante — mesmo endereço nas duas formas de subir — e é
+    # uma armadilha: com um `npm run dev` rodando, o Docker Desktop no Windows **não falha**
+    # ao publicar uma porta já ocupada. Os dois ficam escutando, o dev server atende, e o
+    # container parece no ar servindo conteúdo que não é o dele.
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres-data:

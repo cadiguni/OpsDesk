@@ -22,17 +22,34 @@ Este documento é a especificação funcional do produto. Os detalhes técnicos 
 
 Pré-requisitos: **.NET 10 SDK**, **Node 24 LTS** (`frontend/.nvmrc`; a faixa aceita é `^20.19` ou `>=22.12`) e **Docker**.
 
+Duas formas de subir, e elas servem a propósitos diferentes.
+
+**Para desenvolver** — o SPA fora do compose, com recarga imediata a cada alteração:
+
 ```bash
 docker compose up -d                 # PostgreSQL + API
-cd frontend && npm ci && npm run dev # SPA
+cd frontend && npm ci && npm run dev # SPA em http://localhost:5173
 ```
+
+**Para só usar o sistema** — tudo em contêiner, sem Node na máquina:
+
+```bash
+docker compose --profile web up -d --build   # banco, API e SPA em http://localhost:3000
+```
+
+No perfil `web` o SPA é compilado e servido por nginx, que também repassa `/api` para a API: tudo na mesma origem, sem CORS e com o cookie de refresh como cookie de primeira parte. É o desenho mais parecido com produção, onde um gateway fica na frente dos dois.
+
+O que ele **não** faz é recarga automática: o bundle é estático e cada alteração de código exige `--build` de novo. Para mexer no frontend, `npm run dev` continua sendo o caminho.
 
 | Onde | Endereço |
 | --- | --- |
-| SPA | http://localhost:5173 |
+| SPA, `npm run dev` | http://localhost:5173 |
+| SPA, perfil `web` | http://localhost:3000 |
 | API | http://localhost:8080 |
-| Swagger | http://localhost:8080/swagger |
+| Swagger | http://localhost:8080/swagger (ou /swagger pela porta 3000) |
 | Health check | http://localhost:8080/health |
+
+As duas formas de servir o SPA usam portas diferentes de propósito. Compartilhar a porta parecia mais simples e é uma armadilha: com um `npm run dev` rodando, o Docker Desktop no Windows **não falha** ao publicar uma porta já ocupada — os dois ficam escutando, o dev server atende, e o contêiner parece no ar servindo conteúdo que não é o dele.
 
 A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
 
