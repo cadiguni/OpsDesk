@@ -17,7 +17,8 @@ public class OpsDeskApiFactory(
     string connectionString,
     int credentialAttemptsPerMinute = 10_000,
     int refreshAttemptsPerMinute = 10_000,
-    int refreshGraceSeconds = 30) : WebApplicationFactory<Program>
+    int refreshGraceSeconds = 30,
+    int uploadsPerMinute = 10_000) : WebApplicationFactory<Program>
 {
     /// <summary>
     /// Chave de assinatura só deste processo de teste. Não reaproveitamos a de
@@ -46,6 +47,10 @@ public class OpsDeskApiFactory(
                 ["Cors:AllowedOrigins:0"] = "https://localhost",
                 ["AttachmentStorage:RootPath"] = _attachmentRoot,
 
+                // Varredura desligada: teste que dependa de tarefa periódica é teste que
+                // falha por horário. A limpeza é exercitada diretamente, em teste próprio.
+                ["AttachmentStorage:CleanUpIntervalHours"] = "0",
+
                 // Os limites reais são vinte tentativas de credencial e cento e vinte
                 // renovações por minuto, por IP. No TestServer todas as requisições vêm sem
                 // endereço de origem, portanto caem na mesma partição: com os valores de
@@ -56,6 +61,7 @@ public class OpsDeskApiFactory(
                     credentialAttemptsPerMinute.ToString(),
                 ["RateLimiting:RefreshAttemptsPerMinute"] =
                     refreshAttemptsPerMinute.ToString(),
+                ["RateLimiting:UploadsPerMinute"] = uploadsPerMinute.ToString(),
                 ["Jwt:RefreshTokenGraceSeconds"] = refreshGraceSeconds.ToString(),
             }));
     }

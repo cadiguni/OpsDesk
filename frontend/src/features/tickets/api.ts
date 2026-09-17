@@ -95,6 +95,24 @@ export async function changeStatus(ticketId: string, status: TicketStatus): Prom
  * visibilidade de quem atribuiu — o técnico que encaminha para um colega deixa de
  * enxergar o chamado no mesmo instante.
  */
+/**
+ * Troca prioridade e categoria. Campo ausente quer dizer "nao mexa".
+ *
+ * Trocar a prioridade recalcula os prazos de SLA no servidor, contados da abertura do
+ * chamado — por isso a resposta inteira volta e substitui o detalhe em cache.
+ */
+export async function changeClassification(
+  ticketId: string,
+  input: { priority?: TicketPriority; categoryId?: string },
+): Promise<TicketDetail> {
+  const { data } = await api.post<TicketDetail>(
+    `/api/tickets/${ticketId}/classification`,
+    input,
+  )
+
+  return data
+}
+
 export async function assign(
   ticketId: string,
   technicianId: string | null,

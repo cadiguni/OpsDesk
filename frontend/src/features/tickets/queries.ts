@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import * as ticketsApi from '@/features/tickets/api'
 import type { TicketQuery } from '@/features/tickets/types'
-import type { TicketStatus } from '@/domain/enums'
+import type { TicketPriority, TicketStatus } from '@/domain/enums'
 
 const keys = {
   all: ['tickets'] as const,
@@ -151,6 +151,24 @@ export function useChangeStatus(ticketId: string) {
       queryClient.setQueryData(keys.detail(ticketId), ticket)
       void queryClient.invalidateQueries({ queryKey: keys.history(ticketId) })
       void queryClient.invalidateQueries({ queryKey: keys.lists })
+      void queryClient.invalidateQueries({ queryKey: keys.dashboard })
+    },
+  })
+}
+
+export function useChangeClassification(ticketId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (input: { priority?: TicketPriority; categoryId?: string }) =>
+      ticketsApi.changeClassification(ticketId, input),
+    onSuccess: (ticket) => {
+      queryClient.setQueryData(keys.detail(ticketId), ticket)
+      void queryClient.invalidateQueries({ queryKey: keys.history(ticketId) })
+      void queryClient.invalidateQueries({ queryKey: keys.lists })
+
+      // Prioridade e categoria são dois eixos do dashboard, e a prioridade ainda mexe no
+      // prazo — o que muda a contagem de vencidos.
       void queryClient.invalidateQueries({ queryKey: keys.dashboard })
     },
   })

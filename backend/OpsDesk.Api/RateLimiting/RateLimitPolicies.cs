@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using OpsDesk.Application.Auth;
 
 namespace OpsDesk.Api.RateLimiting;
 
@@ -32,6 +33,17 @@ public class RateLimitOptions
     /// bits, e o limite existe só para conter repetição abusiva.
     /// </summary>
     public int RefreshAttemptsPerMinute { get; set; } = 120;
+
+    /// <summary>
+    /// Envios de anexo por minuto, por usuário autenticado.
+    ///
+    /// Aqui a cota não é contra força bruta: é contra consumo. Cada envio aceito grava até
+    /// dez megabytes no armazenamento, e sem limite um único usuário autenticado enche o
+    /// volume — ou a fatura, quando isso for para a nuvem. Trinta por minuto cobre com
+    /// folga anexar uma dezena de prints de uma vez e corta o laço que sobe arquivo sem
+    /// parar.
+    /// </summary>
+    public int UploadsPerMinute { get; set; } = 30;
 }
 
 public static class RateLimitPolicies
@@ -42,6 +54,9 @@ public static class RateLimitPolicies
     /// <summary>Renovação de sessão.</summary>
     public const string Refresh = "refresh";
 
+    /// <summary>Envio de anexo. Cota de consumo, e não de tentativa.</summary>
+    public const string Uploads = "uploads";
+
     public static RateLimiterOptions AddOpsDeskPolicies(this RateLimiterOptions options)
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -51,6 +66,9 @@ public static class RateLimitPolicies
 
         options.AddPolicy(Refresh, context => Partition(
             context, Refresh, o => o.RefreshAttemptsPerMinute));
+
+        options.AddPolicy(Uploads, context => Partition(
+            context, Uploads, o => o.UploadsPerMinute));
 
         return options;
     }
@@ -90,6 +108,19 @@ public static class RateLimitPolicies
         // o middleware de forwarded headers configurado é pior: o cliente escolheria a
         // própria partição e o limite deixaria de existir. Quando a API for para trás do
         // Front Door, configure UseForwardedHeaders e este endereço passa a ser o real.
+        // O envio de anexo é particionado por usuário, e não por IP: a rota exige
+        // autenticação, e por IP um escritório atrás de NAT dividiria uma cota só — uma
+        // pessoa anexando prints trancaria os colegas para fora.
+        if (policy == Uploads)
+        {
+            var userId = context.User.FindFirst(OpsDeskClaims.Subject)?.Value;
+
+            if (userId is not null)
+            {
+                return $"{policy}|{userId}";
+            }
+        }
+
         var address = context.Connection.RemoteIpAddress?.ToString() ?? "desconhecido";
 
         return $"{policy}|{address}";

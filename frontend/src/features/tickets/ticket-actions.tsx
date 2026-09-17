@@ -12,9 +12,20 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
-import type { TicketStatus } from '@/domain/enums'
+import {
+  ticketPriorities,
+  ticketPriorityLabels,
+  type TicketPriority,
+  type TicketStatus,
+} from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
-import { useAssign, useChangeStatus, useStaff } from '@/features/tickets/queries'
+import {
+  useAssign,
+  useCategories,
+  useChangeClassification,
+  useChangeStatus,
+  useStaff,
+} from '@/features/tickets/queries'
 import type { TicketDetail } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -60,13 +71,19 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
   const navigate = useNavigate()
   const changeStatus = useChangeStatus(ticket.id)
   const assign = useAssign(ticket.id)
+  const classification = useChangeClassification(ticket.id)
   const staff = useStaff(isStaff)
+  const categories = useCategories()
 
   // Qual ação está aguardando o segundo clique. Um clique fora, ou em outra ação,
   // desarma — o estado de confirmação não deve sobreviver à mudança de intenção.
   const [confirming, setConfirming] = useState<TicketStatus | null>(null)
 
   const isMine = ticket.assignedTechnicianId === user?.id
+
+  // Chamado encerrado não é reclassificado: mudar a prioridade agora alteraria indicador
+  // de um atendimento já concluído. A API recusa, e a interface não oferece.
+  const terminal = ticket.status === 'Closed' || ticket.status === 'Cancelled'
 
   /**
    * Encaminhar para outro técnico pode tirar o chamado da própria visibilidade — técnico
@@ -132,6 +149,58 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
           {changeStatus.isError && (
             <p role="alert" className="text-destructive text-xs">
               {errorMessage(changeStatus.error, 'Não foi possível mudar o status.')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {isStaff && !terminal && (
+        <div className="space-y-2 border-t pt-4">
+          <p className="text-xs font-medium">Classificação</p>
+
+          <label className="text-muted-foreground grid gap-1.5 text-xs">
+            Prioridade
+            <Select
+              value={ticket.priority}
+              onChange={(event) =>
+                classification.mutate({ priority: event.target.value as TicketPriority })
+              }
+              disabled={classification.isPending}
+              aria-label="Prioridade do chamado"
+            >
+              {ticketPriorities.map((priority) => (
+                <option key={priority} value={priority}>
+                  {ticketPriorityLabels[priority]}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <label className="text-muted-foreground grid gap-1.5 text-xs">
+            Categoria
+            <Select
+              value={ticket.categoryId}
+              onChange={(event) => classification.mutate({ categoryId: event.target.value })}
+              disabled={classification.isPending || categories.isPending}
+              aria-label="Categoria do chamado"
+            >
+              {categories.data?.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          {/* O aviso existe porque a consequência não é óbvia: trocar a prioridade move o
+              prazo, e um chamado pode passar a vencido no mesmo clique. */}
+          <p className="text-muted-foreground text-xs">
+            Trocar a prioridade recalcula os prazos de SLA, contados da abertura do chamado.
+          </p>
+
+          {classification.isError && (
+            <p role="alert" className="text-destructive text-xs">
+              {errorMessage(classification.error, 'Não foi possível reclassificar o chamado.')}
             </p>
           )}
         </div>

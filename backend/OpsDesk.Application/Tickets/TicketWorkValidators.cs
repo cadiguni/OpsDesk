@@ -22,3 +22,23 @@ public class ChangeStatusRequestValidator : AbstractValidator<ChangeStatusReques
         RuleFor(r => r.Status).IsInEnum().WithMessage("Status inválido.");
     }
 }
+
+public class ChangeClassificationRequestValidator : AbstractValidator<ChangeClassificationRequest>
+{
+    public ChangeClassificationRequestValidator()
+    {
+        // Pedido que não muda nada é erro de cliente, não operação silenciosa: sem isto,
+        // um corpo vazio responderia 200 sem ter feito coisa alguma.
+        RuleFor(r => r)
+            .Must(r => r.Priority is not null || r.CategoryId is not null)
+            .WithMessage("Informe a prioridade, a categoria, ou as duas.");
+
+        RuleFor(r => r.Priority)
+            .IsInEnum().WithMessage("Prioridade inválida.")
+            .When(r => r.Priority is not null);
+
+        RuleFor(r => r.CategoryId)
+            .NotEmpty().WithMessage("Escolha uma categoria.")
+            .When(r => r.CategoryId is not null);
+    }
+}

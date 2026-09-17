@@ -541,6 +541,220 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         Assert.Contains(history, h => h.Action == TicketHistoryAction.Resolved);
     }
 
+    // ----- Reclassificação: prioridade e categoria -----
+
+    [Fact]
+    public async Task Tecnico_troca_a_prioridade_e_o_prazo_e_recalculado()
+    {
+        // Média: 8 horas úteis para resposta, 30 para resolução. Crítica: 1 e 4. Promover
+        // a prioridade tem de apertar o prazo — se não apertar, a prioridade é enfeite e o
+        // indicador de vencidos mede a prioridade errada.
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world, priority: TicketPriority.Medium);
+
+        var before = await GetAsync(world.Technician, ticket);
+        var after = await ReclassifyAsync(world.Technician, ticket, priority: TicketPriority.Critical);
+
+        Assert.Equal(TicketPriority.Critical, after.Priority);
+        Assert.True(after.SlaResponseDueAt < before.SlaResponseDueAt);
+        Assert.True(after.SlaResolutionDueAt < before.SlaResolutionDueAt);
+
+        // A conta recomeça da abertura, não da reclassificação: uma hora útil depois de
+        // aberto, e não uma hora depois de alguém ter mudado o campo.
+        Assert.True(after.SlaResponseDueAt >= after.CreatedAt.AddHours(1));
+
+        var history = await HistoryAsync(world.Technician, ticket);
+        var entry = Assert.Single(history, h => h.Action == TicketHistoryAction.PriorityChanged);
+        Assert.Equal(nameof(TicketPriority.Medium), entry.PreviousValue);
+        Assert.Equal(nameof(TicketPriority.Critical), entry.NewValue);
+    }
+
+    [Fact]
+    public async Task Rebaixar_a_prioridade_afrouxa_o_prazo()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world, priority: TicketPriority.Critical);
+
+        var before = await GetAsync(world.Technician, ticket);
+        var after = await ReclassifyAsync(world.Technician, ticket, priority: TicketPriority.Low);
+
+        Assert.True(after.SlaResolutionDueAt > before.SlaResolutionDueAt);
+    }
+
+    [Fact]
+    public async Task Reclassificar_nao_reescreve_marco_de_resposta_ja_cumprido()
+    {
+        // O prazo de resposta de um chamado já respondido não é recalculado: mexer nele
+        // transformaria retroativamente um atendimento pontual em atrasado, ou o contrário.
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world, priority: TicketPriority.Low);
+
+        await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Estou verificando."));
+
+        var before = await GetAsync(world.Technician, ticket);
+        Assert.NotNull(before.FirstRespondedAt);
+
+        var after = await ReclassifyAsync(world.Technician, ticket, priority: TicketPriority.Critical);
+
+        Assert.Equal(before.SlaResponseDueAt, after.SlaResponseDueAt);
+
+        // A resolução, que ainda não aconteceu, é recalculada normalmente.
+        Assert.True(after.SlaResolutionDueAt < before.SlaResolutionDueAt);
+    }
+
+    [Fact]
+    public async Task Reclassificar_chamado_resolvido_nao_mexe_no_prazo_de_resolucao()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world, priority: TicketPriority.Low);
+
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.Resolved);
+
+        var before = await GetAsync(world.Technician, ticket);
+        var after = await ReclassifyAsync(world.Technician, ticket, priority: TicketPriority.Critical);
+
+        Assert.Equal(TicketPriority.Critical, after.Priority);
+        Assert.Equal(before.SlaResolutionDueAt, after.SlaResolutionDueAt);
+    }
+
+    [Fact]
+    public async Task Reclassificar_preserva_o_tempo_que_o_chamado_passou_em_espera()
+    {
+        // A pausa acumulada é um direito adquirido do chamado: o tempo em que ele esperou
+        // o solicitante não some porque alguém trocou a prioridade depois.
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world, priority: TicketPriority.Medium);
+
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.WaitingOnRequester);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
+
+        var before = await GetAsync(world.Technician, ticket);
+        var after = await ReclassifyAsync(world.Technician, ticket, priority: TicketPriority.High);
+
+        // A pausa acumulada sobrevive à reclassificação, e o prazo não fica menor que o de
+        // um chamado da mesma prioridade aberto agora, que nunca esperou ninguém.
+        var semPausa = await OpenTicketAsync(world, title: "Sem pausa", priority: TicketPriority.High);
+        var outro = await GetAsync(world.Technician, semPausa);
+
+        Assert.Equal(before.SlaPausedBusinessMinutes, after.SlaPausedBusinessMinutes);
+        Assert.True(
+            after.SlaResolutionDueAt >= outro.SlaResolutionDueAt,
+            "o chamado que ficou em espera nao pode terminar com prazo mais curto que um aberto agora");
+    }
+
+    [Fact]
+    public async Task Gestor_troca_a_categoria_sem_mexer_no_prazo()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        var before = await GetAsync(world.Manager, ticket);
+
+        Guid outraCategoria;
+        await using (var db = Fixture.CreateContext())
+        {
+            outraCategoria = await db.Categories
+                .Where(c => c.Id != world.CategoryId && c.IsActive)
+                .Select(c => c.Id)
+                .FirstAsync();
+        }
+
+        var after = await ReclassifyAsync(world.Manager, ticket, categoryId: outraCategoria);
+
+        Assert.Equal(outraCategoria, after.CategoryId);
+        Assert.Equal(before.SlaResponseDueAt, after.SlaResponseDueAt);
+        Assert.Equal(before.SlaResolutionDueAt, after.SlaResolutionDueAt);
+
+        var history = await HistoryAsync(world.Manager, ticket);
+        Assert.Contains(history, h => h.Action == TicketHistoryAction.CategoryChanged);
+    }
+
+    [Fact]
+    public async Task Solicitante_nao_reclassifica_o_proprio_chamado()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        var response = await world.Requester.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/classification",
+            new ChangeClassificationRequest(TicketPriority.Critical, null));
+
+        // Barrado pela política de rota, antes de chegar ao serviço.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        var unchanged = await GetAsync(world.Manager, ticket);
+        Assert.Equal(TicketPriority.Medium, unchanged.Priority);
+    }
+
+    [Fact]
+    public async Task Reclassificar_chamado_fechado_e_recusado()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        await ChangeStatusAsync(world.Technician, ticket, TicketStatus.Closed);
+
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/classification",
+            new ChangeClassificationRequest(TicketPriority.Critical, null));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Reclassificar_com_categoria_inexistente_e_recusado()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/classification",
+            new ChangeClassificationRequest(null, Guid.NewGuid()));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Reclassificacao_vazia_e_recusada()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/classification",
+            new ChangeClassificationRequest(null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Tecnico_nao_reclassifica_chamado_de_outro_tecnico()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
+
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/classification",
+            new ChangeClassificationRequest(TicketPriority.Critical, null));
+
+        // Não é regra de reclassificação: o chamado não existe para ele.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    private static async Task<TicketDetail> ReclassifyAsync(
+        HttpClient client, Guid id, TicketPriority? priority = null, Guid? categoryId = null)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/api/tickets/{id}/classification",
+            new ChangeClassificationRequest(priority, categoryId));
+
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadJsonAsync<TicketDetail>())!;
+    }
+
     // ----- Atribuição -----
 
     [Fact]

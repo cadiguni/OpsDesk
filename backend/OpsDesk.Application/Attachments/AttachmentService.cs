@@ -23,6 +23,24 @@ public class AttachmentService(IOpsDeskDbContext db, IAttachmentStorage storage,
     public const long MaxFileSizeInBytes = 10 * 1024 * 1024;
 
     /// <summary>
+    /// Anexos pendentes que um usuário pode ter ao mesmo tempo.
+    ///
+    /// O limite por arquivo não limita nada sozinho: sem teto de quantidade, mil envios de
+    /// dez megabytes são dez gigabytes. O estado pendente é o ponto certo para cobrar isso,
+    /// porque é o único em que o arquivo existe sem pertencer a nada — e onde um cliente
+    /// com defeito, ou de má-fé, acumularia para sempre. Vincular libera a cota.
+    /// </summary>
+    public const int MaxPendingPerUser = 20;
+
+    /// <summary>
+    /// Anexos por chamado, somando abertura e todos os comentários.
+    ///
+    /// Generoso de propósito: uma conversa longa com print a cada resposta chega perto
+    /// disso legitimamente. É um teto contra abuso, não uma regra de negócio.
+    /// </summary>
+    public const int MaxPerTicket = 50;
+
+    /// <summary>
     /// Tipos aceitos.
     ///
     /// Lista fechada em vez de lista de bloqueio: o que não foi previsto é recusado, e não
@@ -70,6 +88,14 @@ public class AttachmentService(IOpsDeskDbContext db, IAttachmentStorage storage,
         if (!AllowedContentTypes.Contains(contentType))
         {
             return new UploadAttachmentResult.TypeNotAllowed(contentType);
+        }
+
+        var pending = await db.TicketAttachments.CountAsync(
+            a => a.TicketId == null && a.UploadedById == uploader.UserId, cancellationToken);
+
+        if (pending >= MaxPendingPerUser)
+        {
+            return new UploadAttachmentResult.TooManyPending(MaxPendingPerUser);
         }
 
         var now = clock.UtcNow;
@@ -138,6 +164,14 @@ public class AttachmentService(IOpsDeskDbContext db, IAttachmentStorage storage,
             return false;
         }
 
+        var alreadyOnTicket = await db.TicketAttachments
+            .CountAsync(a => a.TicketId == ticketId, cancellationToken);
+
+        if (alreadyOnTicket + attachments.Count > MaxPerTicket)
+        {
+            return false;
+        }
+
         foreach (var attachment in attachments)
         {
             attachment.TicketId = ticketId;
@@ -192,6 +226,51 @@ public class AttachmentService(IOpsDeskDbContext db, IAttachmentStorage storage,
             ? null
             : new AttachmentContent(content, attachment.ContentType, attachment.FileName);
     }
+
+    /// <summary>
+    /// Recolhe anexos pendentes velhos: enviados, nunca vinculados, e sem dono depois de
+    /// <paramref name="olderThan"/>.
+    ///
+    /// Sem isso o arquivo que a pessoa anexou e desistiu de enviar fica para sempre, no
+    /// banco e no armazenamento. Como pendente é invisível para todos menos para quem
+    /// enviou, ninguém descobre o vazamento de espaço olhando a interface — só a conta do
+    /// armazenamento conta a história, meses depois.
+    ///
+    /// O arquivo sai antes da linha. Na ordem inversa, uma falha no meio deixaria arquivo
+    /// sem registro, que nenhuma varredura futura encontraria; nesta ordem, o pior caso é
+    /// uma linha pendente sem arquivo, que a próxima passagem remove.
+    ///
+    /// Processa em lote limitado: uma varredura que apagasse cem mil linhas numa transação
+    /// seguraria o banco sem necessidade. O que sobrar espera a próxima rodada.
+    /// </summary>
+    public async Task<int> CleanUpPendingAsync(
+        TimeSpan olderThan, CancellationToken cancellationToken = default)
+    {
+        var cutoff = clock.UtcNow - olderThan;
+
+        var orphans = await db.TicketAttachments
+            .Where(a => a.TicketId == null && a.CreatedAt < cutoff)
+            .OrderBy(a => a.CreatedAt)
+            .Take(CleanUpBatchSize)
+            .ToListAsync(cancellationToken);
+
+        if (orphans.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var orphan in orphans)
+        {
+            await storage.DeleteAsync(orphan.StorageKey, cancellationToken);
+        }
+
+        db.TicketAttachments.RemoveRange(orphans);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return orphans.Count;
+    }
+
+    private const int CleanUpBatchSize = 500;
 
     private static Expression<Func<TicketAttachment, AttachmentItem>> Projection =>
         a => new AttachmentItem(

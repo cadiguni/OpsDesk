@@ -15,6 +15,22 @@ public class AttachmentStorageOptions
     /// </summary>
     [Required]
     public string RootPath { get; set; } = "attachments";
+
+    /// <summary>
+    /// Quanto tempo um anexo pendente sobrevive sem ser vinculado.
+    ///
+    /// Vinte e quatro horas é folgado para qualquer formulário que uma pessoa deixe aberto
+    /// e retome — e curto o suficiente para que arquivo abandonado não acumule.
+    /// </summary>
+    [Range(1, 24 * 30)]
+    public int PendingRetentionHours { get; set; } = 24;
+
+    /// <summary>
+    /// Intervalo entre varreduras. Zero desliga a varredura, o que é útil em ambiente de
+    /// teste e em execução com muitas réplicas, onde a limpeza deve rodar em um lugar só.
+    /// </summary>
+    [Range(0, 24 * 7)]
+    public int CleanUpIntervalHours { get; set; } = 6;
 }
 
 /// <summary>

@@ -33,6 +33,12 @@ public abstract record UploadAttachmentResult
         public string Message => $"O arquivo passa do limite de {Limit / (1024 * 1024)} MB.";
     }
 
+    public sealed record TooManyPending(int Limit) : UploadAttachmentResult
+    {
+        public string Message =>
+            $"Você tem {Limit} arquivos enviados e ainda não anexados. Envie o chamado ou a resposta antes de anexar mais.";
+    }
+
     public sealed record TypeNotAllowed(string ContentType) : UploadAttachmentResult
     {
         public string Message =>

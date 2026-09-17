@@ -1,5 +1,6 @@
 using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
+using OpsDesk.Api.RateLimiting;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Attachments;
 
@@ -25,6 +26,7 @@ public static class AttachmentEndpoints
             .WithTags("Anexos");
 
         group.MapPost("/", Upload)
+            .RequireRateLimiting(RateLimitPolicies.Uploads)
             .DisableAntiforgery()
             .WithSummary("Envia um arquivo, que fica pendente ate ser vinculado.");
 
@@ -68,6 +70,13 @@ public static class AttachmentEndpoints
                 detail: tooLarge.Message,
                 statusCode: StatusCodes.Status413PayloadTooLarge,
                 title: "Arquivo grande demais"),
+
+            // 429 também: é limite de quantidade, e a resposta certa é "tente depois de
+            // enviar o que já anexou", não "seu pedido está errado".
+            UploadAttachmentResult.TooManyPending tooMany => TypedResults.Problem(
+                detail: tooMany.Message,
+                statusCode: StatusCodes.Status429TooManyRequests,
+                title: "Muitos anexos pendentes"),
 
             UploadAttachmentResult.TypeNotAllowed notAllowed => TypedResults.Problem(
                 detail: notAllowed.Message,

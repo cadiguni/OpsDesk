@@ -97,6 +97,45 @@ public abstract record AssignResult
     }
 }
 
+// ----- Classificação: prioridade e categoria -----
+
+/// <summary>
+/// Reclassificação do chamado (README, seção 6.1). É o trabalho da triagem.
+///
+/// Os dois campos são opcionais e independentes: mexer só na prioridade, só na categoria,
+/// ou nas duas. Nulo quer dizer "não mexa", e não "limpe" — chamado sem categoria ou sem
+/// prioridade não existe no domínio.
+/// </summary>
+public record ChangeClassificationRequest(TicketPriority? Priority, Guid? CategoryId);
+
+public abstract record ChangeClassificationResult
+{
+    public sealed record Changed(TicketDetail Ticket) : ChangeClassificationResult;
+
+    public sealed record TicketNotFound : ChangeClassificationResult;
+
+    public sealed record NotAllowed : ChangeClassificationResult
+    {
+        public string Message => "Apenas técnicos e gestores reclassificam chamado.";
+    }
+
+    public sealed record CategoryNotFound : ChangeClassificationResult
+    {
+        public string Message => "Categoria inválida ou inativa.";
+    }
+
+    public sealed record TicketClosed : ChangeClassificationResult
+    {
+        public string Message =>
+            "Chamado encerrado não é reclassificado: mudar a prioridade agora alteraria indicador de um atendimento já concluído.";
+    }
+
+    public sealed record SlaPolicyMissing(TicketPriority Priority) : ChangeClassificationResult
+    {
+        public string Message => $"Não há política de SLA ativa para a prioridade {Priority}.";
+    }
+}
+
 // ----- Histórico -----
 
 public record TicketHistoryItem(

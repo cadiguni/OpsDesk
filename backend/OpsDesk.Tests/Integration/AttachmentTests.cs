@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Tickets;
 
@@ -257,6 +259,133 @@ public class AttachmentTests(PostgresFixture fixture) : TicketTestBase(fixture)
         Assert.Equal(
             HttpStatusCode.NotFound,
             (await Download(world.Technician, attachment.Id)).StatusCode);
+    }
+
+    // ----- Cota -----
+
+    [Fact]
+    public async Task Acima_do_limite_de_pendentes_o_envio_e_recusado()
+    {
+        // O limite por arquivo não limita nada sozinho: sem teto de quantidade, mil envios
+        // de dez megabytes são dez gigabytes de um único usuário autenticado.
+        var world = await SetUpAsync();
+
+        for (var i = 0; i < AttachmentService.MaxPendingPerUser; i++)
+        {
+            await UploadAsync(world.Requester, $"print-{i}.png", "image/png");
+        }
+
+        var response = await PostFileAsync(
+            world.Requester, "excedente.png", "image/png", [1, 2, 3]);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Vincular_libera_a_cota_de_pendentes()
+    {
+        // A cota é sobre o que está solto, não sobre o que a pessoa já mandou: quem anexou
+        // e enviou o chamado pode anexar de novo na resposta.
+        var world = await SetUpAsync();
+
+        var ids = new List<Guid>();
+        for (var i = 0; i < AttachmentService.MaxPendingPerUser; i++)
+        {
+            ids.Add((await UploadAsync(world.Requester, $"print-{i}.png", "image/png")).Id);
+        }
+
+        var created = await world.Requester.PostAsJsonAsync(
+            "/api/tickets", NewTicket(world.CategoryId) with { AttachmentIds = [.. ids] });
+        created.EnsureSuccessStatusCode();
+
+        var response = await PostFileAsync(world.Requester, "mais-um.png", "image/png", [1, 2, 3]);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    // ----- Varredura de pendentes abandonados -----
+
+    [Fact]
+    public async Task Pendente_velho_e_recolhido_do_banco_e_do_disco()
+    {
+        var world = await SetUpAsync();
+        var attachment = await UploadAsync(world.Requester, "abandonado.png", "image/png");
+
+        // Envelhece o anexo no banco: esperar vinte e quatro horas de verdade não é teste.
+        await using (var db = Fixture.CreateContext())
+        {
+            await db.TicketAttachments
+                .Where(a => a.Id == attachment.Id)
+                .ExecuteUpdateAsync(a => a.SetProperty(
+                    x => x.CreatedAt, DateTimeOffset.UtcNow.AddDays(-2)));
+        }
+
+        var removed = await CleanUpAsync(TimeSpan.FromHours(24));
+
+        Assert.Equal(1, removed);
+
+        // Fora do banco...
+        await using (var db = Fixture.CreateContext())
+        {
+            Assert.False(await db.TicketAttachments.AnyAsync(a => a.Id == attachment.Id));
+        }
+
+        // ...e fora do alcance de quem o enviou, que era o único a enxergá-lo.
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await Download(world.Requester, attachment.Id)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_varredura_nao_toca_em_pendente_recente()
+    {
+        var world = await SetUpAsync();
+        var attachment = await UploadAsync(world.Requester, "recem-enviado.png", "image/png");
+
+        var removed = await CleanUpAsync(TimeSpan.FromHours(24));
+
+        Assert.Equal(0, removed);
+        Assert.Equal(HttpStatusCode.OK, (await Download(world.Requester, attachment.Id)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_varredura_nao_toca_em_anexo_vinculado()
+    {
+        // O que protege o anexo de um chamado antigo é ter dono, não ser novo. Se a
+        // varredura olhasse só a data, ela apagaria o histórico da operação inteira.
+        var world = await SetUpAsync();
+        var attachment = await UploadAsync(world.Requester, "print.png", "image/png");
+
+        var created = await world.Requester.PostAsJsonAsync(
+            "/api/tickets", NewTicket(world.CategoryId) with { AttachmentIds = [attachment.Id] });
+        created.EnsureSuccessStatusCode();
+
+        await using (var db = Fixture.CreateContext())
+        {
+            await db.TicketAttachments
+                .Where(a => a.Id == attachment.Id)
+                .ExecuteUpdateAsync(a => a.SetProperty(
+                    x => x.CreatedAt, DateTimeOffset.UtcNow.AddYears(-1)));
+        }
+
+        var removed = await CleanUpAsync(TimeSpan.FromHours(24));
+
+        Assert.Equal(0, removed);
+        Assert.Equal(HttpStatusCode.OK, (await Download(world.Requester, attachment.Id)).StatusCode);
+    }
+
+    /// <summary>
+    /// Roda a varredura com o mesmo serviço e o mesmo armazenamento que a API usa, tirados
+    /// do contêiner de DI — assim o teste exercita a configuração real, e não uma montagem
+    /// paralela que poderia divergir dela.
+    /// </summary>
+    private async Task<int> CleanUpAsync(TimeSpan olderThan)
+    {
+        await using var scope = Fixture.Api.Services.CreateAsyncScope();
+
+        var attachments = scope.ServiceProvider.GetRequiredService<AttachmentService>();
+
+        return await attachments.CleanUpPendingAsync(olderThan);
     }
 
     // ----- Atalhos -----

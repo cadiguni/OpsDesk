@@ -346,6 +346,29 @@ Exemplos:
 
 ---
 
+### 6.1 Reclassificação: trocar prioridade e categoria
+
+Prioridade e categoria de abertura são um palpite de quem abriu o chamado. Corrigir esse palpite é o trabalho da triagem, e **técnico e gestor podem trocar os dois** a qualquer momento enquanto o chamado não estiver encerrado.
+
+O solicitante não reclassifica, nem o próprio chamado: prioridade definida por quem abre transformaria a fila de atendimento numa negociação com quem escreve o pedido.
+
+**Trocar a prioridade recalcula os prazos de SLA**, e a conta recomeça da **abertura** do chamado, não do instante da reclassificação. Contar da reclassificação daria mais folga a um chamado promovido a crítico do que a um aberto como crítico, e promover viraria uma forma de ganhar prazo.
+
+Dois marcos já cumpridos não são reescritos:
+
+* o prazo de **resposta** só é recalculado enquanto não houve primeira resposta. Mexer depois transformaria retroativamente um atendimento pontual em atrasado, ou o contrário;
+* o prazo de **resolução** só é recalculado enquanto o chamado não foi resolvido.
+
+O tempo que o chamado passou em "Aguardando usuário" é reaplicado sobre o prazo novo: a pausa acumulada não se perde porque alguém trocou a prioridade depois.
+
+Trocar a **categoria** não mexe em prazo nenhum — categoria roteia e agrupa relatório, não define compromisso de tempo.
+
+Chamado **fechado ou cancelado não é reclassificado**: mudar a prioridade de um atendimento concluído alteraria indicador de coisa que já acabou.
+
+As duas mudanças vão para o histórico, com valor anterior e novo.
+
+---
+
 ## 7. Categorias iniciais
 
 As categorias iniciais serão:
@@ -571,6 +594,19 @@ Sem isso haveria uma janela entre "o arquivo já está no servidor" e "o coment�
 
 Na interface, o arquivo entra por botão, arrastar-e-soltar ou **Ctrl+V** — colar um print recém-tirado é o caminho mais comum e não exige salvar arquivo nenhum.
 
+**Cotas.** O limite por arquivo não limita nada sozinho: sem teto de quantidade, mil envios de dez megabytes são dez gigabytes de um único usuário autenticado. Por isso há três limites:
+
+| Limite | Valor | Resposta |
+| --- | --- | --- |
+| Tamanho por arquivo | 10 MB | 413 |
+| Anexos pendentes por usuário | 20 | 429 |
+| Anexos por chamado | 50 | 400 na abertura ou no comentário |
+| Envios por minuto, por usuário | 30 | 429 |
+
+A cota de pendentes é sobre o que está solto, não sobre o que já foi enviado: vincular libera a cota. O limite de envios por minuto é particionado por **usuário**, e não por IP — por IP, um escritório atrás de NAT dividiria uma cota só.
+
+**Varredura de abandonados.** Anexo pendente há mais de 24 horas é recolhido do banco e do armazenamento por uma tarefa que roda a cada 6 horas (`AttachmentStorage:PendingRetentionHours` e `CleanUpIntervalHours`; intervalo zero desliga). Sem isso o arquivo que a pessoa anexou e desistiu de enviar fica para sempre — e como pendente é invisível para todos menos para quem enviou, ninguém descobre olhando a interface.
+
 ---
 
 ## 12. Histórico do chamado
@@ -706,6 +742,7 @@ Ações para técnico:
 
 * assumir chamado;
 * encaminhar para outro técnico;
+* alterar prioridade e categoria;
 * alterar status;
 * adicionar comentário público;
 * adicionar comentário interno;
@@ -1052,54 +1089,87 @@ Descartados de forma deliberada:
 
 ---
 
-## 18. Roadmap inicial
+## 18. Roadmap
 
-### Versão 1.0 — MVP
+Cada item traz o que é, por que está na lista, e o que ainda precisa ser decidido antes de escrever código. Item sem decisão pendente é item que pode começar amanhã.
 
-* login;
-* anexos em chamados e comentários (antecipado da 1.1);
-* cadastro básico;
-* perfis;
-* abertura de chamado;
-* listagem de chamados;
-* detalhe do chamado;
-* comentários;
-* alteração de status;
-* atribuição de técnico;
-* categorias;
-* prioridades;
-* SLA básico;
-* dashboard simples.
+### Entregue na versão 1.0
+
+* login, cadastro e perfis;
+* abertura, listagem e detalhe de chamado;
+* comentários públicos e internos, com "enviar e fechar";
+* máquina de estados e histórico automático;
+* atribuição, inclusive encaminhamento entre técnicos;
+* abertura em nome de outro usuário, pela equipe;
+* reclassificação de prioridade e categoria, com recálculo de SLA;
+* SLA em horas úteis, com pausa e retomada;
+* categorias, prioridades e dashboard;
+* **anexos** em chamados e comentários, antecipados da 1.1.
 
 ### Versão 1.1 — Melhorias operacionais
 
-* paginação avançada;
-* filtros melhores;
-* tela de administração de categorias;
-* tela de administração de usuários;
-* seed inicial de usuários e categorias;
-* melhoria visual do dashboard.
+**Tela de administração de usuários.** Hoje não há como promover alguém a técnico ou gestor sem `UPDATE` no banco, e nem como desativar quem saiu da empresa. Enquanto isso, toda mudança de equipe depende de acesso ao PostgreSQL.
+
+*A decidir:* quem pode promover (só gestor, presumivelmente); se desativar usuário com chamados abertos exige reatribuir antes; se o próprio gestor pode se rebaixar (provavelmente não — sistema sem gestor não tem volta pela interface).
+
+**Tela de administração de categorias.** Criar, renomear e desativar. A entidade e o `IsActive` já existem; falta a tela e os endpoints.
+
+*A decidir:* o que acontece com chamados de uma categoria desativada — a intenção é que continuem válidos e a categoria só saia dos seletores, que é o motivo de `IsActive` existir em vez de `DELETE`.
+
+**Testes de frontend.** Não existe nenhum: são 332 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+
+*A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
+
+**Reabrir chamado fechado.** `Fechado` e `Cancelado` são terminais na versão 1. É o que o usuário pede na primeira semana: "o problema voltou".
+
+*A decidir:* reabertura cria chamado novo vinculado ao antigo, ou reabre o mesmo? Reabrir o mesmo é mais simples e polui o indicador de tempo de resolução; chamado novo mantém os indicadores honestos e exige um campo de vínculo. Também falta decidir se o SLA reinicia.
+
+**Paginação e filtros melhores.** Filtro por responsável e por período de abertura, busca que também olhe a descrição, e ordenação por última atualização. A busca atual cobre código e título, com `lower(coluna) LIKE`.
+
+*A decidir:* busca em descrição com `LIKE` degrada com volume. Se entrar, provavelmente vale `tsvector` com índice GIN — o que é uma migration e uma decisão de arquitetura, não um ajuste de query.
+
+**Melhoria visual do dashboard.** Recorte por período, comparação com o mês anterior, e cumprimento de SLA como percentual, que hoje não existe como indicador.
 
 ### Versão 1.2 — Notificações
 
-* notificações internas;
-* alertas de SLA;
-* e-mail para mudança de status;
-* e-mail para novo comentário.
+É a maior lacuna funcional do produto: hoje ninguém descobre que um chamado mudou a não ser abrindo a tela. O técnico não sabe que foi atribuído, e o solicitante não sabe que a resposta chegou.
+
+**E-mail de novo comentário público e de mudança de status.** Começar por aí.
+
+*A decidir:* serviço de envio (Azure Communication Services, SendGrid, SMTP corporativo); fila ou envio no mesmo request — envio síncrono amarra a resposta da API à disponibilidade do provedor, e a fila pede infraestrutura; e como evitar tempestade de e-mail em chamado muito ativo (agrupar por janela de tempo).
+
+**Atenção, e não é detalhe:** a invariante 2 vale em canal novo. Nota interna e anexo interno **nunca** entram no corpo de um e-mail, e o destinatário de cada mensagem precisa ser derivado da mesma regra de visibilidade que a API usa — não de uma lista montada à mão no serviço de notificação. Todo endpoint novo que exponha comentário pede teste do caso negativo; o mesmo vale para todo canal novo.
+
+**Notificações internas na interface.** Sino com contador, lidas e não lidas.
+
+**Alertas de SLA.** Aviso antes do vencimento, não depois. Depende de tarefa agendada, então vem depois do canal de e-mail existir.
+
+*A decidir:* quem recebe — responsável, gestor, ou os dois; e com quanta antecedência, em horas úteis.
 
 ### Versão 2.0 — Integrações
 
-* abertura de chamado por e-mail, com o remetente virando solicitante;
-* criação automática de solicitante a partir do endereço remetente;
-* vínculo de respostas de e-mail ao chamado original, como comentário;
-* caixa de SPAM, com classificação, revisão manual e promoção a chamado;
-* importação CSV;
-* importação JSON;
-* integração com Freshdesk;
-* integração com Freshservice;
-* identificação de chamados externos por origem e ID externo.
+Ingestão de chamado por e-mail, caixa de SPAM, importação CSV e JSON, e integração com Freshdesk e Freshservice. Especificação completa da ingestão de e-mail e da caixa de SPAM: [docs/integracao-email.md](docs/integracao-email.md).
 
-Especificação completa da ingestão de e-mail e da caixa de SPAM: [docs/integracao-email.md](docs/integracao-email.md).
+O desenho de anexo pendente e vinculado já foi feito pensando nisso: anexo de e-mail entra pelo mesmo caminho, vinculado ao comentário que a mensagem virar.
+
+### Infraestrutura, quando sair do ambiente local
+
+**Anexos em Azure Blob Storage.** O armazenamento em disco atual **não sobrevive a mais de uma réplica**: cada réplica tem seu próprio sistema de arquivos, e o anexo enviado numa dá 404 na outra. O sistema de arquivos de contêiner também é efêmero — um deploy leva os anexos embora. Ou seja, isto deixa de ser melhoria e passa a ser pré-requisito no momento em que a API escalar horizontalmente.
+
+O caminho está preparado: é uma implementação nova de `IAttachmentStorage` (decisão 4.15 de [docs/arquitetura.md](docs/arquitetura.md)), sem tocar em domínio, serviço, schema ou filtro de visibilidade. A chave de armazenamento já é um caminho hierárquico, que é o que o Blob espera.
+
+*Decisões e cuidados:*
+
+* **Não guardar anexo no banco.** Binário em coluna infla backup e restore, prende conexão do pool durante o streaming, e custa por volta de uma ordem de grandeza mais por GB que blob — contado de novo no backup e na réplica.
+* **Managed Identity**, nunca connection string com chave de conta: chave em configuração é credencial permanente que vaza em log e em dump de variável de ambiente.
+* **Como os bytes chegam ao navegador.** Hoje passam pela API, que aplica o filtro de visibilidade antes de abrir o stream. A alternativa é devolver URL SAS e deixar o navegador buscar direto — mas **SAS é portador**: quem tem o link acessa sem autenticação até expirar. Se adotar: gerar depois da verificação de visibilidade, no mesmo endpoint de download e nunca junto da listagem, com *user delegation SAS* e expiração de minutos. A recomendação é continuar transmitindo pela API e migrar quando o egresso justificar.
+* **Azure Files** montado como volume é a saída sem mexer em código, com latência pior e custo maior. Serve para adiar, não para resolver.
+* **Defender for Storage** com varredura de malware, *soft delete* de 7 a 30 dias, e regra de ciclo de vida para camada fria. O sistema aceita zip e documento do Office de qualquer pessoa da empresa: o anexo é o vetor de entrada mais óbvio que existe.
+* A varredura de pendentes roda no processo da API. Com várias réplicas, todas varrem — é idempotente e o lote é pequeno, mas se incomodar, `CleanUpIntervalHours = 0` desliga e a limpeza migra para um job com dono único.
+
+**Forwarded headers.** O rate limiting particiona por IP de origem nas rotas anónimas, lido de `RemoteIpAddress`. Atrás de Front Door ou Application Gateway, todo pedido chega com o IP do proxy e a partição vira uma só. Antes de pôr um proxy na frente, configurar `UseForwardedHeaders` — e só então confiar no cabeçalho, porque confiar nele sem o middleware deixa o cliente escolher a própria partição.
+
+**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir.
 
 ---
 

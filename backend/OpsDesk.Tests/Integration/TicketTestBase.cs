@@ -140,7 +140,15 @@ public abstract class TicketTestBase(PostgresFixture fixture)
     }
 
     /// <summary>Cria um usuário do perfil pedido e devolve um cliente já autenticado.</summary>
-    protected async Task<(HttpClient Client, Guid UserId)> SignInAsync(UserRole role)
+    protected Task<(HttpClient Client, Guid UserId)> SignInAsync(UserRole role) =>
+        SignInAsync(Fixture.Api, role);
+
+    /// <summary>
+    /// Mesma coisa, contra uma fábrica específica. Os testes de rate limiting sobem uma API
+    /// própria, com limite baixo, e precisam autenticar nela — e não na compartilhada.
+    /// </summary>
+    protected async Task<(HttpClient Client, Guid UserId)> SignInAsync(
+        OpsDeskApiFactory api, UserRole role)
     {
         var email = $"{role}.{Guid.NewGuid():N}@empresa.com".ToLowerInvariant();
 
@@ -153,7 +161,7 @@ public abstract class TicketTestBase(PostgresFixture fixture)
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        var client = Fixture.Api.CreateBrowserClient();
+        var client = api.CreateBrowserClient();
 
         var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, Password));
         login.EnsureSuccessStatusCode();

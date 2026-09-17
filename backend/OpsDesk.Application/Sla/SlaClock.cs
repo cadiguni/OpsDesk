@@ -18,6 +18,45 @@ public class SlaClock(IBusinessCalendar calendar)
         calendar.AddBusinessHours(createdAt, policy.ResolutionHours));
 
     /// <summary>
+    /// Recalcula os prazos depois de uma troca de prioridade (README, seção 6.1).
+    ///
+    /// A conta recomeça da <b>abertura</b> do chamado, não do instante da reclassificação:
+    /// o prazo expressa o compromisso com aquele chamado desde que ele existe. Contar da
+    /// reclassificação daria mais folga a um chamado promovido a crítico do que a um
+    /// aberto como crítico, e a promoção viraria uma forma de ganhar prazo.
+    ///
+    /// Dois marcos já cumpridos não são reescritos:
+    ///
+    /// <list type="bullet">
+    /// <item>o prazo de resposta só muda enquanto não houve primeira resposta — mexer
+    /// depois transformaria retroativamente um atendimento pontual em atrasado, ou o
+    /// contrário;</item>
+    /// <item>o prazo de resolução só muda enquanto o chamado não foi resolvido.</item>
+    /// </list>
+    ///
+    /// O tempo já gasto aguardando o solicitante é reaplicado: a pausa não se perde na
+    /// reclassificação. Pausa em curso não precisa de tratamento aqui — ela é somada pelo
+    /// <see cref="Resume"/>, a partir de <c>SlaPausedAt</c>.
+    /// </summary>
+    public void Recalculate(Ticket ticket, SlaPolicy policy)
+    {
+        var deadlines = Calculate(ticket.CreatedAt, policy);
+
+        if (ticket.FirstRespondedAt is null)
+        {
+            ticket.SlaResponseDueAt = deadlines.ResponseDueAt;
+        }
+
+        if (ticket.ResolvedAt is null)
+        {
+            ticket.SlaResolutionDueAt = ticket.SlaPausedBusinessMinutes > 0
+                ? calendar.AddBusinessMinutes(
+                    deadlines.ResolutionDueAt, ticket.SlaPausedBusinessMinutes)
+                : deadlines.ResolutionDueAt;
+        }
+    }
+
+    /// <summary>
     /// Registra o início da pausa, ao entrar em "Aguardando usuário".
     /// Chamar duas vezes seguidas não move o instante da pausa: o primeiro vale.
     /// </summary>

@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpsDesk.Api.Authentication;
 using OpsDesk.Api.Authorization;
 using OpsDesk.Api.Endpoints;
+using OpsDesk.Api.Maintenance;
 using OpsDesk.Api.RateLimiting;
 using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
@@ -109,6 +110,8 @@ try
     builder.Services.Configure<FormOptions>(options =>
         options.MultipartBodyLengthLimit = 32 * 1024 * 1024);
 
+    builder.Services.AddHostedService<PendingAttachmentCleanup>();
+
     builder.Services.AddOpenApi();
 
     builder.Services
@@ -131,8 +134,20 @@ try
     // quebraria o health check do orquestrador.
 
     app.UseCors();
-    app.UseRateLimiter();
+
+    // Autenticação vem antes do rate limiter de propósito.
+    //
+    // A cota de envio de anexo é por usuário, e a partição só consegue ler a claim do
+    // token depois que a autenticação preencheu o `context.User`. Com o limitador antes,
+    // toda requisição autenticada caía na partição de fallback por IP — o que num
+    // escritório atrás de NAT significa uma cota única para a empresa inteira, e nos
+    // testes significou uma cota única para a suíte toda.
+    //
+    // As cotas anônimas não perdem nada com isso: login e renovação continuam
+    // particionados por IP, e a autenticação num pedido sem token é só não preencher
+    // usuário nenhum.
     app.UseAuthentication();
+    app.UseRateLimiter();
     app.UseAuthorization();
 
     app.MapHealthChecks("/health").AllowAnonymous();

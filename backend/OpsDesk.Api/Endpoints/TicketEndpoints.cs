@@ -48,6 +48,11 @@ public static class TicketEndpoints
             .ValidatingBody<ChangeStatusRequest>()
             .WithSummary("Move o chamado na maquina de estados.");
 
+        group.MapPost("/{id:guid}/classification", ChangeClassification)
+            .RequireAuthorization(AuthorizationPolicies.Staff)
+            .ValidatingBody<ChangeClassificationRequest>()
+            .WithSummary("Troca prioridade e categoria. Prioridade recalcula o SLA.");
+
         group.MapPost("/{id:guid}/assignment", Assign)
             .RequireAuthorization(AuthorizationPolicies.Staff)
             .WithSummary("Define ou remove o tecnico responsavel.");
@@ -237,6 +242,48 @@ public static class TicketEndpoints
 
             _ => throw new InvalidOperationException(
                 $"Resultado de mudança de status não tratado: {result.GetType().Name}.")
+        };
+    }
+
+    private static async Task<IResult> ChangeClassification(
+        Guid id,
+        ChangeClassificationRequest request,
+        TicketWorkflowService workflow,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await workflow.ChangeClassificationAsync(
+            id, request, currentUser.Viewer, cancellationToken);
+
+        return result switch
+        {
+            ChangeClassificationResult.Changed changed => TypedResults.Ok(changed.Ticket),
+
+            ChangeClassificationResult.TicketNotFound => TypedResults.NotFound(),
+
+            ChangeClassificationResult.NotAllowed notAllowed => TypedResults.Problem(
+                detail: notAllowed.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Reclassificação não permitida"),
+
+            ChangeClassificationResult.CategoryNotFound categoryNotFound => TypedResults.Problem(
+                detail: categoryNotFound.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Categoria inválida"),
+
+            // 409 e não 400: o pedido está bem formado, mas conflita com o estado atual.
+            ChangeClassificationResult.TicketClosed closed => TypedResults.Problem(
+                detail: closed.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Chamado encerrado"),
+
+            ChangeClassificationResult.SlaPolicyMissing missing => TypedResults.Problem(
+                detail: missing.Message,
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Política de SLA ausente"),
+
+            _ => throw new InvalidOperationException(
+                $"Resultado de reclassificação não tratado: {result.GetType().Name}.")
         };
     }
 

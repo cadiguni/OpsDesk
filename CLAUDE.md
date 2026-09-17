@@ -28,6 +28,7 @@ GET    /api/tickets/{id}
 GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
 GET    /api/tickets/{id}/history
 POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
+POST   /api/tickets/{id}/classification   (prioridade e categoria; prioridade recalcula o SLA)
 GET    /api/categories               GET  /api/staff        GET /api/dashboard
 GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
 POST   /api/attachments              GET  /api/attachments/{id}
@@ -161,6 +162,7 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * O expediente tem **dez** horas (08:00–18:00), então "1 dia útil" do README são 10 horas úteis, não 8. A tradução de dias para horas está no `DatabaseSeeder`, não espalhada.
 * A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
 * **Rotação de refresh token de uso único é estrita demais sem janela de tolerância.** Duas abas recarregando, ou o `StrictMode` do React executando o efeito duas vezes, produzem duas renovações concorrentes com o mesmo cookie — e a segunda parece reuso. `JwtOptions.RefreshTokenGraceSeconds` cobre isso no servidor, e no cliente `refreshSession` garante uma renovação por vez. Os dois lados são necessários: um sozinho não resolve.
+* **O `UseRateLimiter` vem depois do `UseAuthentication`.** A cota de envio de anexo é por usuário, e a partição só lê a claim do token depois que a autenticação preencheu o `context.User`. Com o limitador antes, toda requisição autenticada cai na partição de fallback por IP — num escritório atrás de NAT isso é uma cota única para a empresa, e na suíte de testes era uma cota única para todos os testes, que passaram a falhar em bloco com 429. Há teste fixando os dois lados (`UploadRateLimitTests`).
 * **Não misture cota de rate limiting entre login e renovação de sessão.** A interface renova a cada carregamento de página; com cota compartilhada, recarregar algumas vezes gastava as tentativas de credencial e o login legítimo recebia 429 na primeira tentativa.
 * **Corpo de requisição malformado estoura como `BadHttpRequestException`** e, sem tratamento, sai como 500 — o que significa "defeito nosso" e alimenta alerta de produção. O `MalformedRequestHandler` traduz para 400.
 * **O JSON da API serializa enum como texto**, configurado por `ConfigureHttpJsonOptions`. Sem isso o padrão é inteiro, e `role: 1` chega ao frontend onde o TypeScript espera `'Technician'` — o rótulo sai vazio e nada acusa o erro em tempo de compilação. Há teste de contrato fixando isso.

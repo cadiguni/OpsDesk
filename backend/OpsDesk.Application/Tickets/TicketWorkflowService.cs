@@ -115,6 +115,79 @@ public class TicketWorkflowService(
         }
     }
 
+    /// <summary>
+    /// Troca prioridade e categoria — a reclassificação da triagem.
+    ///
+    /// Prioridade não é só rótulo: ela define o prazo, então trocá-la recalcula o SLA pelo
+    /// <see cref="SlaClock.Recalculate"/>. Categoria não mexe em prazo nenhum, só em
+    /// roteamento e relatório.
+    ///
+    /// O histórico das duas mudanças é gravado pelo interceptor, que compara valor
+    /// anterior com novo. Nada é adicionado à mão aqui.
+    /// </summary>
+    public async Task<ChangeClassificationResult> ChangeClassificationAsync(
+        Guid ticketId,
+        ChangeClassificationRequest request,
+        TicketViewer viewer,
+        CancellationToken cancellationToken = default)
+    {
+        if (!viewer.IsStaff)
+        {
+            // Prioridade definida pelo solicitante depois da abertura faria da fila uma
+            // negociação com quem abre o chamado. A triagem é da equipe (README, 4.1).
+            return new ChangeClassificationResult.NotAllowed();
+        }
+
+        var ticket = await db.Tickets
+            .VisibleTo(viewer)
+            .SingleOrDefaultAsync(t => t.Id == ticketId, cancellationToken);
+
+        if (ticket is null)
+        {
+            return new ChangeClassificationResult.TicketNotFound();
+        }
+
+        if (ticket.Status is TicketStatus.Closed or TicketStatus.Cancelled)
+        {
+            return new ChangeClassificationResult.TicketClosed();
+        }
+
+        if (request.CategoryId is { } categoryId && categoryId != ticket.CategoryId)
+        {
+            var categoryExists = await db.Categories
+                .AnyAsync(c => c.Id == categoryId && c.IsActive, cancellationToken);
+
+            if (!categoryExists)
+            {
+                return new ChangeClassificationResult.CategoryNotFound();
+            }
+
+            ticket.CategoryId = categoryId;
+        }
+
+        if (request.Priority is { } priority && priority != ticket.Priority)
+        {
+            var policy = await db.SlaPolicies
+                .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, cancellationToken);
+
+            if (policy is null)
+            {
+                // Mesmo tratamento da abertura: sem política ativa não há prazo, e é erro
+                // de configuração do sistema, não do pedido.
+                return new ChangeClassificationResult.SlaPolicyMissing(priority);
+            }
+
+            ticket.Priority = priority;
+            sla.Recalculate(ticket, policy);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        var detail = await tickets.GetAsync(ticket.Id, viewer, cancellationToken);
+
+        return new ChangeClassificationResult.Changed(detail!);
+    }
+
     public async Task<AssignResult> AssignAsync(
         Guid ticketId,
         AssignRequest request,

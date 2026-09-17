@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using OpsDesk.Application.Auth;
+using OpsDesk.Domain.Enums;
 
 namespace OpsDesk.Tests.Integration;
 
@@ -103,5 +104,61 @@ public class AuthRateLimitTests(PostgresFixture fixture)
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
+    }
+}
+
+/// <summary>
+/// O rate limiting do envio de anexo.
+///
+/// Aqui a cota não é contra força bruta, é contra consumo: cada envio aceito grava até dez
+/// megabytes. E a partição é por <b>usuário</b>, não por IP — o que só funciona porque a
+/// autenticação roda antes do limitador no pipeline. Este teste existe sobretudo por causa
+/// disso: com a ordem invertida, a claim ainda não existe, todo mundo cai na partição de
+/// fallback por IP, e um escritório atrás de NAT passa a dividir uma cota só.
+/// </summary>
+[Collection(PostgresCollection.Name)]
+public class UploadRateLimitTests(PostgresFixture fixture) : TicketTestBase(fixture)
+{
+    private const int Limit = 3;
+
+    [Fact]
+    public async Task Envio_repetido_passa_a_receber_429_e_a_cota_e_por_usuario()
+    {
+        await Fixture.ResetAsync();
+
+        await using var api = new OpsDeskApiFactory(Fixture.ConnectionString, uploadsPerMinute: Limit);
+
+        var (primeiro, _) = await SignInAsync(api, UserRole.Requester);
+        var (segundo, _) = await SignInAsync(api, UserRole.Requester);
+
+        var statuses = new List<HttpStatusCode>();
+
+        for (var i = 0; i < Limit + 1; i++)
+        {
+            statuses.Add((await PostFileAsync(primeiro, $"print-{i}.png")).StatusCode);
+        }
+
+        Assert.All(
+            statuses.Take(Limit),
+            status => Assert.Equal(HttpStatusCode.Created, status));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, statuses[^1]);
+
+        // O segundo usuário tem a própria cota: quem estourou o limite não tranca o colega.
+        var doOutro = await PostFileAsync(segundo, "print-do-outro.png");
+        Assert.Equal(HttpStatusCode.Created, doOutro.StatusCode);
+
+        primeiro.Dispose();
+        segundo.Dispose();
+    }
+
+    private static async Task<HttpResponseMessage> PostFileAsync(HttpClient client, string fileName)
+    {
+        using var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent([1, 2, 3, 4]);
+        file.Headers.TryAddWithoutValidation("Content-Type", "image/png");
+        form.Add(file, "file", fileName);
+
+        return await client.PostAsync("/api/attachments", form);
     }
 }
