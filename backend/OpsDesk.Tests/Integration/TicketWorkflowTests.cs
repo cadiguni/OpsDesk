@@ -122,10 +122,6 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         var hidden = await world.OtherRequester.PostAsJsonAsync(
             $"/api/tickets/{ticket}/comments", new AddCommentRequest("Indevido.", CloseTicket: true));
         Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
-        await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
-        var forbidden = await world.Technician.PostAsJsonAsync(
-            $"/api/tickets/{ticket}/comments", new AddCommentRequest("Indevido.", CloseTicket: true));
-        Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
         Assert.Empty(await CommentsAsync(world.Manager, ticket));
         Assert.Equal(TicketStatus.Open, (await GetAsync(world.Manager, ticket)).Status);
     }
@@ -226,8 +222,10 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Tecnico_nao_comenta_em_chamado_de_outro_tecnico()
+    public async Task Tecnico_comenta_em_chamado_de_outro_tecnico()
     {
+        // Cobrir ausência de colega é atendimento normal, e antes exigia passar pelo
+        // gestor: o chamado do outro técnico simplesmente não existia para este.
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
 
@@ -235,9 +233,9 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
 
         var response = await world.Technician.PostAsJsonAsync(
             $"/api/tickets/{ticket}/comments",
-            new AddCommentRequest("Comentário indevido."));
+            new AddCommentRequest("Assumindo enquanto o colega está fora.", IsInternal: true));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]
@@ -729,18 +727,32 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Tecnico_nao_reclassifica_chamado_de_outro_tecnico()
+    public async Task Tecnico_reclassifica_chamado_de_outro_tecnico()
     {
+        // Triagem é da equipe, e não de quem por acaso assumiu o chamado: prioridade
+        // errada na fila do colega tem de poder ser corrigida por quem notar.
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
         await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
 
-        var response = await world.Technician.PostAsJsonAsync(
+        var after = await ReclassifyAsync(
+            world.Technician, ticket, priority: TicketPriority.Critical);
+
+        Assert.Equal(TicketPriority.Critical, after.Priority);
+    }
+
+    [Fact]
+    public async Task Solicitante_nao_reclassifica_chamado_de_terceiro()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        var response = await world.OtherRequester.PostAsJsonAsync(
             $"/api/tickets/{ticket}/classification",
             new ChangeClassificationRequest(TicketPriority.Critical, null));
 
-        // Não é regra de reclassificação: o chamado não existe para ele.
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // Barrado pela política de rota, que só aceita equipe.
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     private static async Task<TicketDetail> ReclassifyAsync(
@@ -772,21 +784,20 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Tecnico_encaminha_chamado_para_outro_tecnico()
+    public async Task Tecnico_encaminha_chamado_para_outro_tecnico_e_continua_vendo()
     {
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
 
-        var response = await world.Technician.PostAsJsonAsync(
-            $"/api/tickets/{ticket}/assignment", new AssignRequest(world.OtherTechnicianId));
+        var forwarded = await AssignAsync(world.Technician, ticket, world.OtherTechnicianId);
 
-        // 204: a atribuição valeu, mas o chamado saiu da visibilidade de quem encaminhou —
-        // técnico vê o que está sem responsável e o que é dele, e agora não é nenhum dos
-        // dois. Não há corpo a devolver sem furar o filtro de visibilidade.
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(world.OtherTechnicianId, forwarded.AssignedTechnicianId);
 
+        // Encaminhar não tira o chamado da vista de quem encaminhou. Enquanto técnico via
+        // só os sem responsável e os seus, esta chamada respondia 204 e a interface
+        // precisava devolver a pessoa para a lista.
         Assert.Equal(
-            HttpStatusCode.NotFound,
+            HttpStatusCode.OK,
             (await world.Technician.GetAsync($"/api/tickets/{ticket}")).StatusCode);
 
         var received = await GetAsync(world.OtherTechnician, ticket);
@@ -806,19 +817,18 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Tecnico_nao_alcanca_chamado_de_outro_tecnico_para_atribuir()
+    public async Task Tecnico_assume_para_si_chamado_de_outro_tecnico()
     {
-        // O que impede o técnico de mexer no chamado alheio é o filtro de visibilidade,
-        // não uma regra de atribuição: o chamado simplesmente não existe para ele.
+        // O caso de quem volta de férias e precisa puxar de volta o próprio chamado, ou de
+        // quem assume a fila de um colega ausente. Antes dependia do gestor.
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
 
         await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
 
-        var response = await world.Technician.PostAsJsonAsync(
-            $"/api/tickets/{ticket}/assignment", new AssignRequest(world.TechnicianId));
+        var taken = await AssignAsync(world.Technician, ticket, world.TechnicianId);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(world.TechnicianId, taken.AssignedTechnicianId);
     }
 
     [Fact]

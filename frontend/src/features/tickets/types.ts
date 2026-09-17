@@ -67,6 +67,7 @@ export type TicketQuery = {
   status?: TicketStatus[]
   priority?: TicketPriority[]
   categoryId?: string
+  assignedTechnicianId?: string
   unassigned?: boolean
   overdue?: boolean
   search?: string

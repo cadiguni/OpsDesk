@@ -300,11 +300,6 @@ public static class TicketEndpoints
         {
             AssignResult.Assigned assigned => TypedResults.Ok(assigned.Ticket),
 
-            // Gravado, mas o chamado saiu da visibilidade de quem atribuiu. 204 em vez de
-            // 200 com corpo vazio: o cliente precisa distinguir "atualizado, aqui está" de
-            // "atualizado, e você não vê mais" para tirar a pessoa da tela de detalhe.
-            AssignResult.AssignedAndHidden => TypedResults.NoContent(),
-
             AssignResult.TicketNotFound => TypedResults.NotFound(),
 
             AssignResult.NotAllowed notAllowed => TypedResults.Problem(

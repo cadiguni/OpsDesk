@@ -48,7 +48,7 @@ public class TicketVisibilitySqlTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task Tecnico_enxerga_os_sem_responsavel_e_os_dele()
+    public async Task Tecnico_enxerga_a_fila_inteira()
     {
         await fixture.ResetAsync();
         await using var db = fixture.CreateContext();
@@ -59,10 +59,12 @@ public class TicketVisibilitySqlTests(PostgresFixture fixture)
             .Select(t => t.Title)
             .ToListAsync();
 
-        Assert.Contains("Chamado de terceiro", visible);   // atribuído a ele
+        Assert.Contains("Chamado de terceiro", visible);
         Assert.Contains("Sem responsável", visible);
-        Assert.Contains("Chamado do solicitante", visible); // também sem responsável
-        Assert.DoesNotContain("De outro técnico", visible);
+        Assert.Contains("Chamado do solicitante", visible);
+
+        // O que era proibido e passou a ser permitido: chamado que outro técnico assumiu.
+        Assert.Contains("De outro técnico", visible);
     }
 
     [Fact]

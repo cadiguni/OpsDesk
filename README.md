@@ -157,8 +157,7 @@ Representa o profissional responsável por atender chamados.
 
 Permissões:
 
-* visualizar chamados disponíveis para atendimento;
-* visualizar chamados atribuídos a ele;
+* visualizar todos os chamados, atribuídos ou não;
 * assumir chamados;
 * encaminhar chamado para outro técnico;
 * abrir chamado em nome de um usuário;
@@ -194,6 +193,24 @@ Permissões:
 * visualizar histórico completo;
 * gerenciar usuários futuramente;
 * configurar SLA futuramente.
+
+---
+
+### 4.4 Visibilidade dos chamados
+
+A fronteira de visibilidade é entre **equipe e solicitante**, e não entre os três perfis:
+
+| Perfil | Enxerga |
+| --- | --- |
+| Gestor | todos os chamados |
+| Técnico | todos os chamados |
+| Usuário | apenas os próprios, e neles nunca o que é interno |
+
+Técnico já viu apenas os chamados sem responsável e os atribuíos a ele. A restrição custava mais do que protegia: quem encaminhava um chamado para um colega o perdia de vista no mesmo instante, ninguém conseguia reclassificar nem comentar no chamado que o colega havia assumido, e cobrir uma ausência exigia passar pelo gestor. E não protegia dado de ninguém — é a mesma equipe, com o mesmo acesso a comentário e anexo internos.
+
+Ver tudo não é o mesmo que trabalhar sobre tudo: a fila pessoal continua disponível na listagem, agora como filtro ("Meus chamados") em vez de imposição do backend.
+
+O que **não** mudou, e é o que importa: o solicitante continua enxergando só os próprios chamados, sem comentário interno e sem anexo interno. O filtro segue aplicado na query, antes da projeção — invariante 1 do [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -541,9 +558,7 @@ Um chamado poderá ser atribuído de quatro formas:
 3. gestor atribui a um técnico;
 4. regra automática, em versão futura.
 
-Encaminhar não é privilégio de gestão: quem recebeu o chamado errado precisa poder passá-lo adiante sem depender do gestor. O que limita o técnico não é a regra de atribuição e sim o filtro de visibilidade — ele só alcança chamado sem responsável ou atribuído a ele, e o chamado de outra pessoa simplesmente não existe para ele (404).
-
-Consequência direta disso: ao encaminhar para um colega, o técnico perde o chamado de vista no mesmo instante. A API responde **204** nesse caso, em vez de 200 com o chamado — devolver o corpo exigiria reler o chamado ignorando o filtro de visibilidade. A interface leva a pessoa de volta para a lista.
+Encaminhar não é privilégio de gestão: quem recebeu o chamado errado precisa poder passá-lo adiante sem depender do gestor. E, como a equipe enxerga a fila inteira (seção 4.4), encaminhar não tira o chamado da vista de quem encaminhou — dá para acompanhar o que foi passado adiante.
 
 Quando um técnico assumir o chamado:
 
@@ -999,7 +1014,7 @@ Pode acessar:
 
 * painel técnico;
 * chamados sem responsável;
-* chamados atribuídos a ele;
+* chamados atribuídos a ele, pelo filtro "Meus chamados";
 * comentários internos;
 * histórico dos chamados que pode atender.
 

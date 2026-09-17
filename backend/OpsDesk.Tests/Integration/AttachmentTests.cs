@@ -242,10 +242,11 @@ public class AttachmentTests(PostgresFixture fixture) : TicketTestBase(fixture)
     }
 
     [Fact]
-    public async Task Anexo_de_chamado_de_outro_tecnico_nao_e_visivel()
+    public async Task Anexo_de_chamado_de_outro_tecnico_e_visivel_para_a_equipe()
     {
-        // Mesma regra do chamado: técnico alcança o que está sem responsável e o que é
-        // dele. O anexo acompanha, sem exceção própria.
+        // O anexo acompanha a visibilidade do chamado, sem exceção própria: como a equipe
+        // enxerga a fila inteira, enxerga também os anexos dela. A fronteira que importa
+        // continua sendo a do solicitante, coberta nos testes acima.
         var world = await SetUpAsync();
         var attachment = await UploadAsync(world.Requester, "print.png", "image/png");
 
@@ -255,9 +256,9 @@ public class AttachmentTests(PostgresFixture fixture) : TicketTestBase(fixture)
 
         await AssignAsync(world.Manager, ticket!.Id, world.OtherTechnicianId);
 
-        Assert.Empty(await ListAttachmentsAsync(world.Technician, ticket.Id));
+        Assert.Single(await ListAttachmentsAsync(world.Technician, ticket.Id));
         Assert.Equal(
-            HttpStatusCode.NotFound,
+            HttpStatusCode.OK,
             (await Download(world.Technician, attachment.Id)).StatusCode);
     }
 

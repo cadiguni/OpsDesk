@@ -89,13 +89,6 @@ export async function changeStatus(ticketId: string, status: TicketStatus): Prom
 }
 
 /**
- * Define ou remove o responsável.
- *
- * Devolve `null` quando a API responde 204: a atribuição valeu, mas o chamado saiu da
- * visibilidade de quem atribuiu — o técnico que encaminha para um colega deixa de
- * enxergar o chamado no mesmo instante.
- */
-/**
  * Troca prioridade e categoria. Campo ausente quer dizer "nao mexa".
  *
  * Trocar a prioridade recalcula os prazos de SLA no servidor, contados da abertura do
@@ -113,15 +106,16 @@ export async function changeClassification(
   return data
 }
 
+/** Define ou remove o responsável. `null` deixa o chamado sem responsável. */
 export async function assign(
   ticketId: string,
   technicianId: string | null,
-): Promise<TicketDetail | null> {
-  const response = await api.post<TicketDetail>(`/api/tickets/${ticketId}/assignment`, {
+): Promise<TicketDetail> {
+  const { data } = await api.post<TicketDetail>(`/api/tickets/${ticketId}/assignment`, {
     technicianId,
   })
 
-  return response.status === 204 ? null : response.data
+  return data
 }
 
 export async function listUsers(search?: string): Promise<UserOption[]> {

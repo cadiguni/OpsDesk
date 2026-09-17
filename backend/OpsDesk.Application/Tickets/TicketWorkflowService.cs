@@ -241,14 +241,11 @@ public class TicketWorkflowService(
 
         var detail = await tickets.GetAsync(ticket.Id, viewer, cancellationToken);
 
-        // Encaminhar para outro técnico tira o chamado da própria visibilidade: técnico vê
-        // o que está sem responsável e o que é dele, e o chamado deixou de ser os dois.
-        // A atribuição valeu; só não há mais o que devolver. Reler o chamado ignorando o
-        // filtro para poder responder alguma coisa furaria a invariante 1 por conveniência
-        // de interface.
-        return detail is null
-            ? new AssignResult.AssignedAndHidden()
-            : new AssignResult.Assigned(detail);
+        // Encaminhar não tira o chamado da vista de quem encaminhou: a equipe enxerga a
+        // fila inteira. Enquanto técnico via só os chamados sem responsável e os seus,
+        // este ponto precisava de um resultado próprio para "gravei, mas você não vê
+        // mais" — e a interface tirava a pessoa da tela.
+        return new AssignResult.Assigned(detail!);
     }
 
     /// <summary>Técnicos e gestores ativos, para o seletor de responsável.</summary>

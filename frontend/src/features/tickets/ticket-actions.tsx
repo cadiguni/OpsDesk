@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Ban,
   CircleCheck,
@@ -68,7 +67,6 @@ const statusActions: Record<TicketStatus, StatusAction> = {
 
 export function TicketActions({ ticket }: { ticket: TicketDetail }) {
   const { isStaff, user } = useSession()
-  const navigate = useNavigate()
   const changeStatus = useChangeStatus(ticket.id)
   const assign = useAssign(ticket.id)
   const classification = useChangeClassification(ticket.id)
@@ -84,21 +82,6 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
   // Chamado encerrado não é reclassificado: mudar a prioridade agora alteraria indicador
   // de um atendimento já concluído. A API recusa, e a interface não oferece.
   const terminal = ticket.status === 'Closed' || ticket.status === 'Cancelled'
-
-  /**
-   * Encaminhar para outro técnico pode tirar o chamado da própria visibilidade — técnico
-   * vê o que está sem responsável e o que é dele. Quando a API responde sem corpo é
-   * exatamente isso, e ficar na tela renderizaria um chamado que já não se pode ler.
-   */
-  function changeAssignee(technicianId: string | null) {
-    assign.mutate(technicianId, {
-      onSuccess: (updated) => {
-        if (!updated) {
-          void navigate('/chamados', { replace: true })
-        }
-      },
-    })
-  }
 
   function activate(status: TicketStatus) {
     const action = statusActions[status]
@@ -219,7 +202,7 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
                 variant="outline"
                 className="justify-start"
                 disabled={assign.isPending}
-                onClick={() => changeAssignee(user?.id ?? null)}
+                onClick={() => assign.mutate(user?.id ?? null)}
               >
                 <UserRoundCheck />
                 {assign.isPending ? 'Salvando…' : 'Assumir chamado'}
@@ -232,7 +215,7 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
                 variant="outline"
                 className="justify-start"
                 disabled={assign.isPending}
-                onClick={() => changeAssignee(null)}
+                onClick={() => assign.mutate(null)}
               >
                 <RotateCcw />
                 Devolver para a fila
@@ -245,7 +228,7 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
               Encaminhar para
               <Select
                 value={ticket.assignedTechnicianId ?? ''}
-                onChange={(event) => changeAssignee(event.target.value || null)}
+                onChange={(event) => assign.mutate(event.target.value || null)}
                 disabled={assign.isPending || staff.isPending}
                 aria-label="Técnico responsável"
               >

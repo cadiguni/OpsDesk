@@ -6,7 +6,7 @@ Instruções para agentes de IA que trabalham neste repositório.
 
 OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis: Usuário, Técnico e Gestor. O domínio é pequeno e bem definido; a complexidade real está em três pontos, e é neles que o cuidado deve se concentrar:
 
-1. **autorização por recurso** — solicitante nunca vê chamado de terceiro nem comentário interno;
+1. **autorização por recurso** — a fronteira é entre equipe e solicitante: técnico e gestor enxergam todos os chamados, e o solicitante nunca vê chamado de terceiro, comentário interno nem anexo interno;
 2. **máquina de estados do chamado** — sete status, toda transição auditada;
 3. **SLA em horas úteis** — com pausa enquanto o chamado aguarda o solicitante.
 
@@ -130,7 +130,7 @@ Criados pelo seed só em Development, senha `OpsDesk@123`:
 
 Estas regras não são preferências de estilo. Quebrá-las é bug, e em alguns casos é vazamento de dado.
 
-1. **O filtro de visibilidade é aplicado na query.** Toda leitura de chamado passa pelo filtro derivado do usuário autenticado, no `IQueryable`, antes da projeção. Nunca confie em atributo de rota ou em condicional na interface para esconder chamado de terceiro.
+1. **O filtro de visibilidade é aplicado na query.** Toda leitura de chamado passa pelo filtro derivado do usuário autenticado, no `IQueryable`, antes da projeção. Nunca confie em atributo de rota ou em condicional na interface para esconder chamado de terceiro. O corte é por `TicketViewer.IsStaff` — equipe vê tudo, solicitante vê o próprio — e qualquer perfil desconhecido cai no caso restrito.
 2. **Comentário com `IsInternal = true` nunca chega ao solicitante.** Não em resposta de API, não em e-mail, não em notificação. Qualquer endpoint novo que retorne comentários precisa de teste cobrindo esse caso. **Vale igual para anexo:** o arquivo de uma nota interna é tão restrito quanto o texto dela — some da listagem e o download direto responde 404.
 3. **`TicketHistory` é append-only.** Nada de `Update` nem `Delete`. O preenchimento é feito pelo interceptor do EF Core, não espalhado pelos serviços.
 4. **Datas em UTC, colunas `timestamptz`.** Conversão para `America/Sao_Paulo` só na interface e dentro do cálculo de horas úteis.

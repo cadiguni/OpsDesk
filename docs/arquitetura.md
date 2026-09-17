@@ -103,12 +103,14 @@ Quatro projetos são o suficiente. A regra prática: se uma classe nova não tem
 Toda leitura de chamados passa por um filtro derivado do usuário autenticado, aplicado no `IQueryable` antes de qualquer projeção:
 
 * **Usuário**: apenas chamados em que ele é o solicitante;
-* **Técnico**: chamados sem responsável e chamados atribuídos a ele;
+* **Técnico**: todos os chamados, como o gestor — a fronteira de visibilidade é entre equipe e solicitante, e não entre perfis da equipe;
 * **Gestor**: todos.
 
 Comentários internos (`IsInternal = true`) são removidos na mesma camada quando o solicitante é o requisitante do chamado.
 
 **Por quê:** se a proteção viver em atributo de rota, basta alguém criar um endpoint novo e esquecer o atributo para vazar chamado de terceiro. Amarrando ao acesso aos dados, o caminho inseguro deixa de existir.
+
+Todos os predicados decidem por `TicketViewer.IsStaff`, que é falso para qualquer valor de perfil fora de técnico e gestor. É um fail closed deliberado: perfil novo que ninguém lembrou de tratar cai no caso mais restrito em vez de virar acesso amplo, e há teste fixando isso.
 
 ### 4.2 Histórico é gravado por interceptor do EF Core
 

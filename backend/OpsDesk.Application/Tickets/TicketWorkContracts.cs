@@ -81,12 +81,6 @@ public abstract record AssignResult
 {
     public sealed record Assigned(TicketDetail Ticket) : AssignResult;
 
-    /// <summary>
-    /// A atribuição foi gravada, mas o chamado saiu da visibilidade de quem atribuiu —
-    /// caso do técnico que encaminha para um colega.
-    /// </summary>
-    public sealed record AssignedAndHidden : AssignResult;
-
     public sealed record TicketNotFound : AssignResult;
 
     public sealed record NotAllowed(string Message) : AssignResult;

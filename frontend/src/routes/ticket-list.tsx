@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlarmClock, Search, UserX, X } from 'lucide-react'
+import { AlarmClock, Search, UserRound, UserX, X } from 'lucide-react'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,7 +38,7 @@ const sortLabels: Record<TicketSort, string> = {
  * de voltar do navegador funciona, e recarregar não perde o que a pessoa filtrou.
  */
 export function TicketList() {
-  const { isStaff } = useSession()
+  const { isStaff, user } = useSession()
   const [params, setParams] = useSearchParams()
   const categories = useCategories()
 
@@ -47,6 +47,11 @@ export function TicketList() {
   const categoryId = params.get('categoryId') ?? undefined
   const search = params.get('search') ?? ''
   const unassigned = params.get('unassigned') === 'true'
+
+  // Guardado como `mine=true`, e não com o identificador na URL: a equipe enxerga a fila
+  // inteira desde que técnico deixou de ver só o que é dele, e o filtro pessoal virou
+  // escolha de quem olha. Assim o mesmo endereço serve a qualquer pessoa da equipe.
+  const mine = params.get('mine') === 'true'
   const overdue = params.get('overdue') === 'true'
   const sort = (params.get('sort') as TicketSort | null) ?? 'CreatedAtDescending'
   const page = Number(params.get('page') ?? '1')
@@ -55,6 +60,7 @@ export function TicketList() {
     status: status.length > 0 ? status : undefined,
     priority: priority.length > 0 ? priority : undefined,
     categoryId,
+    assignedTechnicianId: mine ? user?.id : undefined,
     unassigned: unassigned || undefined,
     overdue: overdue || undefined,
     search: search || undefined,
@@ -112,6 +118,7 @@ export function TicketList() {
         ]
       : []),
     ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => update({ search: null }) }] : []),
+    ...(mine ? [{ key: 'mine', label: 'Meus chamados', clear: () => update({ mine: null }) }] : []),
     ...(unassigned
       ? [{ key: 'unassigned', label: 'Sem responsável', clear: () => update({ unassigned: null }) }]
       : []),
@@ -230,6 +237,10 @@ export function TicketList() {
           {isStaff && (
             <>
               <span aria-hidden className="bg-border mx-1 h-5 w-px" />
+
+              <FilterChip active={mine} onClick={() => update({ mine: mine ? null : 'true' })}>
+                <UserRound className="size-3.5" /> Meus chamados
+              </FilterChip>
 
               <FilterChip
                 active={unassigned}

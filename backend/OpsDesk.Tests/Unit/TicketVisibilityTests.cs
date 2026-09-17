@@ -78,22 +78,23 @@ public class TicketVisibilityTests
     }
 
     [Fact]
-    public void Tecnico_ve_os_sem_responsavel_e_os_dele()
+    public void Tecnico_ve_a_fila_inteira()
     {
         var visible = AllTickets.VisibleTo(new TicketViewer(Technician, UserRole.Technician)).ToList();
 
-        Assert.Contains(Unassigned, visible);
-        Assert.Contains(AssignedToTechnician, visible);
-        Assert.Contains(Own, visible);              // também está sem responsável
-        Assert.Contains(OfSomeoneElse, visible);    // idem
+        Assert.Equal(5, visible.Count);
     }
 
     [Fact]
-    public void Tecnico_nao_ve_chamado_atribuido_a_outro_tecnico()
+    public void Tecnico_ve_chamado_atribuido_a_outro_tecnico()
     {
+        // Um técnico não é terceiro para outro técnico: é a mesma equipe, com o mesmo
+        // acesso a comentário interno. Esconder o chamado do colega custava atendimento
+        // — encaminhar tirava o chamado da própria vista, e cobrir ausência exigia o
+        // gestor — sem proteger dado de ninguém.
         var visible = AllTickets.VisibleTo(new TicketViewer(Technician, UserRole.Technician)).ToList();
 
-        Assert.DoesNotContain(AssignedToAnotherTechnician, visible);
+        Assert.Contains(AssignedToAnotherTechnician, visible);
     }
 
     [Fact]
@@ -107,8 +108,10 @@ public class TicketVisibilityTests
     [Fact]
     public void Perfil_desconhecido_cai_no_caso_mais_restrito()
     {
-        // Fail closed: um perfil novo que ninguém lembrou de tratar no switch não pode
-        // virar acesso amplo. Vale como contrato do filtro, não como cenário esperado.
+        // Fail closed: o filtro decide por `IsStaff`, que é falso para qualquer valor
+        // fora de técnico e gestor. Perfil novo que ninguém lembrou de tratar cai no caso
+        // mais restrito em vez de virar acesso amplo. Contrato do filtro, não cenário
+        // esperado.
         var visible = AllTickets.VisibleTo(new TicketViewer(Requester, (UserRole)99)).ToList();
 
         Assert.Single(visible);
@@ -154,24 +157,14 @@ public class TicketVisibilityTests
     }
 
     [Fact]
-    public void Tecnico_ve_comentario_interno_dos_chamados_que_atende()
+    public void Tecnico_ve_comentario_interno_de_qualquer_chamado()
     {
         var visible = Comments()
             .VisibleTo(new TicketViewer(Technician, UserRole.Technician))
             .ToList();
 
-        Assert.Equal(2, visible.Count);
+        Assert.Equal(4, visible.Count);
         Assert.Contains(visible, c => c.IsInternal);
-    }
-
-    [Fact]
-    public void Tecnico_nao_ve_comentario_de_chamado_de_outro_tecnico()
-    {
-        var visible = Comments()
-            .VisibleTo(new TicketViewer(Technician, UserRole.Technician))
-            .ToList();
-
-        Assert.DoesNotContain(visible, c => c.Content.Contains("terceiro"));
     }
 
     [Fact]

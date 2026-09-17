@@ -350,16 +350,33 @@ public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixt
     }
 
     [Fact]
-    public async Task Tecnico_lista_os_sem_responsavel_e_os_dele()
+    public async Task Tecnico_lista_a_fila_inteira()
     {
         var world = await SetUpWithTicketsAsync();
 
-        var titles = (await ListAsync(world.Technician)).Items.Select(t => t.Title).ToList();
+        var page = await ListAsync(world.Technician);
+        var titles = page.Items.Select(t => t.Title).ToList();
 
-        Assert.Contains("Chamado do solicitante", titles);  // sem responsável
+        Assert.Contains("Chamado do solicitante", titles);
         Assert.Contains("Sem responsável", titles);
         Assert.Contains("Atribuído ao técnico", titles);
-        Assert.DoesNotContain("De outro técnico", titles);
+        Assert.Contains("De outro técnico", titles);
+        Assert.Equal(4, page.TotalCount);
+    }
+
+    [Fact]
+    public async Task Tecnico_filtra_o_que_e_dele_quando_quiser()
+    {
+        // Ver tudo não é o mesmo que trabalhar sobre tudo: a fila pessoal continua
+        // disponível, agora como filtro em vez de imposição do backend.
+        var world = await SetUpWithTicketsAsync();
+
+        var page = await ListAsync(
+            world.Technician, $"?assignedTechnicianId={world.TechnicianId}");
+
+        var titles = page.Items.Select(t => t.Title).ToList();
+
+        Assert.Equal(["Atribuído ao técnico"], titles);
     }
 
     [Fact]
@@ -385,13 +402,13 @@ public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixt
     }
 
     [Fact]
-    public async Task Tecnico_nao_alcanca_chamado_de_outro_tecnico_pelo_id()
+    public async Task Tecnico_alcanca_pelo_id_o_chamado_que_outro_tecnico_assumiu()
     {
         var world = await SetUpWithTicketsAsync();
 
         var response = await world.Technician.GetAsync($"/api/tickets/{world.OfOtherTechnicianId}");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -399,6 +416,7 @@ public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixt
     {
         var world = await SetUpWithTicketsAsync();
 
+        // Pela ótica do solicitante: um chamado que não é dele e um que não existe.
         var missing = await world.Requester.GetAsync($"/api/tickets/{Guid.CreateVersion7()}");
         var forbidden = await world.Requester.GetAsync($"/api/tickets/{world.OfOtherTechnicianId}");
 

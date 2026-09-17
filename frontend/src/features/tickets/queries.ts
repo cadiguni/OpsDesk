@@ -180,14 +180,7 @@ export function useAssign(ticketId: string) {
   return useMutation({
     mutationFn: (technicianId: string | null) => ticketsApi.assign(ticketId, technicianId),
     onSuccess: (ticket) => {
-      // `null` é o encaminhamento que tirou o chamado da própria visibilidade. Guardar
-      // isso no cache deixaria a tela mostrando um chamado que a API já não devolve;
-      // quem trata a saída é a tela, navegando de volta para a lista.
-      if (ticket) {
-        queryClient.setQueryData(keys.detail(ticketId), ticket)
-      } else {
-        queryClient.removeQueries({ queryKey: keys.detail(ticketId) })
-      }
+      queryClient.setQueryData(keys.detail(ticketId), ticket)
 
       void queryClient.invalidateQueries({ queryKey: keys.history(ticketId) })
       void queryClient.invalidateQueries({ queryKey: keys.lists })
