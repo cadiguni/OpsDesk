@@ -18,6 +18,8 @@ public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
 
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
 
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
+
     public DbSet<TicketHistory> TicketHistory => Set<TicketHistory>();
 
     public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();

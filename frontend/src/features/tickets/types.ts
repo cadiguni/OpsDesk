@@ -114,6 +114,28 @@ export type StaffOption = {
   role: UserRole
 }
 
+export type Attachment = {
+  id: string
+  /** Nulo no anexo da abertura; preenchido no anexo de um comentário. */
+  commentId: string | null
+  fileName: string
+  contentType: string
+  sizeInBytes: number
+  isInternal: boolean
+  isImage: boolean
+  uploadedById: string
+  uploadedByName: string
+  createdAt: string
+}
+
+/** Usuário ativo, para o seletor de solicitante da equipe. */
+export type UserOption = {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+}
+
 export type CountByLabel = {
   label: string
   count: number

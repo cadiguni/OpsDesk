@@ -39,8 +39,13 @@ services:
       # ambiente do orquestrador ou do Azure Key Vault, nunca deste arquivo.
       Jwt__SigningKey: "desenvolvimento-apenas-troque-esta-chave-em-qualquer-outro-ambiente"
       Cors__AllowedOrigins__0: "http://localhost:5173"
+      # Anexos ficam no volume, e não na imagem: um novo deploy não pode levar embora o
+      # print que o solicitante mandou.
+      AttachmentStorage__RootPath: "/var/opsdesk/attachments"
     ports:
       - "8080:8080"
+    volumes:
+      - attachments-data:/var/opsdesk/attachments
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -50,3 +55,4 @@ services:
 
 volumes:
   postgres-data:
+  attachments-data:

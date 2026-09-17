@@ -3,6 +3,7 @@ using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Tickets;
+using OpsDesk.Application.Users;
 using OpsDesk.Domain.Enums;
 
 namespace OpsDesk.Api.Endpoints;
@@ -56,6 +57,11 @@ public static class TicketEndpoints
             .WithTags("Categorias")
             .WithSummary("Categorias ativas, para os seletores da interface.");
 
+        routes.MapGet("/api/users", ListUsers)
+            .RequireAuthorization(AuthorizationPolicies.Staff)
+            .WithTags("Usuarios")
+            .WithSummary("Usuarios ativos, para abrir chamado em nome de outra pessoa.");
+
         routes.MapGet("/api/staff", ListStaff)
             .RequireAuthorization(AuthorizationPolicies.Staff)
             .WithTags("Usuarios")
@@ -81,6 +87,22 @@ public static class TicketEndpoints
                 detail: notFound.Message,
                 statusCode: StatusCodes.Status400BadRequest,
                 title: "Categoria inválida"),
+
+            CreateTicketResult.RequesterNotFound requesterNotFound => TypedResults.Problem(
+                detail: requesterNotFound.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Solicitante inválido"),
+
+            // 403 e não 400: o pedido está correto, o perfil é que não pode fazê-lo.
+            CreateTicketResult.RequesterNotAllowed notAllowed => TypedResults.Problem(
+                detail: notAllowed.Message,
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Abertura em nome de terceiro não permitida"),
+
+            CreateTicketResult.AttachmentsInvalid attachmentsInvalid => TypedResults.Problem(
+                detail: attachmentsInvalid.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Anexo inválido"),
 
             // Falta de política de SLA é erro de configuração do sistema, não do pedido do
             // usuário — daí 500 e não 400. O log do Serilog registra a prioridade.
@@ -169,6 +191,11 @@ public static class TicketEndpoints
                 statusCode: StatusCodes.Status403Forbidden,
                 title: "Comentário interno não permitido"),
 
+            AddCommentResult.AttachmentsInvalid attachmentsInvalid => TypedResults.Problem(
+                detail: attachmentsInvalid.Message,
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Anexo inválido"),
+
             AddCommentResult.TicketClosed closed => TypedResults.Problem(
                 detail: closed.Message,
                 statusCode: StatusCodes.Status409Conflict,
@@ -226,6 +253,11 @@ public static class TicketEndpoints
         {
             AssignResult.Assigned assigned => TypedResults.Ok(assigned.Ticket),
 
+            // Gravado, mas o chamado saiu da visibilidade de quem atribuiu. 204 em vez de
+            // 200 com corpo vazio: o cliente precisa distinguir "atualizado, aqui está" de
+            // "atualizado, e você não vê mais" para tirar a pessoa da tela de detalhe.
+            AssignResult.AssignedAndHidden => TypedResults.NoContent(),
+
             AssignResult.TicketNotFound => TypedResults.NotFound(),
 
             AssignResult.NotAllowed notAllowed => TypedResults.Problem(
@@ -242,6 +274,12 @@ public static class TicketEndpoints
                 $"Resultado de atribuição não tratado: {result.GetType().Name}.")
         };
     }
+
+    private static async Task<IResult> ListUsers(
+        UserDirectoryService users,
+        CancellationToken cancellationToken,
+        string? search = null) =>
+        TypedResults.Ok(await users.SearchAsync(search, cancellationToken));
 
     private static async Task<IResult> ListStaff(
         TicketWorkflowService workflow, CancellationToken cancellationToken) =>

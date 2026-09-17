@@ -26,6 +26,14 @@ RUN apt-get update \
 
 COPY --from=build /app .
 
+# Raiz dos anexos criada **antes** do USER, e com dono certo.
+#
+# Um volume nomeado do Docker herda dono e permissão do caminho que existir na imagem no
+# primeiro uso. Sem este mkdir, o volume nasce pertencendo ao root, a API roda como
+# usuário sem privilégio, e o envio de anexo falha com "Permission denied" — só no
+# container, nunca no `dotnet run` nem nos testes.
+RUN mkdir -p /var/opsdesk/attachments && chown -R $APP_UID:$APP_UID /var/opsdesk
+
 # Usuário sem privilégio, já presente nas imagens oficiais.
 USER $APP_UID
 

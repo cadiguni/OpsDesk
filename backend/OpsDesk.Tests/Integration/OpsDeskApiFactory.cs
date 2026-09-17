@@ -25,6 +25,13 @@ public class OpsDeskApiFactory(
     /// </summary>
     private const string SigningKey = "chave-de-assinatura-exclusiva-dos-testes-de-integracao";
 
+    /// <summary>
+    /// Raiz dos anexos deste processo de teste. Pasta temporária própria: os testes não
+    /// devem sujar o diretório de trabalho nem enxergar arquivo de uma execução anterior.
+    /// </summary>
+    private readonly string _attachmentRoot =
+        Path.Combine(Path.GetTempPath(), $"opsdesk-tests-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -37,6 +44,7 @@ public class OpsDeskApiFactory(
                 ["Jwt:Issuer"] = "opsdesk-tests",
                 ["Jwt:Audience"] = "opsdesk-tests",
                 ["Cors:AllowedOrigins:0"] = "https://localhost",
+                ["AttachmentStorage:RootPath"] = _attachmentRoot,
 
                 // Os limites reais são vinte tentativas de credencial e cento e vinte
                 // renovações por minuto, por IP. No TestServer todas as requisições vêm sem
@@ -50,6 +58,16 @@ public class OpsDeskApiFactory(
                     refreshAttemptsPerMinute.ToString(),
                 ["Jwt:RefreshTokenGraceSeconds"] = refreshGraceSeconds.ToString(),
             }));
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (disposing && Directory.Exists(_attachmentRoot))
+        {
+            Directory.Delete(_attachmentRoot, recursive: true);
+        }
     }
 
     /// <summary>

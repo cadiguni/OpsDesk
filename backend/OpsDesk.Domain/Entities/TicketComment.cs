@@ -24,4 +24,6 @@ public class TicketComment : IHasCreatedAt
     public bool IsInternal { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    public ICollection<TicketAttachment> Attachments { get; set; } = [];
 }

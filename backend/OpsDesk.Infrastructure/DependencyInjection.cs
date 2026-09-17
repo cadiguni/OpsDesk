@@ -3,15 +3,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Dashboard;
 using OpsDesk.Application.Sla;
 using OpsDesk.Application.Tickets;
+using OpsDesk.Application.Users;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Infrastructure.Authentication;
 using OpsDesk.Infrastructure.Persistence;
 using OpsDesk.Infrastructure.Persistence.Interceptors;
 using OpsDesk.Infrastructure.Persistence.Seed;
+using OpsDesk.Infrastructure.Storage;
 using OpsDesk.Infrastructure.Time;
 
 namespace OpsDesk.Infrastructure;
@@ -42,6 +45,15 @@ public static class DependencyInjection
 
         services.AddMemoryCache();
 
+        services
+            .AddOptions<AttachmentStorageOptions>()
+            .Bind(configuration.GetSection(AttachmentStorageOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Sem estado por requisição: uma instância serve todas.
+        services.AddSingleton<IAttachmentStorage, FileSystemAttachmentStorage>();
+
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
@@ -59,6 +71,8 @@ public static class DependencyInjection
         services.AddScoped<TicketCommentService>();
         services.AddScoped<TicketWorkflowService>();
         services.AddScoped<DashboardService>();
+        services.AddScoped<UserDirectoryService>();
+        services.AddScoped<AttachmentService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
         services.AddScoped<DatabaseSeeder>();

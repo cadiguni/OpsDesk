@@ -39,6 +39,38 @@ public static class TicketQueryExtensions
             _ => comments.Where(c => !c.IsInternal && c.Ticket.RequesterId == viewer.UserId)
         };
 
+    /// <summary>
+    /// Anexos que o usuário pode enxergar.
+    ///
+    /// Duas regras empilhadas. A primeira é o estado pendente: anexo ainda sem chamado é
+    /// arquivo solto no formulário de quem o enviou, e não existe para mais ninguém —
+    /// nem para o gestor. É o que fecha a janela em que um print destinado a uma nota
+    /// interna ficaria legível para o solicitante entre o envio do arquivo e o envio do
+    /// comentário.
+    ///
+    /// A segunda é a do chamado, com o mesmo corte por <c>IsInternal</c> dos comentários:
+    /// invariante 2 do CLAUDE.md vale para o anexo da nota interna tanto quanto para o
+    /// texto dela.
+    /// </summary>
+    public static IQueryable<TicketAttachment> VisibleTo(
+        this IQueryable<TicketAttachment> attachments, TicketViewer viewer) =>
+        viewer.Role switch
+        {
+            UserRole.Manager => attachments.Where(a =>
+                a.TicketId != null || a.UploadedById == viewer.UserId),
+
+            UserRole.Technician => attachments.Where(a =>
+                a.TicketId == null
+                    ? a.UploadedById == viewer.UserId
+                    : a.Ticket!.AssignedTechnicianId == null
+                      || a.Ticket.AssignedTechnicianId == viewer.UserId),
+
+            _ => attachments.Where(a =>
+                a.TicketId == null
+                    ? a.UploadedById == viewer.UserId
+                    : !a.IsInternal && a.Ticket!.RequesterId == viewer.UserId)
+        };
+
     /// <summary>Histórico segue a visibilidade do chamado a que pertence.</summary>
     public static IQueryable<TicketHistory> VisibleTo(
         this IQueryable<TicketHistory> history, TicketViewer viewer) =>

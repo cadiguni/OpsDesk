@@ -72,6 +72,8 @@ public class Ticket : IHasUpdatedAt
 
     public ICollection<TicketHistory> History { get; set; } = [];
 
+    public ICollection<TicketAttachment> Attachments { get; set; } = [];
+
     /// <summary>Status finais não contam mais SLA.</summary>
     public bool IsClosedOut => Status is TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled;
 

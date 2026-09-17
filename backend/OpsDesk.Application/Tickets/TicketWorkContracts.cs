@@ -12,7 +12,11 @@ namespace OpsDesk.Application.Tickets;
 /// interno é recusado em vez de silenciosamente convertido em público — converter esconderia
 /// um erro de cliente e publicaria para o solicitante um texto que alguém quis restringir.
 /// </summary>
-public record AddCommentRequest(string Content, bool IsInternal = false, bool CloseTicket = false);
+public record AddCommentRequest(
+    string Content,
+    bool IsInternal = false,
+    bool CloseTicket = false,
+    Guid[]? AttachmentIds = null);
 
 public record TicketCommentItem(
     Guid Id,
@@ -40,6 +44,12 @@ public abstract record AddCommentResult
     public sealed record TicketClosed : AddCommentResult
     {
         public string Message => "Este chamado está encerrado e não aceita novos comentários.";
+    }
+
+    public sealed record AttachmentsInvalid : AddCommentResult
+    {
+        public string Message =>
+            "Algum anexo não foi encontrado ou já pertence a outro chamado. O comentário não foi enviado.";
     }
 }
 
@@ -70,6 +80,12 @@ public record AssignRequest(Guid? TechnicianId);
 public abstract record AssignResult
 {
     public sealed record Assigned(TicketDetail Ticket) : AssignResult;
+
+    /// <summary>
+    /// A atribuição foi gravada, mas o chamado saiu da visibilidade de quem atribuiu —
+    /// caso do técnico que encaminha para um colega.
+    /// </summary>
+    public sealed record AssignedAndHidden : AssignResult;
 
     public sealed record TicketNotFound : AssignResult;
 

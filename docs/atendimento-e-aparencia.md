@@ -39,9 +39,15 @@ A descrição de abertura é a primeira mensagem da conversa, marcada como abert
 
 O editor oferece **Resposta pública** e **Nota interna**, com indicação explícita de quem poderá ler. A opção de nota interna só aparece para a equipe. Histórico recebe uma apresentação de linha do tempo, e textos longos da conversa e descrição quebram para caber na tela.
 
+No painel de gerenciamento, **Assumir chamado** e **Devolver para a fila** continuam como botão, porque são o gesto mais frequente e não devem custar abrir um seletor e achar o próprio nome. Ao lado deles, **Encaminhar para** lista a equipe: técnico também repassa chamado, não só gestor. Encaminhar para um colega tira o chamado da visibilidade de quem encaminhou, então a tela volta para a lista em vez de renderizar um chamado que a API já não devolve.
+
+Na abertura, técnico e gestor veem um campo **Solicitante**, com o padrão “eu mesmo”, para registrar chamado em nome de quem ligou ou apareceu no balcão. O solicitante não vê esse campo.
+
 As transições viram botões com o nome da ação — **Enviar para triagem**, **Iniciar atendimento**, **Aguardar solicitante**, **Marcar como resolvido** —, e não um seletor com o nome do estado. A lista de botões continua vindo de `allowedNextStatuses`. Fechar e cancelar pedem um segundo clique de confirmação no próprio botão.
 
-Trata-se de uma aproximação visual e do fluxo de atendimento, sem equivalência completa de funcionalidades ao Freshdesk. Respostas são comentários no portal; esta mudança não implementa envio de e-mail, anexos ou editor de texto rico.
+O editor aceita anexo por botão, por arrastar-e-soltar e por **Ctrl+V** — colar um print recém-tirado é o caminho mais comum e não exige salvar arquivo nenhum. O arquivo sobe assim que é escolhido, para que a espera aconteça enquanto a pessoa ainda escreve e um arquivo recusado apareça na hora, não depois de um texto longo. Quando o editor está em nota interna, um aviso lembra que os anexos ficam restritos à equipe — e é o que de fato acontece: o anexo herda a visibilidade do comentário. Na conversa, imagem aparece como miniatura e o resto como linha com nome, tamanho e download.
+
+Trata-se de uma aproximação visual e do fluxo de atendimento, sem equivalência completa de funcionalidades ao Freshdesk. Respostas são comentários no portal; esta mudança não implementa envio de e-mail nem editor de texto rico.
 
 ## Temas
 

@@ -29,9 +29,12 @@ GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
 GET    /api/tickets/{id}/history
 POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
 GET    /api/categories               GET  /api/staff        GET /api/dashboard
+GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
+POST   /api/attachments              GET  /api/attachments/{id}
+GET    /api/tickets/{id}/attachments
 ```
 
-**Fora do escopo da versão 1, conforme o roadmap:** anexos, notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Perfis de técnico e gestor são definidos pelo seed ou direto no banco — não há tela para promover usuário.
+**Fora do escopo da versão 1, conforme o roadmap:** notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos foram antecipados da 1.1 e já existem. Perfis de técnico e gestor são definidos pelo seed ou direto no banco — não há tela para promover usuário.
 
 ## Documentação
 
@@ -122,13 +125,14 @@ Criados pelo seed só em Development, senha `OpsDesk@123`:
 Estas regras não são preferências de estilo. Quebrá-las é bug, e em alguns casos é vazamento de dado.
 
 1. **O filtro de visibilidade é aplicado na query.** Toda leitura de chamado passa pelo filtro derivado do usuário autenticado, no `IQueryable`, antes da projeção. Nunca confie em atributo de rota ou em condicional na interface para esconder chamado de terceiro.
-2. **Comentário com `IsInternal = true` nunca chega ao solicitante.** Não em resposta de API, não em e-mail, não em notificação. Qualquer endpoint novo que retorne comentários precisa de teste cobrindo esse caso.
+2. **Comentário com `IsInternal = true` nunca chega ao solicitante.** Não em resposta de API, não em e-mail, não em notificação. Qualquer endpoint novo que retorne comentários precisa de teste cobrindo esse caso. **Vale igual para anexo:** o arquivo de uma nota interna é tão restrito quanto o texto dela — some da listagem e o download direto responde 404.
 3. **`TicketHistory` é append-only.** Nada de `Update` nem `Delete`. O preenchimento é feito pelo interceptor do EF Core, não espalhado pelos serviços.
 4. **Datas em UTC, colunas `timestamptz`.** Conversão para `America/Sao_Paulo` só na interface e dentro do cálculo de horas úteis.
 5. **`Ticket.Code` vem da sequence do PostgreSQL.** Nunca de `COUNT`, `MAX` ou contador em memória.
 6. **Cálculo de horas úteis mora em `IBusinessCalendar`.** Não replique a lógica em serviço nenhum.
 7. **Schema muda por migration do EF Core.** Sem `EnsureCreated`, sem SQL manual no banco.
 8. **Senha usa `PasswordHasher<T>`.** Nunca hash artesanal, nunca MD5 ou SHA sem KDF.
+9. **Anexo nasce pendente, e é o vínculo que define a visibilidade.** Enviar cria um anexo sem chamado, visível só para quem enviou; a abertura ou o comentário é que o vincula e copia o `IsInternal`. Nunca vincule anexo enviado por outra pessoa, e nunca torne um anexo visível antes de saber a que comentário ele pertence.
 
 ## Convenções
 
@@ -163,6 +167,8 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Ler `IConfiguration` durante a montagem do pipeline congela o valor daquele instante.** Fontes registradas depois — como as de um `WebApplicationFactory` em teste — são ignoradas em silêncio. Por isso `JwtOptions`, `RateLimitOptions` e a connection string são resolvidos por DI, e não lidos direto no `Program.cs`.
 * O cookie de refresh é `Secure`. Chrome e Firefox aceitam cookie `Secure` sobre HTTP em `localhost`; **o Safari não**. Em Mac com Safari, a sessão não sobrevive ao reload em desenvolvimento.
 * Os binários nativos do Vite e do oxlint declaram `engines: ^20.19 || >=22.12`. Em Node fora dessa faixa o npm **omite o binário em silêncio**: `npm install` termina com sucesso e o build estoura por binding ausente. O `frontend/.npmrc` liga `engine-strict` justamente para transformar isso em erro na instalação.
+* **Volume do Docker herda o dono do caminho que existir na imagem.** A API roda como usuário sem privilégio (`USER $APP_UID`), e sem o `mkdir -p /var/opsdesk/attachments && chown` no Dockerfile o volume nasce pertencendo ao root: o envio de anexo falha com `UnauthorizedAccessException: Permission denied`. Só no container — `dotnet run` e os testes gravam em pasta do próprio usuário e passam. Trocar a raiz dos anexos exige repetir o `mkdir` com o dono certo, e recriar o volume (`docker compose down -v`), porque o dono é fixado no primeiro uso.
+* **`api.post` com `FormData` precisa de `'Content-Type': undefined`.** O cliente axios tem `application/json` como padrão; mantido, o multipart vai sem `boundary` e o servidor recusa. Remover o cabeçalho deixa o navegador montá-lo.
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.

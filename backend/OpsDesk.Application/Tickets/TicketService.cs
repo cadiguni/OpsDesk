@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Sla;
@@ -16,10 +17,12 @@ namespace OpsDesk.Application.Tickets;
 /// <see cref="IQueryable{T}"/> antes de qualquer outro <c>Where</c> e antes da projeção,
 /// então não existe caminho em que um filtro esquecido exponha chamado de terceiro.
 /// </summary>
-public class TicketService(IOpsDeskDbContext db, SlaClock sla, IClock clock)
+public class TicketService(
+    IOpsDeskDbContext db, SlaClock sla, IClock clock, AttachmentService attachments)
 {
+    /// <param name="author">Quem está autenticado — nem sempre é o solicitante do chamado.</param>
     public async Task<CreateTicketResult> CreateAsync(
-        CreateTicketRequest request, TicketViewer requester, CancellationToken cancellationToken = default)
+        CreateTicketRequest request, TicketViewer author, CancellationToken cancellationToken = default)
     {
         var categoryExists = await db.Categories
             .AnyAsync(c => c.Id == request.CategoryId && c.IsActive, cancellationToken);
@@ -27,6 +30,29 @@ public class TicketService(IOpsDeskDbContext db, SlaClock sla, IClock clock)
         if (!categoryExists)
         {
             return new CreateTicketResult.CategoryNotFound();
+        }
+
+        // Abertura em nome de terceiro: o técnico atende alguém por telefone ou presencial
+        // e registra o chamado no nome de quem pediu, para que o chamado apareça na lista
+        // dessa pessoa e as respostas cheguem a ela. Quem abriu de fato fica no histórico,
+        // gravado pelo interceptor — o campo Requester diz de quem é o problema, não quem
+        // digitou.
+        var requesterId = request.RequesterId ?? author.UserId;
+
+        if (requesterId != author.UserId)
+        {
+            if (!author.IsStaff)
+            {
+                return new CreateTicketResult.RequesterNotAllowed();
+            }
+
+            var requesterExists = await db.Users
+                .AnyAsync(u => u.Id == requesterId && u.IsActive, cancellationToken);
+
+            if (!requesterExists)
+            {
+                return new CreateTicketResult.RequesterNotFound();
+            }
         }
 
         var policy = await db.SlaPolicies
@@ -49,7 +75,7 @@ public class TicketService(IOpsDeskDbContext db, SlaClock sla, IClock clock)
             Description = request.Description.Trim(),
             CategoryId = request.CategoryId,
             Priority = request.Priority,
-            RequesterId = requester.UserId,
+            RequesterId = requesterId,
 
             // Automáticos, README seção 9. O status inicial é sempre Aberto, e a origem
             // é sempre Portal na versão 1.
@@ -70,11 +96,20 @@ public class TicketService(IOpsDeskDbContext db, SlaClock sla, IClock clock)
 
         db.Tickets.Add(ticket);
 
+        // Anexos da abertura são sempre públicos: é o print que o solicitante mandou junto
+        // com o problema. O identificador do chamado já existe antes do SaveChanges, então
+        // o vínculo entra na mesma transação.
+        if (!await attachments.TryBindAsync(
+                request.AttachmentIds ?? [], ticket.Id, null, false, author, cancellationToken))
+        {
+            return new CreateTicketResult.AttachmentsInvalid();
+        }
+
         // O código vem da sequence do banco e volta preenchido nesta mesma operação; o
         // histórico de criação é gravado pelo interceptor. Nada disso é feito aqui.
         await db.SaveChangesAsync(cancellationToken);
 
-        var detail = await GetAsync(ticket.Id, requester, cancellationToken);
+        var detail = await GetAsync(ticket.Id, author, cancellationToken);
 
         return new CreateTicketResult.Created(detail!);
     }
@@ -253,5 +288,22 @@ public abstract record CreateTicketResult
     public sealed record SlaPolicyMissing(TicketPriority Priority) : CreateTicketResult
     {
         public string Message => $"Não há política de SLA ativa para a prioridade {Priority}.";
+    }
+
+    public sealed record RequesterNotFound : CreateTicketResult
+    {
+        public string Message => "Solicitante inválido ou inativo.";
+    }
+
+    public sealed record RequesterNotAllowed : CreateTicketResult
+    {
+        public string Message =>
+            "Apenas técnicos e gestores abrem chamado em nome de outra pessoa.";
+    }
+
+    public sealed record AttachmentsInvalid : CreateTicketResult
+    {
+        public string Message =>
+            "Algum anexo não foi encontrado ou já pertence a outro chamado. O chamado não foi aberto.";
     }
 }

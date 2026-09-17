@@ -211,6 +211,22 @@ Tabelas e colunas usam `snake_case`, aplicado pela convenção do `EFCore.Naming
 
 O schema evolui exclusivamente por migrations do EF Core, versionadas no repositório. Nada de alteração manual no banco, nem de `EnsureCreated`.
 
+### 4.15 Anexo fora do banco, atrás de uma interface
+
+O conteúdo dos anexos vai para o `IAttachmentStorage`; o banco guarda metadado e a chave. A versão 1 implementa em disco (`FileSystemAttachmentStorage`), com volume no compose e caminho em `AttachmentStorage:RootPath`.
+
+**Por quê:** guardar binário em coluna `bytea` infla o banco e o backup, e transforma cada leitura de metadado num risco de trazer megabytes junto. Disco resolve o ambiente local sem subir serviço novo, e a interface deixa a troca por S3 ou MinIO ser uma implementação nova — sem tocar em serviço, domínio ou schema.
+
+A chave é gerada pelo sistema (`ano/mês/identificador.extensão`) e nunca deriva do nome enviado pelo usuário. Nome de arquivo é entrada não confiável: derivar caminho dele é travessia de diretório no primeiro `../`. O `FileSystemAttachmentStorage` ainda recusa qualquer caminho resolvido fora da raiz, para que uma mudança futura nesse ponto apareça como exceção em vez de leitura de arquivo arbitrário.
+
+### 4.16 Anexo nasce pendente, e o vínculo define a visibilidade
+
+Enviar um arquivo cria um anexo **sem chamado**, visível só para quem enviou. A abertura do chamado ou o envio do comentário é que o vincula — e copia o `IsInternal` do comentário.
+
+**Por quê:** o formulário de abertura precisa aceitar arquivo antes de o chamado existir, e o editor de resposta precisa aceitar arquivo antes de o comentário existir. Vincular direto ao chamado no momento do envio resolveria o primeiro problema e criaria um vazamento no segundo: entre o envio do print e o envio da nota interna, o arquivo estaria legível para o solicitante. O estado pendente fecha essa janela.
+
+A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibilidade fica sem junção com a tabela de comentários, e o vínculo é o único ponto do sistema que escreve esse campo.
+
 ---
 
 ## 5. Requisitos não funcionais na prática

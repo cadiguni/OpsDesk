@@ -40,7 +40,7 @@ A API aplica as migrations e popula o seed na subida, apenas em ambiente de dese
 
 **O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
 
-Fora do escopo da versão 1, conforme o roadmap da seção 18: anexos, notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Perfis de técnico e gestor são definidos pelo seed ou direto no banco.
+Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. Perfis de técnico e gestor são definidos pelo seed ou direto no banco.
 
 ---
 
@@ -120,7 +120,7 @@ Permissões:
 * comentar em seus chamados;
 * visualizar respostas dos técnicos;
 * acompanhar status;
-* anexar arquivos futuramente;
+* anexar arquivos ao chamado e aos comentários;
 * solicitar reabertura de chamado futuramente.
 
 Não pode:
@@ -143,6 +143,8 @@ Permissões:
 * visualizar chamados disponíveis para atendimento;
 * visualizar chamados atribuídos a ele;
 * assumir chamados;
+* encaminhar chamado para outro técnico;
+* abrir chamado em nome de um usuário;
 * alterar status;
 * responder chamados;
 * adicionar comentários internos;
@@ -441,8 +443,7 @@ Para abrir um chamado, o usuário deverá informar:
 * título;
 * descrição;
 * categoria;
-* prioridade;
-* solicitante.
+* prioridade.
 
 Campos obrigatórios:
 
@@ -456,9 +457,20 @@ Campos automáticos:
 * código do chamado;
 * status inicial;
 * data de criação;
-* usuário solicitante;
 * prazo de SLA;
 * origem do chamado.
+
+### 9.1 Solicitante
+
+Por padrão, o solicitante é quem está autenticado, e o corpo do pedido não precisa informá-lo.
+
+**Técnico e gestor podem abrir chamado em nome de outro usuário.** É o atendimento por telefone ou presencial: quem registra é a equipe, mas o problema é de quem pediu, e o chamado precisa aparecer na lista dessa pessoa para que as respostas cheguem a ela. O solicitante recebe 403 se tentar — abrir chamado no nome de um colega não é atribuição dele.
+
+O campo `requesterId` aceita apenas usuário ativo; inexistente ou inativo é recusado com 400. Informar o próprio identificador é abertura comum, não abertura em nome de terceiro.
+
+Quem registrou o chamado fica no `TicketHistory`, na entrada de criação. O campo solicitante diz **de quem é o problema**; o histórico diz **quem digitou**. São coisas diferentes e as duas ficam guardadas.
+
+O chamado nasce sem responsável, como qualquer outro: registrar em nome de alguém não é assumir o atendimento.
 
 Na versão 1, a origem será sempre:
 
@@ -482,11 +494,16 @@ Um chamado pode ou não possuir técnico responsável.
 
 Ao ser criado, o chamado ficará sem responsável.
 
-Um chamado poderá ser atribuído de três formas:
+Um chamado poderá ser atribuído de quatro formas:
 
 1. técnico assume manualmente;
-2. gestor atribui a um técnico;
-3. regra automática, em versão futura.
+2. técnico encaminha para outro técnico;
+3. gestor atribui a um técnico;
+4. regra automática, em versão futura.
+
+Encaminhar não é privilégio de gestão: quem recebeu o chamado errado precisa poder passá-lo adiante sem depender do gestor. O que limita o técnico não é a regra de atribuição e sim o filtro de visibilidade — ele só alcança chamado sem responsável ou atribuído a ele, e o chamado de outra pessoa simplesmente não existe para ele (404).
+
+Consequência direta disso: ao encaminhar para um colega, o técnico perde o chamado de vista no mesmo instante. A API responde **204** nesse caso, em vez de 200 com o chamado — devolver o corpo exigiria reler o chamado ignorando o filtro de visibilidade. A interface leva a pessoa de volta para a lista.
 
 Quando um técnico assumir o chamado:
 
@@ -530,6 +547,29 @@ Exemplo:
 > Verificar se esse usuário está no grupo correto do AD antes de responder.
 
 O usuário solicitante não poderá visualizar comentários internos.
+
+---
+
+## 11.1 Anexos
+
+Chamado e comentário aceitam arquivo: print da tela, log, planilha, PDF — o que hoje sairia por e-mail.
+
+Regras:
+
+* até **10 MB por arquivo**, e a lista de tipos aceitos é fechada: imagem, PDF, texto, CSV, zip, documento e planilha do Office, e mensagem de e-mail. O que não está na lista é recusado, e não aceito por omissão;
+* o conteúdo **não** fica no banco. Vai para o armazenamento configurado — disco com volume no ambiente local —, e o banco guarda metadados e a chave;
+* **o anexo herda a visibilidade do comentário.** Arquivo enviado numa nota interna é tão restrito quanto o texto dela: não aparece na listagem do solicitante e o download direto pelo identificador responde 404. A regra da seção 11 vale para o arquivo, não só para o texto;
+* anexo da abertura é público, como a descrição;
+* anexo de chamado que o usuário não pode ver não é baixável, pela mesma verificação que esconde o chamado.
+
+O envio acontece em dois tempos, e a ordem é o que sustenta a regra acima:
+
+1. o arquivo sobe assim que é escolhido e nasce **pendente** — sem chamado, visível apenas para quem o enviou;
+2. a abertura do chamado, ou o envio do comentário, é o que o vincula e define a quem ele passa a ser visível.
+
+Sem isso haveria uma janela entre "o arquivo já está no servidor" e "o comentário interno foi enviado" em que o print estaria legível para o solicitante. Anexo que nunca chega a ser vinculado continua pendente e invisível para todos os outros.
+
+Na interface, o arquivo entra por botão, arrastar-e-soltar ou **Ctrl+V** — colar um print recém-tirado é o caminho mais comum e não exige salvar arquivo nenhum.
 
 ---
 
@@ -624,7 +664,9 @@ Campos:
 * título;
 * descrição;
 * categoria;
-* prioridade.
+* prioridade;
+* solicitante — só para técnico e gestor, e só para abrir em nome de outra pessoa. O padrão é “eu mesmo”;
+* anexos — opcional.
 
 Ações:
 
@@ -652,6 +694,7 @@ Deve exibir:
 * data de criação;
 * prazo de SLA;
 * comentários;
+* anexos, junto da mensagem a que pertencem;
 * histórico.
 
 Ações para usuário:
@@ -662,6 +705,7 @@ Ações para usuário:
 Ações para técnico:
 
 * assumir chamado;
+* encaminhar para outro técnico;
 * alterar status;
 * adicionar comentário público;
 * adicionar comentário interno;
@@ -1013,6 +1057,7 @@ Descartados de forma deliberada:
 ### Versão 1.0 — MVP
 
 * login;
+* anexos em chamados e comentários (antecipado da 1.1);
 * cadastro básico;
 * perfis;
 * abertura de chamado;
@@ -1028,7 +1073,6 @@ Descartados de forma deliberada:
 
 ### Versão 1.1 — Melhorias operacionais
 
-* anexos;
 * paginação avançada;
 * filtros melhores;
 * tela de administração de categorias;

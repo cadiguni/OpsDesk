@@ -15,6 +15,10 @@ export const createTicketSchema = z.object({
     .min(10, 'Descreva o problema com pelo menos 10 caracteres.'),
   categoryId: z.string().min(1, 'Escolha uma categoria.'),
   priority: z.enum(ticketPriorities),
+
+  // Vazio quer dizer "eu mesmo". Só a equipe vê este campo, e é o backend que recusa
+  // abertura em nome de terceiro para quem não pode.
+  requesterId: z.string().optional(),
 })
 
 export type CreateTicketFields = z.infer<typeof createTicketSchema>

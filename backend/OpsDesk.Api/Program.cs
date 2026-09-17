@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -101,6 +102,13 @@ try
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+    // Teto do multipart acima do limite por arquivo do AttachmentService, de propósito:
+    // arquivo entre um e outro é recusado pelo serviço, com 413 e mensagem dizendo qual
+    // é o limite. Fosse o teto igual, o framework cortaria antes e a pessoa receberia um
+    // erro genérico de pedido malformado.
+    builder.Services.Configure<FormOptions>(options =>
+        options.MultipartBodyLengthLimit = 32 * 1024 * 1024);
+
     builder.Services.AddOpenApi();
 
     builder.Services
@@ -130,6 +138,7 @@ try
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapAuthEndpoints();
     app.MapTicketEndpoints();
+    app.MapAttachmentEndpoints();
     app.MapDashboardEndpoints();
 
     if (app.Environment.IsDevelopment())

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { CheckCheck, LockKeyhole, MessageSquare, Send } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -6,8 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { userRoleLabels, type UserRole } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
-import { useAddComment, useComments } from '@/features/tickets/queries'
-import type { TicketDetail } from '@/features/tickets/types'
+import { AttachmentList } from '@/features/attachments/attachment-list'
+import { AttachmentPicker } from '@/features/attachments/attachment-picker'
+import {
+  isUploading,
+  uploadedIds,
+  type PendingAttachment,
+} from '@/features/attachments/pending-attachment'
+import { useAddComment, useAttachments, useComments } from '@/features/tickets/queries'
+import type { Attachment, TicketDetail } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
 import { formatDateTime, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -28,24 +35,43 @@ import { cn } from '@/lib/utils'
 export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
   const { isStaff } = useSession()
   const comments = useComments(ticket.id)
+  const attachments = useAttachments(ticket.id)
   const addComment = useAddComment(ticket.id)
 
   const [content, setContent] = useState('')
   const [isInternal, setIsInternal] = useState(false)
+  const [pending, setPending] = useState<PendingAttachment[]>([])
+
+  // O `paste` é escutado no campo de texto: é onde a pessoa está com o cursor quando
+  // aperta Ctrl+V depois de tirar um print.
+  const editor = useRef<HTMLTextAreaElement>(null)
 
   const closed = ticket.status === 'Closed' || ticket.status === 'Cancelled'
 
+  // Comentário só com anexo é legítimo — "segue o print" às vezes é o print e mais nada.
+  const hasSomethingToSend = content.trim().length > 0 || uploadedIds(pending).length > 0
+  const canSend = hasSomethingToSend && !isUploading(pending) && !addComment.isPending
+
+  const byComment = (commentId: string | null): Attachment[] =>
+    (attachments.data ?? []).filter((item) => item.commentId === commentId)
+
   async function submit(closeTicket = false) {
-    if (addComment.isPending || content.trim().length === 0) {
+    if (!canSend) {
       return
     }
 
     try {
-      await addComment.mutateAsync({ content, isInternal, closeTicket })
+      await addComment.mutateAsync({
+        content,
+        isInternal,
+        closeTicket,
+        attachmentIds: uploadedIds(pending),
+      })
       setContent('')
       setIsInternal(false)
+      setPending([])
     } catch {
-      // A mensagem aparece abaixo; mantenha o rascunho para uma nova tentativa.
+      // A mensagem aparece abaixo; mantenha o rascunho e os anexos para uma nova tentativa.
     }
   }
 
@@ -58,6 +84,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
             authorRole="Requester"
             createdAt={ticket.createdAt}
             badge={<Badge variant="secondary">Abertura do chamado</Badge>}
+            attachments={byComment(null)}
           >
             {ticket.description}
           </Message>
@@ -77,6 +104,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
                   </Badge>
                 )
               }
+              attachments={byComment(comment.id)}
             >
               {comment.content}
             </Message>
@@ -142,6 +170,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
           </p>
 
           <Textarea
+            ref={editor}
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder={isInternal ? 'Observação interna da equipe…' : 'Escreva uma resposta…'}
@@ -152,20 +181,34 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
             className="rounded-none border-0 bg-transparent p-4 shadow-none"
           />
 
+          <div className="px-4 pb-3">
+            <AttachmentPicker
+              attachments={pending}
+              onChange={setPending}
+              disabled={addComment.isPending}
+              pasteTarget={editor}
+            />
+
+            {isInternal && pending.length > 0 && (
+              <p className="text-sla-due-soon mt-2 text-xs">
+                Os anexos seguem a visibilidade do comentário: enviados aqui, ficam
+                restritos à equipe.
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/30 p-3">
-            <Button
-              onClick={() => void submit()}
-              disabled={addComment.isPending || content.trim().length === 0}
-            >
-              <Send className="size-4" /> {addComment.isPending ? 'Enviando…' : 'Enviar'}
+            <Button onClick={() => void submit()} disabled={!canSend}>
+              <Send className="size-4" />
+              {addComment.isPending
+                ? 'Enviando…'
+                : isUploading(pending)
+                  ? 'Enviando anexos…'
+                  : 'Enviar'}
             </Button>
 
             {ticket.allowedNextStatuses.includes('Closed') && (
-              <Button
-                variant="outline"
-                onClick={() => void submit(true)}
-                disabled={addComment.isPending || content.trim().length === 0}
-              >
+              <Button variant="outline" onClick={() => void submit(true)} disabled={!canSend}>
                 <CheckCheck className="size-4" /> Enviar e fechar
               </Button>
             )}
@@ -194,6 +237,7 @@ function Message({
   createdAt,
   internal = false,
   badge,
+  attachments,
   children,
 }: {
   authorName: string
@@ -201,6 +245,7 @@ function Message({
   createdAt: string
   internal?: boolean
   badge?: ReactNode
+  attachments: Attachment[]
   children: string
 }) {
   return (
@@ -234,6 +279,8 @@ function Message({
         {/* whitespace-pre-wrap preserva as quebras de linha do que foi digitado, que
             costuma ser log colado. */}
         <p className="whitespace-pre-wrap break-words">{children}</p>
+
+        <AttachmentList attachments={attachments} />
       </div>
     </article>
   )

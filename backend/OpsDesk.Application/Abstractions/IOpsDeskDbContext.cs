@@ -28,6 +28,8 @@ public interface IOpsDeskDbContext
 
     DbSet<TicketComment> TicketComments { get; }
 
+    DbSet<TicketAttachment> TicketAttachments { get; }
+
     DbSet<TicketHistory> TicketHistory { get; }
 
     DbSet<SlaPolicy> SlaPolicies { get; }

@@ -15,7 +15,9 @@ const keys = {
   categories: ['categories'] as const,
   comments: (id: string) => ['tickets', 'comments', id] as const,
   history: (id: string) => ['tickets', 'history', id] as const,
+  attachments: (id: string) => ['tickets', 'attachments', id] as const,
   staff: ['staff'] as const,
+  users: (search: string) => ['users', search] as const,
   dashboard: ['dashboard'] as const,
 }
 
@@ -75,6 +77,13 @@ export function useHistory(ticketId: string) {
   })
 }
 
+export function useAttachments(ticketId: string) {
+  return useQuery({
+    queryKey: keys.attachments(ticketId),
+    queryFn: () => ticketsApi.listAttachments(ticketId),
+  })
+}
+
 export function useStaff(enabled: boolean) {
   return useQuery({
     queryKey: keys.staff,
@@ -84,6 +93,21 @@ export function useStaff(enabled: boolean) {
     // dispararia uma requisição que volta 403 e sujaria o console sem motivo.
     enabled,
     staleTime: 10 * 60 * 1000,
+  })
+}
+
+/**
+ * Usuários ativos, para o seletor de solicitante.
+ *
+ * Restrito à equipe pela mesma razão do /api/staff: solicitante não enumera colegas, e a
+ * rota devolve 403 para ele.
+ */
+export function useUsers(enabled: boolean, search = '') {
+  return useQuery({
+    queryKey: keys.users(search),
+    queryFn: () => ticketsApi.listUsers(search || undefined),
+    enabled,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -98,9 +122,14 @@ export function useAddComment(ticketId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: { content: string; isInternal: boolean; closeTicket?: boolean }) =>
-      ticketsApi.addComment(ticketId, input),
+    mutationFn: (input: {
+      content: string
+      isInternal: boolean
+      closeTicket?: boolean
+      attachmentIds?: string[]
+    }) => ticketsApi.addComment(ticketId, input),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.attachments(ticketId) })
       // O comentário público da equipe pode ter encerrado o SLA de resposta e gerou
       // histórico, então o detalhe e o histórico também saem do cache.
       void queryClient.invalidateQueries({ queryKey: keys.comments(ticketId) })
@@ -133,7 +162,15 @@ export function useAssign(ticketId: string) {
   return useMutation({
     mutationFn: (technicianId: string | null) => ticketsApi.assign(ticketId, technicianId),
     onSuccess: (ticket) => {
-      queryClient.setQueryData(keys.detail(ticketId), ticket)
+      // `null` é o encaminhamento que tirou o chamado da própria visibilidade. Guardar
+      // isso no cache deixaria a tela mostrando um chamado que a API já não devolve;
+      // quem trata a saída é a tela, navegando de volta para a lista.
+      if (ticket) {
+        queryClient.setQueryData(keys.detail(ticketId), ticket)
+      } else {
+        queryClient.removeQueries({ queryKey: keys.detail(ticketId) })
+      }
+
       void queryClient.invalidateQueries({ queryKey: keys.history(ticketId) })
       void queryClient.invalidateQueries({ queryKey: keys.lists })
       void queryClient.invalidateQueries({ queryKey: keys.dashboard })

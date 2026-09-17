@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpsDesk.Api.Endpoints;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Tickets;
+using OpsDesk.Application.Users;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
 using OpsDesk.Infrastructure.Persistence.Seed;
@@ -163,10 +164,8 @@ public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixt
     }
 
     [Fact]
-    public async Task O_solicitante_e_sempre_quem_esta_autenticado()
+    public async Task Sem_solicitante_no_corpo_o_solicitante_e_quem_esta_autenticado()
     {
-        // O corpo do pedido não tem campo de solicitante, e não deve ganhar um: abrir
-        // chamado em nome de outra pessoa é atribuição que não existe na versão 1.
         var world = await SetUpAsync();
 
         var response = await world.OtherRequester.PostAsJsonAsync(
@@ -174,6 +173,167 @@ public class TicketEndpointsTests(PostgresFixture fixture) : TicketTestBase(fixt
         var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
 
         Assert.Equal(world.OtherRequesterId, ticket!.RequesterId);
+    }
+
+    // ----- Abertura em nome de outra pessoa -----
+
+    [Fact]
+    public async Task Tecnico_abre_chamado_em_nome_do_solicitante()
+    {
+        // O caso real é o atendimento por telefone ou presencial: quem registra é o
+        // técnico, mas o chamado é do usuário — e precisa aparecer na lista dele.
+        var world = await SetUpAsync();
+
+        var response = await world.Technician.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = world.RequesterId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
+
+        Assert.Equal(world.RequesterId, ticket!.RequesterId);
+        Assert.Equal(TicketSource.Portal, ticket.Source);
+
+        // Sem responsável: registrar em nome de alguém não é assumir o atendimento.
+        Assert.Null(ticket.AssignedTechnicianId);
+
+        var page = await ListAsync(world.Requester);
+        Assert.Contains(page.Items, item => item.Id == ticket.Id);
+    }
+
+    [Fact]
+    public async Task Quem_abriu_em_nome_de_outro_fica_no_historico()
+    {
+        // O campo Requester diz de quem é o problema; quem digitou está na auditoria.
+        var world = await SetUpAsync();
+
+        var response = await world.Technician.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = world.RequesterId });
+
+        var ticket = await response.Content.ReadJsonAsync<TicketDetail>();
+        var history = await HistoryAsync(world.Technician, ticket!.Id);
+
+        var created = Assert.Single(
+            history, h => h.Action == TicketHistoryAction.Created);
+
+        Assert.Equal(world.TechnicianId, created.ChangedById);
+    }
+
+    [Fact]
+    public async Task Solicitante_nao_abre_chamado_em_nome_de_outra_pessoa()
+    {
+        var world = await SetUpAsync();
+
+        var response = await world.Requester.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = world.OtherRequesterId });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // E nada foi gravado: o chamado não existe nem para o suposto solicitante.
+        var page = await ListAsync(world.OtherRequester);
+        Assert.Equal(0, page.TotalCount);
+    }
+
+    [Fact]
+    public async Task Abertura_em_nome_de_usuario_inexistente_e_recusada()
+    {
+        var world = await SetUpAsync();
+
+        var response = await world.Technician.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = Guid.NewGuid() });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Abertura_em_nome_de_usuario_inativo_e_recusada()
+    {
+        var world = await SetUpAsync();
+
+        await using (var db = Fixture.CreateContext())
+        {
+            await db.Users
+                .Where(u => u.Id == world.RequesterId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.IsActive, false));
+        }
+
+        var response = await world.Technician.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = world.RequesterId });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Informar_o_proprio_id_como_solicitante_e_aceito()
+    {
+        // Não é abertura em nome de terceiro: a interface pode mandar o campo preenchido
+        // com o próprio usuário sem que isso vire privilégio de equipe.
+        var world = await SetUpAsync();
+
+        var response = await world.Requester.PostAsJsonAsync(
+            "/api/tickets",
+            NewTicket(world.CategoryId) with { RequesterId = world.RequesterId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    // ----- Diretório de usuários -----
+
+    [Fact]
+    public async Task Solicitante_nao_enumera_usuarios()
+    {
+        var world = await SetUpAsync();
+
+        var response = await world.Requester.GetAsync("/api/users");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Equipe_busca_usuario_por_nome_ou_email()
+    {
+        var world = await SetUpAsync();
+
+        string email;
+        await using (var db = Fixture.CreateContext())
+        {
+            email = await db.Users
+                .Where(u => u.Id == world.RequesterId)
+                .Select(u => u.Email)
+                .SingleAsync();
+        }
+
+        var response = await world.Technician.GetAsync($"/api/users?search={email}");
+
+        response.EnsureSuccessStatusCode();
+
+        var users = await response.Content.ReadJsonAsync<List<UserOption>>();
+
+        var found = Assert.Single(users!);
+        Assert.Equal(world.RequesterId, found.Id);
+    }
+
+    [Fact]
+    public async Task Usuario_inativo_nao_aparece_no_diretorio()
+    {
+        var world = await SetUpAsync();
+
+        await using (var db = Fixture.CreateContext())
+        {
+            await db.Users
+                .Where(u => u.Id == world.RequesterId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.IsActive, false));
+        }
+
+        var response = await world.Manager.GetAsync("/api/users");
+        var users = await response.Content.ReadJsonAsync<List<UserOption>>();
+
+        Assert.DoesNotContain(users!, u => u.Id == world.RequesterId);
     }
 
     // ----- Listagem e visibilidade -----

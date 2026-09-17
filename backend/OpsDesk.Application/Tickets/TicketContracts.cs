@@ -6,11 +6,22 @@ namespace OpsDesk.Application.Tickets;
 /// <summary>
 /// Abertura de chamado (README, seção 9).
 ///
-/// Só o que o solicitante informa. Código, status inicial, datas, solicitante, prazo de
-/// SLA e origem são automáticos — e prioridade **não** é inferida do texto: a triagem é
-/// da equipe.
+/// Só o que o solicitante informa. Código, status inicial, datas, prazo de SLA e origem
+/// são automáticos — e prioridade **não** é inferida do texto: a triagem é da equipe.
+///
+/// <paramref name="RequesterId"/> é o chamado aberto em nome de outra pessoa, e só técnico
+/// e gestor podem preenchê-lo. Vazio, o solicitante é quem está autenticado.
+///
+/// <paramref name="AttachmentIds"/> são anexos já enviados e ainda pendentes, que a
+/// abertura vincula ao chamado.
 /// </summary>
-public record CreateTicketRequest(string Title, string Description, Guid CategoryId, TicketPriority Priority);
+public record CreateTicketRequest(
+    string Title,
+    string Description,
+    Guid CategoryId,
+    TicketPriority Priority,
+    Guid? RequesterId = null,
+    Guid[]? AttachmentIds = null);
 
 /// <summary>Resumo do chamado para as listagens.</summary>
 public record TicketListItem(

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
@@ -15,7 +16,8 @@ namespace OpsDesk.Application.Tickets;
 /// fora da equipe crie comentário interno; e na leitura, pelo filtro de visibilidade, que
 /// corta por <c>IsInternal</c> dentro do SQL.
 /// </summary>
-public class TicketCommentService(IOpsDeskDbContext db, IClock clock, TicketWorkflowService workflow)
+public class TicketCommentService(
+    IOpsDeskDbContext db, IClock clock, TicketWorkflowService workflow, AttachmentService attachments)
 {
     public async Task<AddCommentResult> AddAsync(
         Guid ticketId,
@@ -69,6 +71,21 @@ public class TicketCommentService(IOpsDeskDbContext db, IClock clock, TicketWork
         };
 
         db.TicketComments.Add(comment);
+
+        // O anexo herda a visibilidade do comentário: arquivo de nota interna é nota
+        // interna. Recusar o comentário inteiro quando um identificador não serve é
+        // melhor que publicá-lo sem o anexo que a pessoa achou que tinha mandado — e o
+        // `return` antes do SaveChanges garante que nada foi gravado.
+        if (!await attachments.TryBindAsync(
+                request.AttachmentIds ?? [],
+                ticket.Id,
+                comment.Id,
+                request.IsInternal,
+                author,
+                cancellationToken))
+        {
+            return new AddCommentResult.AttachmentsInvalid();
+        }
 
         // Marco do SLA de resposta (README, seção 8.3): o primeiro comentário **público**
         // de técnico ou gestor. Comentário interno não conta — ele não chega ao solicitante,

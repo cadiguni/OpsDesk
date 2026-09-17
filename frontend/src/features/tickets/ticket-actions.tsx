@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Ban,
   CircleCheck,
@@ -55,7 +56,8 @@ const statusActions: Record<TicketStatus, StatusAction> = {
 }
 
 export function TicketActions({ ticket }: { ticket: TicketDetail }) {
-  const { isStaff, role, user } = useSession()
+  const { isStaff, user } = useSession()
+  const navigate = useNavigate()
   const changeStatus = useChangeStatus(ticket.id)
   const assign = useAssign(ticket.id)
   const staff = useStaff(isStaff)
@@ -64,8 +66,22 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
   // desarma — o estado de confirmação não deve sobreviver à mudança de intenção.
   const [confirming, setConfirming] = useState<TicketStatus | null>(null)
 
-  const isManager = role === 'Manager'
   const isMine = ticket.assignedTechnicianId === user?.id
+
+  /**
+   * Encaminhar para outro técnico pode tirar o chamado da própria visibilidade — técnico
+   * vê o que está sem responsável e o que é dele. Quando a API responde sem corpo é
+   * exatamente isso, e ficar na tela renderizaria um chamado que já não se pode ler.
+   */
+  function changeAssignee(technicianId: string | null) {
+    assign.mutate(technicianId, {
+      onSuccess: (updated) => {
+        if (!updated) {
+          void navigate('/chamados', { replace: true })
+        }
+      },
+    })
+  }
 
   function activate(status: TicketStatus) {
     const action = statusActions[status]
@@ -125,51 +141,54 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
         <div className="space-y-2 border-t pt-4">
           <p className="text-xs font-medium">Responsável</p>
 
-          {isManager ? (
-            <Select
-              value={ticket.assignedTechnicianId ?? ''}
-              onChange={(event) => assign.mutate(event.target.value || null)}
-              disabled={assign.isPending || staff.isPending}
-              aria-label="Técnico responsável"
-            >
-              <option value="">Sem responsável</option>
-              {staff.data?.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            // Técnico assume para si ou devolve o próprio chamado; não movimenta o de
-            // outra pessoa. A API recusa de todo jeito, e a interface não oferece.
-            <div className="grid gap-2">
-              {!isMine && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="justify-start"
-                  disabled={assign.isPending || ticket.assignedTechnicianId !== null}
-                  onClick={() => assign.mutate(user?.id ?? null)}
-                >
-                  <UserRoundCheck />
-                  {assign.isPending ? 'Assumindo…' : 'Assumir chamado'}
-                </Button>
-              )}
+          {/* Assumir e devolver ficam como botão porque são o gesto mais frequente, e um
+              gesto frequente não deve custar abrir um seletor e achar o próprio nome. */}
+          <div className="grid gap-2">
+            {!isMine && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-start"
+                disabled={assign.isPending}
+                onClick={() => changeAssignee(user?.id ?? null)}
+              >
+                <UserRoundCheck />
+                {assign.isPending ? 'Salvando…' : 'Assumir chamado'}
+              </Button>
+            )}
 
-              {isMine && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="justify-start"
-                  disabled={assign.isPending}
-                  onClick={() => assign.mutate(null)}
-                >
-                  <RotateCcw />
-                  Devolver para a fila
-                </Button>
-              )}
-            </div>
-          )}
+            {isMine && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-start"
+                disabled={assign.isPending}
+                onClick={() => changeAssignee(null)}
+              >
+                <RotateCcw />
+                Devolver para a fila
+              </Button>
+            )}
+
+            {/* Encaminhar para um colega é atendimento normal, não privilégio de gestão:
+                quem recebeu o chamado errado precisa poder passá-lo adiante. */}
+            <label className="text-muted-foreground grid gap-1.5 text-xs">
+              Encaminhar para
+              <Select
+                value={ticket.assignedTechnicianId ?? ''}
+                onChange={(event) => changeAssignee(event.target.value || null)}
+                disabled={assign.isPending || staff.isPending}
+                aria-label="Técnico responsável"
+              >
+                <option value="">Sem responsável</option>
+                {staff.data?.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
 
           {assign.isError && (
             <p role="alert" className="text-destructive text-xs">

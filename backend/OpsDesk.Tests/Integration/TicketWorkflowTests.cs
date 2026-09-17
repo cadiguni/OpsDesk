@@ -55,8 +55,16 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         var visible = await CommentsAsync(world.Requester, ticket);
         Assert.Equal(isInternal ? 0 : 1, visible.Count);
         var history = await HistoryAsync(world.Manager, ticket);
-        Assert.Contains(history, h => h.Action == TicketHistoryAction.Closed);
-        Assert.Contains(history, h => h.Action == TicketHistoryAction.StatusChanged && h.NewValue == "Closed" && h.PreviousValue == from.ToString());
+
+        // Uma entrada só para o fechamento, e ela carrega a transição real. O interceptor
+        // dá nome próprio às transições terminais — fechar é `Closed`, não `StatusChanged`
+        // com destino "Closed" —, e não simula as etapas intermediárias que o "enviar e
+        // fechar" pulou.
+        var closed = Assert.Single(history, h => h.Action == TicketHistoryAction.Closed);
+        Assert.Equal(from.ToString(), closed.PreviousValue);
+        Assert.Equal(nameof(TicketStatus.Closed), closed.NewValue);
+        Assert.DoesNotContain(history, h => h.Action == TicketHistoryAction.StatusChanged && h.NewValue == "Closed");
+
         Assert.Contains(history, h => h.Action == (isInternal ? TicketHistoryAction.InternalCommentAdded : TicketHistoryAction.CommentAdded));
     }
 
@@ -550,7 +558,7 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Tecnico_nao_atribui_chamado_a_outra_pessoa()
+    public async Task Tecnico_encaminha_chamado_para_outro_tecnico()
     {
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
@@ -558,7 +566,45 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         var response = await world.Technician.PostAsJsonAsync(
             $"/api/tickets/{ticket}/assignment", new AssignRequest(world.OtherTechnicianId));
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        // 204: a atribuição valeu, mas o chamado saiu da visibilidade de quem encaminhou —
+        // técnico vê o que está sem responsável e o que é dele, e agora não é nenhum dos
+        // dois. Não há corpo a devolver sem furar o filtro de visibilidade.
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await world.Technician.GetAsync($"/api/tickets/{ticket}")).StatusCode);
+
+        var received = await GetAsync(world.OtherTechnician, ticket);
+        Assert.Equal(world.OtherTechnicianId, received.AssignedTechnicianId);
+    }
+
+    [Fact]
+    public async Task Tecnico_devolve_para_a_fila_o_chamado_que_e_seu()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        await AssignAsync(world.Technician, ticket, world.TechnicianId);
+        var unassigned = await AssignAsync(world.Technician, ticket, null);
+
+        Assert.Null(unassigned.AssignedTechnicianId);
+    }
+
+    [Fact]
+    public async Task Tecnico_nao_alcanca_chamado_de_outro_tecnico_para_atribuir()
+    {
+        // O que impede o técnico de mexer no chamado alheio é o filtro de visibilidade,
+        // não uma regra de atribuição: o chamado simplesmente não existe para ele.
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        await AssignAsync(world.Manager, ticket, world.OtherTechnicianId);
+
+        var response = await world.Technician.PostAsJsonAsync(
+            $"/api/tickets/{ticket}/assignment", new AssignRequest(world.TechnicianId));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

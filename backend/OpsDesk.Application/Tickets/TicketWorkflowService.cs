@@ -135,22 +135,10 @@ public class TicketWorkflowService(
             return new AssignResult.TicketNotFound();
         }
 
-        // Técnico assume chamado e devolve o seu, mas não movimenta o de outra pessoa.
-        // Gestor atribui a quem quiser — é a atribuição da seção 10 do README.
-        if (!viewer.IsManager && request.TechnicianId is { } target && target != viewer.UserId)
-        {
-            return new AssignResult.NotAllowed(
-                "Técnico pode assumir o chamado para si, mas não atribuí-lo a outra pessoa.");
-        }
-
-        if (!viewer.IsManager
-            && request.TechnicianId is null
-            && ticket.AssignedTechnicianId is { } current
-            && current != viewer.UserId)
-        {
-            return new AssignResult.NotAllowed(
-                "Técnico não pode remover o responsável de um chamado de outra pessoa.");
-        }
+        // Técnico e gestor repassam chamado dentro da equipe. O filtro de visibilidade já
+        // limita *quais* chamados um técnico alcança — os sem responsável e os seus —, e
+        // dentro desse conjunto encaminhar para o colega certo é trabalho normal de
+        // atendimento, não privilégio de gestão. Quem não é da equipe não chega aqui.
 
         if (request.TechnicianId is { } technicianId)
         {
@@ -180,7 +168,14 @@ public class TicketWorkflowService(
 
         var detail = await tickets.GetAsync(ticket.Id, viewer, cancellationToken);
 
-        return new AssignResult.Assigned(detail!);
+        // Encaminhar para outro técnico tira o chamado da própria visibilidade: técnico vê
+        // o que está sem responsável e o que é dele, e o chamado deixou de ser os dois.
+        // A atribuição valeu; só não há mais o que devolver. Reler o chamado ignorando o
+        // filtro para poder responder alguma coisa furaria a invariante 1 por conveniência
+        // de interface.
+        return detail is null
+            ? new AssignResult.AssignedAndHidden()
+            : new AssignResult.Assigned(detail);
     }
 
     /// <summary>Técnicos e gestores ativos, para o seletor de responsável.</summary>
