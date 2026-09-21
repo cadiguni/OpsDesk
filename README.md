@@ -51,7 +51,7 @@ O que ele **não** faz é recarga automática: o bundle é estático e cada alte
 
 As duas formas de servir o SPA usam portas diferentes de propósito. Compartilhar a porta parecia mais simples e é uma armadilha: com um `npm run dev` rodando, o Docker Desktop no Windows **não falha** ao publicar uma porta já ocupada — os dois ficam escutando, o dev server atende, e o contêiner parece no ar servindo conteúdo que não é o dele.
 
-A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
+A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. **Subir fora de desenvolvimento ainda não é um caminho pronto:** sem migration, sem dados de referência e sem um primeiro gestor, a aplicação sobe saudável e recusa o primeiro chamado. O que falta está detalhado na seção 18, em "Primeira execução: instalar em branco". Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
 
 ### Estado do código
 
@@ -1138,6 +1138,51 @@ Cada item traz o que é, por que está na lista, e o que ainda precisa ser decid
 * categorias, prioridades e dashboard;
 * **anexos** em chamados e comentários, antecipados da 1.1.
 
+### Primeira execução: instalar em branco
+
+Hoje o projeto sobe pronto para uso **em desenvolvimento**, e apenas nele. A API aplica migration e roda o seed na subida só quando o ambiente é `Development`; em qualquer outro, `ApplyDatabaseStartupTasksAsync` retorna cedo e nada acontece.
+
+Quem clonar o repositório e subir em produção encontra, em ordem, isto:
+
+* banco sem schema, até alguém rodar a migration à mão;
+* zero categorias e zero políticas de SLA — abrir chamado responde **500**, porque chamado sem prazo não entra em indicador nenhum e o serviço falha alto de propósito;
+* zero feriados — o cálculo de horas úteis passa a tratar feriado como dia útil, sem erro nenhum para indicar o problema;
+* zero usuários, e o cadastro pela tela sempre cria perfil **Usuário**: não há caminho pela interface para existir o primeiro gestor.
+
+O ambiente de desenvolvimento esconde tudo isso, o que é justamente o que torna o problema traiçoeiro: funciona na máquina de quem escreveu.
+
+**Seed de dados de referência em qualquer ambiente.** Categorias, políticas de SLA e feriados não são dados de exemplo, são pré-requisito de funcionamento. O `DatabaseSeeder` já é idempotente e já separa "dados de referência" de "usuários de exemplo" — falta um caminho para executá-lo fora de `Development`.
+
+*A decidir:* etapa explícita de deploy (um comando, como a migration) ou execução automática na subida em qualquer ambiente? A migration virou etapa explícita para que ninguém descubra alteração de banco pelo log de inicialização; o mesmo argumento vale aqui, e a recomendação é comando explícito — com a ressalva de que quem esquecer de rodar sobe um sistema que parece saudável e recusa o primeiro chamado.
+
+**O primeiro gestor.** É o item que trava tudo: sem um gestor não há quem atribua, reclassifique ou administre, e pela interface não existe como criar um.
+
+*A decidir entre três caminhos, e cada um tem um custo:*
+
+* **variáveis de ambiente de bootstrap** (`OpsDesk__Bootstrap__Email` e `__Password`), aplicadas uma única vez quando não existir nenhum gestor. Simples e automatizável; põe senha em variável de ambiente, então pede troca obrigatória no primeiro acesso;
+* **comando de linha** (`dotnet run --bootstrap-admin`, ou um `opsdesk-cli`), executado por quem tem acesso ao host. Nada de senha em configuração, mas exige um passo manual e acesso ao contêiner;
+* **o primeiro usuário cadastrado vira gestor.** É o mais cómodo e o mais perigoso: numa instância exposta antes de ser configurada, quem chegar primeiro vira administrador do sistema. Só aceitável com uma janela fechada por token de instalação.
+
+A recomendação é o primeiro, com troca de senha obrigatória no primeiro acesso — e o terceiro descartado.
+
+**Feriados não se renovam sozinhos fora de desenvolvimento.** O seed cobre o ano corrente e os dois seguintes, e essa janela só "anda" porque roda a cada subida. Em produção, com seed executado uma vez, em algum ano o cálculo de horas úteis passa a contar feriado como expediente — em silêncio, e o sintoma aparece como prazo estranho, não como erro.
+
+*A decidir:* renovar por tarefa agendada, reexecutar o seed em cada deploy, ou criar tela de administração de feriados (que também resolve feriado municipal, que nenhuma tabela nacional tem).
+
+**Validar a configuração na subida, com mensagem que diz o que fazer.** `Jwt:SigningKey`, connection string e `AttachmentStorage` já falham cedo, por `ValidateOnStart`. Faltam os casos que sobem calados e quebram depois: `Cors:AllowedOrigins` vazio (a API sobe e o SPA não fala com ela), raiz de anexos sem permissão de escrita (o primeiro upload morre com `Permission denied`), e fuso de expediente inválido.
+
+**Readiness separado de liveness.** O `/health` de hoje verifica se o banco responde. Não verifica se o schema está na versão da aplicação nem se os dados de referência existem — ou seja, o orquestrador considera saudável um contêiner que vai recusar todo chamado novo. Um endpoint de readiness que reprove migration pendente e ausência de política de SLA tornaria o problema visível no lugar certo: no deploy.
+
+**Compose e segredos para quem não é desenvolvedor.** O compose atual traz chave JWT de desenvolvimento embutida, e está escrito nele que é só para isso. Falta um exemplo de subida séria: segredo injetado por `docker secret` ou cofre, senha de banco fora do arquivo, volumes nomeados para banco e anexos, e um `.env.example` do backend documentando cada variável obrigatória.
+
+**Imagem do frontend com endereço de API definido no build.** `VITE_API_URL` é embutido em tempo de compilação, então a mesma imagem não serve a dois domínios. Hoje isso não incomoda porque o nginx do perfil `web` põe SPA e API na mesma origem; incomodaria numa topologia com domínios separados.
+
+*A decidir, só quando essa topologia existir:* gerar a configuração em tempo de execução (um `config.js` escrito pelo entrypoint do contêiner) ou manter a regra de mesma origem.
+
+**Dados de demonstração opcionais.** Quem sobe o sistema para avaliar cai numa lista vazia, e lista vazia não mostra SLA, dashboard nem conversa. Uma flag de seed de demonstração — alguns chamados em status diferentes, um com anexo, um vencido, um aguardando solicitante — resolve, e precisa ser separada do seed de referência para nunca escapar para produção.
+
+**Backup e restauração de banco e anexos juntos.** São dois volumes, e o estado consistente exige os dois. Restaurar só o banco dá anexo que a interface lista e o download não encontra (404 com aviso no log); restaurar só os arquivos dá lixo em disco que nenhuma tela mostra. Falta documentar a ordem e um procedimento de restauração testado — backup que ninguém restaurou não é backup.
+
 ### Versão 1.1 — Melhorias operacionais
 
 **Tela de administração de usuários.** Hoje não há como promover alguém a técnico ou gestor sem `UPDATE` no banco, e nem como desativar quem saiu da empresa. Enquanto isso, toda mudança de equipe depende de acesso ao PostgreSQL.
@@ -1148,7 +1193,7 @@ Cada item traz o que é, por que está na lista, e o que ainda precisa ser decid
 
 *A decidir:* o que acontece com chamados de uma categoria desativada — a intenção é que continuem válidos e a categoria só saia dos seletores, que é o motivo de `IsActive` existir em vez de `DELETE`.
 
-**Testes de frontend.** Não existe nenhum: são 332 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+**Testes de frontend.** Não existe nenhum: são 333 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
 
 *A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
 
@@ -1201,7 +1246,7 @@ O caminho está preparado: é uma implementação nova de `IAttachmentStorage` (
 
 **Forwarded headers.** O rate limiting particiona por IP de origem nas rotas anónimas, lido de `RemoteIpAddress`. Atrás de Front Door ou Application Gateway, todo pedido chega com o IP do proxy e a partição vira uma só. Antes de pôr um proxy na frente, configurar `UseForwardedHeaders` — e só então confiar no cabeçalho, porque confiar nele sem o middleware deixa o cliente escolher a própria partição.
 
-**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir.
+**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir — junto com o seed de dados de referência e o bootstrap do primeiro gestor, descritos em "Primeira execução" acima.
 
 ---
 

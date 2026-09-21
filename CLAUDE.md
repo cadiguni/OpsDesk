@@ -76,6 +76,8 @@ docker compose --profile web up -d --build
 
 A API aplica migration e roda o seed na subida, **apenas em Development**. Em outros ambientes o schema sobe como etapa explícita do deploy.
 
+Uma consequência que vale ter em mente antes de afirmar que o sistema "está pronto": fora de Development não roda migration **nem seed**, então uma instalação limpa fica sem categorias, sem políticas de SLA, sem feriados e sem nenhum usuário — e o cadastro pela tela só cria perfil Usuário. A aplicação sobe saudável e recusa o primeiro chamado com 500. O caminho de primeira execução está desenhado na seção 18 do README, em "Primeira execução: instalar em branco", e ainda não foi implementado.
+
 ### Backend
 
 ```bash
