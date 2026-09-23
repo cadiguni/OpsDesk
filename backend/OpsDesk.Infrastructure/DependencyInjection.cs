@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
@@ -30,6 +31,10 @@ public static class DependencyInjection
     public static IServiceCollection AddOpsDeskInfrastructure(
         this IServiceCollection services, IConfiguration configuration)
     {
+        // O validador é registrado junto: sem ele o ValidateOnStart abaixo não tem o que
+        // validar, e fuso inexistente ou expediente invertido passariam calados.
+        services.AddSingleton<IValidateOptions<BusinessHoursOptions>, BusinessHoursOptionsValidator>();
+
         services
             .AddOptions<BusinessHoursOptions>()
             .Bind(configuration.GetSection(BusinessHoursOptions.SectionName))

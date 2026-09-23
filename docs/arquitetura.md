@@ -247,6 +247,14 @@ O primeiro gestor nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePass
 
 **Por quê o bootstrap só age sem nenhum gestor:** a variável tende a ficar esquecida no orquestrador. Recriar a conta a cada deploy ressuscitaria, em silêncio, um administrador que alguém pode ter desativado de propósito.
 
+### 4.19 Liveness e readiness respondem perguntas diferentes
+
+`/health` diz se o processo está vivo e o banco alcançável. `/ready` acrescenta schema na versão da aplicação e dados de referência presentes.
+
+**Por quê separar:** as duas respostas levam a ações opostas. Um contêiner que não responde deve ser reiniciado; um contêiner cujo schema está desatualizado não deve receber tráfego — e reiniciá-lo não conserta nada, porque reiniciar não aplica migration. Com um endpoint só, o segundo caso vira laço de reinício sem diagnóstico.
+
+**Por quê o corpo do `/ready` é detalhado:** o escritor padrão devolve a palavra `Unhealthy` e nada mais, o que joga fora um diagnóstico que já existe. Como ele é anônimo, o texto fala de schema e de dados de referência, nunca de connection string ou caminho de arquivo.
+
 ---
 
 ## 5. Requisitos não funcionais na prática

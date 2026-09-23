@@ -21,7 +21,7 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 **Endpoints:**
 
 ```
-GET    /health  /openapi/v1.json  /swagger
+GET    /health  /ready  /openapi/v1.json  /swagger
 POST   /api/auth/{register,login,refresh,logout,password}   GET /api/auth/me
 POST   /api/tickets                                    GET /api/tickets  (filtros, paginação)
 GET    /api/tickets/{id}
@@ -84,7 +84,9 @@ docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e Ops
 
 `--seed` nunca cria usuários de exemplo. O gestor do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum gestor.
 
-Ainda **não** implementado, e vale ter em mente antes de afirmar que o sistema "está pronto": quem esquecer de rodar o comando sobe uma aplicação que responde `/health` e recusa o primeiro chamado com 500 — não há readiness que reprove schema desatualizado ou ausência de política de SLA. Feriados também não se renovam sozinhos fora de Development. Ver README, seção 18, em "Primeira execução: instalar em branco".
+Quem esquecer o comando é acusado pelo `/ready`, que reprova migration pendente e ausência de dados de referência, com o que fazer no corpo da resposta. O `/health` continua verde nesse caso de propósito: ele decide reiniciar o contêiner, e reiniciar não aplica migration.
+
+Ainda **não** implementado: feriados não se renovam sozinhos fora de Development. Ver README, seção 18, em "Primeira execução: instalar em branco".
 
 ### Backend
 
@@ -180,6 +182,7 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
 * **Rotação de refresh token de uso único é estrita demais sem janela de tolerância.** Duas abas recarregando, ou o `StrictMode` do React executando o efeito duas vezes, produzem duas renovações concorrentes com o mesmo cookie — e a segunda parece reuso. `JwtOptions.RefreshTokenGraceSeconds` cobre isso no servidor, e no cliente `refreshSession` garante uma renovação por vez. Os dois lados são necessários: um sozinho não resolve.
 * **O `UseRateLimiter` vem depois do `UseAuthentication`.** A cota de envio de anexo é por usuário, e a partição só lê a claim do token depois que a autenticação preencheu o `context.User`. Com o limitador antes, toda requisição autenticada cai na partição de fallback por IP — num escritório atrás de NAT isso é uma cota única para a empresa, e na suíte de testes era uma cota única para todos os testes, que passaram a falhar em bloco com 429. Há teste fixando os dois lados (`UploadRateLimitTests`).
+* **A janela de tolerância do refresh vale para rotação, nunca para revogação deliberada.** O que distingue as duas no banco é `ReplacedByTokenHash`: rotação preenche esse campo junto com `RevokedAt`, e logout, troca de senha, conta desativada e o corte por reuso detectado preenchem só o `RevokedAt`. Sem essa separação a tolerância anula a revogação — quem troca a senha para cortar um intruso vê o navegador dele renovar a sessão segundos depois. O teste do logout não pegava isso porque o logout também apaga o cookie, e a renovação seguinte ia sem token nenhum: o 401 vinha pelo motivo errado. Há teste apresentando o token guardado de propósito (`Token_revogado_no_logout_nao_ganha_a_janela_de_tolerancia`).
 * **Não misture cota de rate limiting entre login e renovação de sessão.** A interface renova a cada carregamento de página; com cota compartilhada, recarregar algumas vezes gastava as tentativas de credencial e o login legítimo recebia 429 na primeira tentativa.
 * **Corpo de requisição malformado estoura como `BadHttpRequestException`** e, sem tratamento, sai como 500 — o que significa "defeito nosso" e alimenta alerta de produção. O `MalformedRequestHandler` traduz para 400.
 * **O JSON da API serializa enum como texto**, configurado por `ConfigureHttpJsonOptions`. Sem isso o padrão é inteiro, e `role: 1` chega ao frontend onde o TypeScript espera `'Technician'` — o rótulo sai vazio e nada acusa o erro em tempo de compilação. Há teste de contrato fixando isso.

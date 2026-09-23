@@ -141,7 +141,8 @@ public class FirstRunTests(PostgresFixture fixture)
     {
         using var client = await BootstrappedClientAsync();
 
-        var me = await client.GetFromJsonAsync<SessionUser>("/api/auth/me");
+        var response = await client.GetAsync("/api/auth/me");
+        var me = await response.Content.ReadJsonAsync<SessionUser>();
 
         Assert.True(me?.MustChangePassword);
     }

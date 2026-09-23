@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -116,7 +117,8 @@ try
 
     builder.Services
         .AddHealthChecks()
-        .AddDbContextCheck<OpsDeskDbContext>("postgres");
+        .AddDbContextCheck<OpsDeskDbContext>("postgres")
+        .AddOpsDeskReadiness();
 
     builder.Services.AddProblemDetails();
     builder.Services.AddExceptionHandler<MalformedRequestHandler>();
@@ -130,6 +132,10 @@ try
     {
         return await DatabaseCommands.RunAsync(app, args);
     }
+
+    // Configuração que passaria pela subida e quebraria no uso. Vem antes das tarefas de
+    // banco para que o erro seja o da configuração, e não o que ela causa depois.
+    app.ValidateConfiguration();
 
     await app.ApplyDatabaseStartupTasksAsync();
 
@@ -162,7 +168,21 @@ try
     // de senha provisória fica reservado a quem de fato está autenticado.
     app.UsePasswordChangeRequired();
 
-    app.MapHealthChecks("/health").AllowAnonymous();
+    // Liveness: o processo responde e o banco está alcançável. É o que decide reiniciar
+    // o contêiner, então os testes de readiness ficam de fora — reiniciar não aplica
+    // migration nem roda seed, e incluí-los daria um laço de reinício sem diagnóstico.
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        Predicate = check => !check.Tags.Contains(ReadinessChecks.Tag)
+    }).AllowAnonymous();
+
+    // Readiness: além do acima, o schema está na versão da aplicação e os dados de
+    // referência existem. É o que decide mandar tráfego.
+    app.MapHealthChecks("/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains(ReadinessChecks.Tag),
+        ResponseWriter = ReadinessResponse.WriteAsync
+    }).AllowAnonymous();
     app.MapAuthEndpoints();
     app.MapTicketEndpoints();
     app.MapAttachmentEndpoints();

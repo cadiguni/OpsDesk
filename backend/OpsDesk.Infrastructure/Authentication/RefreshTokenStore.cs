@@ -62,6 +62,22 @@ public class RefreshTokenStore(
 
         if (existing.RevokedAt is { } revokedAt)
         {
+            // Revogação deliberada não tem tolerância nenhuma.
+            //
+            // A distinção está em `ReplacedByTokenHash`: rotação preenche os dois campos,
+            // revogação deliberada — logout, troca de senha, conta desativada, ou o corte
+            // que segue uma suspeita de vazamento — preenche só `RevokedAt`.
+            //
+            // Sem esta separação a janela de tolerância anulava a revogação: quem trocasse
+            // a senha para cortar um intruso veria o navegador dele renovar a sessão
+            // segundos depois, com token novo em folha. O mesmo valia para o logout e,
+            // pior, para o próprio corte por reuso detectado — o token do usuário legítimo
+            // acabava de ser revogado, e a renovação seguinte o ressuscitava.
+            if (existing.ReplacedByTokenHash is null)
+            {
+                return new RefreshTokenRotation.Rejected();
+            }
+
             var sinceRotation = now - revokedAt;
 
             if (sinceRotation <= TimeSpan.FromSeconds(_options.RefreshTokenGraceSeconds))

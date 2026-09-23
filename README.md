@@ -47,7 +47,8 @@ O que ele **não** faz é recarga automática: o bundle é estático e cada alte
 | SPA, perfil `web` | http://localhost:3000 |
 | API | http://localhost:8080 |
 | Swagger | http://localhost:8080/swagger (ou /swagger pela porta 3000) |
-| Health check | http://localhost:8080/health |
+| Health check (liveness) | http://localhost:8080/health |
+| Readiness | http://localhost:8080/ready |
 
 As duas formas de servir o SPA usam portas diferentes de propósito. Compartilhar a porta parecia mais simples e é uma armadilha: com um `npm run dev` rodando, o Docker Desktop no Windows **não falha** ao publicar uma porta já ocupada — os dois ficam escutando, o dev server atende, e o contêiner parece no ar servindo conteúdo que não é o dele.
 
@@ -71,7 +72,9 @@ Migration continua fora da subida da aplicação de propósito: ninguém deve de
 
 O gestor criado pelo bootstrap nasce com **troca de senha obrigatória** — a senha chegou por variável de ambiente, e variável de ambiente aparece em log de deploy, em `docker inspect` e no histórico do shell. Até a troca acontecer, a API recusa com 403 tudo fora de `/api/auth` e a interface prende a navegação na tela de troca. O bootstrap só age quando **não existe nenhum gestor**: a variável esquecida no orquestrador não ressuscita conta administrativa a cada deploy. Se o e-mail já pertencer a alguém, essa conta é promovida e mantém a senha que já tinha.
 
-O que ainda falta para uma instalação em branco ser confortável — readiness que reprove schema desatualizado, validação de configuração na subida, renovação de feriados — está na seção 18, em "Primeira execução: instalar em branco".
+`/health` e `/ready` respondem perguntas diferentes. O primeiro diz se o processo está vivo e o banco alcançável — é o que decide **reiniciar** o contêiner. O segundo acrescenta schema na versão da aplicação e dados de referência presentes — é o que decide **mandar tráfego**, e quem esquecer o `--setup` é acusado ali, com o comando que falta no corpo da resposta.
+
+O que ainda falta para uma instalação em branco ser confortável — renovação de feriados, exemplo de compose com segredos, backup dos dois volumes — está na seção 18, em "Primeira execução: instalar em branco".
 
 ### Estado do código
 
@@ -1176,7 +1179,8 @@ Cada item traz o que é, por que está na lista, e o que ainda precisa ser decid
 * SLA em horas úteis, com pausa e retomada;
 * categorias, prioridades e dashboard;
 * **anexos** em chamados e comentários, antecipados da 1.1;
-* **instalação em branco**: comandos de migration, seed e bootstrap do primeiro gestor, com troca de senha obrigatória no primeiro acesso.
+* **instalação em branco**: comandos de migration, seed e bootstrap do primeiro gestor, com troca de senha obrigatória no primeiro acesso;
+* **diagnóstico de instalação**: `/ready` separado do `/health`, e validação de configuração na subida.
 
 ### Primeira execução: instalar em branco
 
@@ -1194,9 +1198,11 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 *A decidir:* renovar por tarefa agendada, reexecutar o seed em cada deploy, ou criar tela de administração de feriados (que também resolve feriado municipal, que nenhuma tabela nacional tem).
 
-**Validar a configuração na subida, com mensagem que diz o que fazer.** `Jwt:SigningKey`, connection string e `AttachmentStorage` já falham cedo, por `ValidateOnStart`. Faltam os casos que sobem calados e quebram depois: `Cors:AllowedOrigins` vazio (a API sobe e o SPA não fala com ela), raiz de anexos sem permissão de escrita (o primeiro upload morre com `Permission denied`), e fuso de expediente inválido.
+**Entregue: validação de configuração na subida.** `Jwt:SigningKey`, connection string e `AttachmentStorage` já falhavam cedo. Entraram os casos que subiam calados: raiz de anexos sem permissão de escrita (um arquivo de sonda na subida, em vez do `Permission denied` no primeiro upload) e fuso de expediente inválido — `BusinessHoursOptions` declarava `ValidateOnStart` sem validador registrado, ou seja, não validava nada; agora fuso inexistente, expediente invertido e lista de dias úteis vazia derrubam a subida com mensagem.
 
-**Readiness separado de liveness.** O `/health` de hoje verifica se o banco responde. Não verifica se o schema está na versão da aplicação nem se os dados de referência existem — ou seja, o orquestrador considera saudável um contêiner que vai recusar todo chamado novo. Um endpoint de readiness que reprove migration pendente e ausência de política de SLA tornaria o problema visível no lugar certo: no deploy.
+`Cors:AllowedOrigins` vazio ficou como **aviso**, e não como erro, contra o que este roadmap previa. O motivo apareceu ao implementar: no perfil `web` o nginx põe SPA e API na mesma origem, e nessa topologia a lista vazia é a configuração correta — derrubar a subida quebraria justamente o desenho mais próximo de produção. O que virou erro foi origem malformada: o middleware compara origem como texto, então `http://localhost:3000/` com barra no fim nunca casa, e o navegador reporta só um bloqueio genérico enquanto o log da API não registra nada.
+
+**Entregue: readiness separado de liveness.** O `/health` responde se o processo está vivo e o banco alcançável, e é o que decide reiniciar o contêiner. O `/ready` acrescenta schema na versão da aplicação e dados de referência presentes, e é o que decide mandar tráfego; o corpo da resposta traz o comando que falta. Os testes de readiness ficam **fora** do `/health` de propósito: reiniciar o contêiner não aplica migration nem roda seed, e incluí-los daria um laço de reinício sem diagnóstico.
 
 **Compose e segredos para quem não é desenvolvedor.** O compose atual traz chave JWT de desenvolvimento embutida, e está escrito nele que é só para isso. Falta um exemplo de subida séria: segredo injetado por `docker secret` ou cofre, senha de banco fora do arquivo, volumes nomeados para banco e anexos, e um `.env.example` do backend documentando cada variável obrigatória.
 

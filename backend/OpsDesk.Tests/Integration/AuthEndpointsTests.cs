@@ -508,6 +508,33 @@ public class AuthEndpointsTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task Token_revogado_no_logout_nao_ganha_a_janela_de_tolerancia()
+    {
+        // O teste acima não cobre isto: o logout também apaga o cookie, então a renovação
+        // seguinte vai sem token nenhum e o 401 vem pelo motivo errado. Aqui guardamos o
+        // valor e o apresentamos de propósito, que é o que um cookie roubado faria.
+        //
+        // O defeito que este teste fixa: a janela de tolerância olhava só para RevokedAt e
+        // não distinguia rotação de revogação deliberada. Dentro dela, apresentar um token
+        // recém-revogado devolvia uma sessão nova em folha — o logout, a troca de senha e
+        // o próprio corte por reuso detectado viravam decoração por trinta segundos.
+        await fixture.ResetAsync();
+
+        var cookies = new CookieHandler();
+        using var client = fixture.Api.CreateDefaultClient(cookies);
+        client.BaseAddress = new Uri("https://localhost");
+
+        await client.PostAsJsonAsync("/api/auth/register", NewRegistration());
+        var stolen = cookies["opsdesk_refresh"];
+
+        await client.PostAsync("/api/auth/logout", null);
+
+        var replayed = await Refresh(stolen);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, replayed.StatusCode);
+    }
+
+    [Fact]
     public async Task Logout_sem_sessao_nao_e_erro()
     {
         // O cliente pode estar com cookie antigo. Falhar aqui o deixaria preso a uma
