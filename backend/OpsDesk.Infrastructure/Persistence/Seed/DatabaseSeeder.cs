@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
 
@@ -18,6 +19,7 @@ namespace OpsDesk.Infrastructure.Persistence.Seed;
 public class DatabaseSeeder(
     OpsDeskDbContext db,
     IPasswordHasher<User> passwordHasher,
+    IOptions<BootstrapAdminOptions> bootstrapOptions,
     ILogger<DatabaseSeeder> logger)
 {
     /// <summary>Senha dos usuários de exemplo. Vale apenas em desenvolvimento.</summary>
@@ -133,6 +135,82 @@ public class DatabaseSeeder(
         }
     }
 
+    /// <summary>
+    /// Cria o primeiro gestor a partir de <see cref="BootstrapAdminOptions"/>.
+    ///
+    /// Roda uma única vez, no sentido que importa: havendo qualquer gestor no banco, não
+    /// faz nada. É o que impede a variável de ambiente esquecida no orquestrador de
+    /// ressuscitar uma conta administrativa a cada deploy — inclusive depois de alguém a
+    /// ter desativado de propósito, que é o caso perigoso.
+    ///
+    /// Quando o e-mail já pertence a alguém, promovemos essa conta em vez de tentar criar
+    /// outra: é o que a pessoa que se cadastrou pelo portal e agora precisa administrar o
+    /// sistema espera, e evita colidir no índice único. Nesse caminho a senha
+    /// configurada é ignorada — a pessoa já tem a dela.
+    /// </summary>
+    public async Task<BootstrapAdminResult> EnsureBootstrapAdminAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var options = bootstrapOptions.Value;
+
+        if (!options.IsConfigured)
+        {
+            logger.LogInformation(
+                "Bootstrap: {Section}:Email e {Section}:Password não configurados, nada a fazer.",
+                BootstrapAdminOptions.SectionName, BootstrapAdminOptions.SectionName);
+
+            return BootstrapAdminResult.NotConfigured;
+        }
+
+        if (await db.Users.AnyAsync(u => u.Role == UserRole.Manager, cancellationToken))
+        {
+            logger.LogInformation("Bootstrap: já existe gestor no sistema, nada a fazer.");
+
+            return BootstrapAdminResult.ManagerAlreadyExists;
+        }
+
+        // Mesmo critério do login: e-mail é identificador, sempre em minúsculas.
+        var email = options.Email!.Trim().ToLowerInvariant();
+
+        var existing = await db.Users.SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
+
+        if (existing is not null)
+        {
+            existing.Role = UserRole.Manager;
+            existing.IsActive = true;
+
+            await db.SaveChangesAsync(cancellationToken);
+
+            logger.LogWarning(
+                "Bootstrap: {Email} já existia e foi promovido a gestor. A senha configurada " +
+                "foi ignorada — a conta mantém a senha que já tinha.", email);
+
+            return BootstrapAdminResult.Promoted;
+        }
+
+        var manager = new User
+        {
+            Name = options.Name.Trim(),
+            Email = email,
+            Role = UserRole.Manager,
+
+            // A senha chegou por configuração, e configuração vaza. Vale uma vez.
+            MustChangePassword = true
+        };
+
+        // Invariante 8 do CLAUDE.md: o hash sai do PasswordHasher, nunca de código próprio.
+        manager.PasswordHash = passwordHasher.HashPassword(manager, options.Password!);
+
+        db.Users.Add(manager);
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogWarning(
+            "Bootstrap: gestor {Email} criado. A senha configurada vale uma vez e precisa ser " +
+            "trocada no primeiro acesso.", email);
+
+        return BootstrapAdminResult.Created;
+    }
+
     private async Task SeedDevelopmentUsersAsync(CancellationToken cancellationToken)
     {
         (string Email, string Name, UserRole Role)[] users =
@@ -157,4 +235,20 @@ public class DatabaseSeeder(
             logger.LogInformation("Seed: usuário de desenvolvimento {Email} ({Role}).", email, role);
         }
     }
+}
+
+/// <summary>O que o bootstrap do primeiro gestor fez, para o comando relatar.</summary>
+public enum BootstrapAdminResult
+{
+    /// <summary>Sem e-mail ou sem senha em configuração.</summary>
+    NotConfigured,
+
+    /// <summary>Já havia gestor: o bootstrap não toca em sistema já instalado.</summary>
+    ManagerAlreadyExists,
+
+    /// <summary>Conta já existente promovida a gestor, com a senha que já tinha.</summary>
+    Promoted,
+
+    /// <summary>Gestor criado, com troca de senha obrigatória no primeiro acesso.</summary>
+    Created
 }

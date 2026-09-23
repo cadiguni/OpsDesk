@@ -13,6 +13,10 @@ export type SessionState = {
   signIn: (input: authApi.LoginInput) => Promise<void>
   signUp: (input: authApi.RegisterInput) => Promise<void>
   signOut: () => Promise<void>
+  changePassword: (input: authApi.ChangePasswordInput) => Promise<void>
+
+  /** Senha provisória: a navegação fica presa na tela de troca até isto ser falso. */
+  mustChangePassword: boolean
 
   /** Perfil do usuário, ou `null` quando não há sessão. */
   role: UserRole | null

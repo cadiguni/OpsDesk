@@ -27,6 +27,22 @@ public class JwtAccessTokenService(IOptions<JwtOptions> options, IClock clock) :
         var issuedAt = clock.UtcNow;
         var expiresAt = issuedAt.AddMinutes(_options.AccessTokenMinutes);
 
+        var claims = new Dictionary<string, object>
+        {
+            [OpsDeskClaims.Subject] = user.Id.ToString(),
+            [OpsDeskClaims.Name] = user.Name,
+            [OpsDeskClaims.Email] = user.Email,
+            [OpsDeskClaims.Role] = user.Role.ToString()
+        };
+
+        // Só entra quando é verdade. Claim que existe sempre, valendo "false" na maioria
+        // esmagadora dos tokens, é peso em todo cabeçalho de requisição para nada — e a
+        // leitura fica igual, porque ausente e "false" significam o mesmo.
+        if (user.MustChangePassword)
+        {
+            claims[OpsDeskClaims.MustChangePassword] = "true";
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = _options.Issuer,
@@ -34,13 +50,7 @@ public class JwtAccessTokenService(IOptions<JwtOptions> options, IClock clock) :
             IssuedAt = issuedAt.UtcDateTime,
             NotBefore = issuedAt.UtcDateTime,
             Expires = expiresAt.UtcDateTime,
-            Claims = new Dictionary<string, object>
-            {
-                [OpsDeskClaims.Subject] = user.Id.ToString(),
-                [OpsDeskClaims.Name] = user.Name,
-                [OpsDeskClaims.Email] = user.Email,
-                [OpsDeskClaims.Role] = user.Role.ToString()
-            },
+            Claims = claims,
             SigningCredentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey)),
                 SecurityAlgorithms.HmacSha256)

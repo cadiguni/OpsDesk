@@ -35,3 +35,25 @@ export const registerSchema = z
   })
 
 export type RegisterFields = z.infer<typeof registerSchema>
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Informe sua senha atual.'),
+    newPassword: z
+      .string()
+      .min(MINIMUM_PASSWORD_LENGTH, `A senha deve ter no mínimo ${MINIMUM_PASSWORD_LENGTH} caracteres.`)
+      .max(128, 'No máximo 128 caracteres.'),
+    newPasswordConfirmation: z.string().min(1, 'Repita a nova senha.'),
+  })
+  .refine((fields) => fields.newPassword === fields.newPasswordConfirmation, {
+    message: 'As senhas não conferem.',
+    path: ['newPasswordConfirmation'],
+  })
+  // O servidor recusa senha repetida, e recusar aqui também evita a viagem de ida e volta
+  // para dizer o óbvio. Quem manda continua sendo ele.
+  .refine((fields) => fields.newPassword !== fields.currentPassword, {
+    message: 'A nova senha precisa ser diferente da atual.',
+    path: ['newPassword'],
+  })
+
+export type ChangePasswordFields = z.infer<typeof changePasswordSchema>

@@ -43,6 +43,14 @@ public static class DependencyInjection
             // de login.
             .ValidateOnStart();
 
+        // Credencial do primeiro gestor. Sem ValidateOnStart de propósito: a API sobe
+        // normalmente com a seção ausente, que é o caso comum, e a validação acontece
+        // quando o comando de bootstrap lê o valor.
+        services
+            .AddOptions<BootstrapAdminOptions>()
+            .Bind(configuration.GetSection(BootstrapAdminOptions.SectionName))
+            .ValidateDataAnnotations();
+
         services.AddMemoryCache();
 
         services

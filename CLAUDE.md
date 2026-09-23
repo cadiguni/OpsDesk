@@ -14,15 +14,15 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 **O MVP da versão 1 está completo e rodando.** Os nove critérios de sucesso da seção 19 do README estão atendidos.
 
-**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo, chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico) e dashboard por consultas agregadas.
+**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico) e dashboard por consultas agregadas.
 
-**Frontend:** login, cadastro, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, e dashboard com gráficos.
+**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, e dashboard com gráficos.
 
 **Endpoints:**
 
 ```
 GET    /health  /openapi/v1.json  /swagger
-POST   /api/auth/{register,login,refresh,logout}      GET /api/auth/me
+POST   /api/auth/{register,login,refresh,logout,password}   GET /api/auth/me
 POST   /api/tickets                                    GET /api/tickets  (filtros, paginação)
 GET    /api/tickets/{id}
 GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
@@ -35,7 +35,7 @@ POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-**Fora do escopo da versão 1, conforme o roadmap:** notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos foram antecipados da 1.1 e já existem. Perfis de técnico e gestor são definidos pelo seed ou direto no banco — não há tela para promover usuário.
+**Fora do escopo da versão 1, conforme o roadmap:** notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; promover os demais a técnico ou gestor continua sendo `UPDATE` no banco — não há tela para isso.
 
 ## Documentação
 
@@ -76,7 +76,15 @@ docker compose --profile web up -d --build
 
 A API aplica migration e roda o seed na subida, **apenas em Development**. Em outros ambientes o schema sobe como etapa explícita do deploy.
 
-Uma consequência que vale ter em mente antes de afirmar que o sistema "está pronto": fora de Development não roda migration **nem seed**, então uma instalação limpa fica sem categorias, sem políticas de SLA, sem feriados e sem nenhum usuário — e o cadastro pela tela só cria perfil Usuário. A aplicação sobe saudável e recusa o primeiro chamado com 500. O caminho de primeira execução está desenhado na seção 18 do README, em "Primeira execução: instalar em branco", e ainda não foi implementado.
+Fora de Development a instalação é um comando explícito, no mesmo executável da API:
+
+```bash
+docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e OpsDesk__Bootstrap__Password='uma-senha-provisoria'   api --setup            # = --migrate + --seed + --bootstrap-admin
+```
+
+`--seed` nunca cria usuários de exemplo. O gestor do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum gestor.
+
+Ainda **não** implementado, e vale ter em mente antes de afirmar que o sistema "está pronto": quem esquecer de rodar o comando sobe uma aplicação que responde `/health` e recusa o primeiro chamado com 500 — não há readiness que reprove schema desatualizado ou ausência de política de SLA. Feriados também não se renovam sozinhos fora de Development. Ver README, seção 18, em "Primeira execução: instalar em branco".
 
 ### Backend
 
@@ -141,6 +149,7 @@ Estas regras não são preferências de estilo. Quebrá-las é bug, e em alguns 
 7. **Schema muda por migration do EF Core.** Sem `EnsureCreated`, sem SQL manual no banco.
 8. **Senha usa `PasswordHasher<T>`.** Nunca hash artesanal, nunca MD5 ou SHA sem KDF.
 9. **Anexo nasce pendente, e é o vínculo que define a visibilidade.** Enviar cria um anexo sem chamado, visível só para quem enviou; a abertura ou o comentário é que o vincula e copia o `IsInternal`. Nunca vincule anexo enviado por outra pessoa, e nunca torne um anexo visível antes de saber a que comentário ele pertence.
+10. **Senha provisória só serve para trocar a si mesma.** Enquanto `User.MustChangePassword` for verdadeiro, nenhuma rota fora de `/api/auth` responde — a trava é o middleware `UsePasswordChangeRequired`, e não um atributo por rota, para que endpoint novo nasça coberto. Não a substitua por verificação rota a rota nem a contorne em serviço: a credencial do bootstrap chega por variável de ambiente, e é essa trava que a faz valer uma vez em vez de para sempre.
 
 ## Convenções
 
@@ -158,7 +167,8 @@ Antes de considerar uma alteração concluída, verifique se ela tem cobertura q
 * transições da máquina de estados;
 * regras de autorização, inclusive os casos negativos (o que cada perfil **não** pode ver);
 * cálculo de SLA, com pausa, retomada, virada de expediente, fim de semana e feriado;
-* ausência de comentário interno nas respostas destinadas ao solicitante.
+* ausência de comentário interno nas respostas destinadas ao solicitante;
+* a trava de senha provisória, inclusive o caso negativo: a rota nova recusa enquanto `MustChangePassword` estiver de pé?
 
 Testes de integração usam PostgreSQL real via Testcontainers. Não use o provider InMemory do EF Core: ele não reproduz sequences, `timestamptz` nem o comportamento transacional que o projeto depende.
 

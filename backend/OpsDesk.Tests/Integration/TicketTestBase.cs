@@ -1,14 +1,12 @@
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using OpsDesk.Api.Endpoints;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Tickets;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
-using OpsDesk.Infrastructure.Persistence.Seed;
 
 namespace OpsDesk.Tests.Integration;
 
@@ -41,8 +39,7 @@ public abstract class TicketTestBase(PostgresFixture fixture)
 
         // Categorias e políticas de SLA são dados de referência: sem eles não há como
         // abrir chamado. O seed é o mesmo que a API roda em desenvolvimento.
-        var seeder = new DatabaseSeeder(
-            db, new PasswordHasher<User>(), NullLogger<DatabaseSeeder>.Instance);
+        var seeder = TestData.NewSeeder(db);
         await seeder.SeedAsync(includeDevelopmentUsers: false);
 
         var categoryId = await db.Categories

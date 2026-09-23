@@ -51,13 +51,33 @@ O que ele **não** faz é recarga automática: o bundle é estático e cada alte
 
 As duas formas de servir o SPA usam portas diferentes de propósito. Compartilhar a porta parecia mais simples e é uma armadilha: com um `npm run dev` rodando, o Docker Desktop no Windows **não falha** ao publicar uma porta já ocupada — os dois ficam escutando, o dev server atende, e o contêiner parece no ar servindo conteúdo que não é o dele.
 
-A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. **Subir fora de desenvolvimento ainda não é um caminho pronto:** sem migration, sem dados de referência e sem um primeiro gestor, a aplicação sobe saudável e recusa o primeiro chamado. O que falta está detalhado na seção 18, em "Primeira execução: instalar em branco". Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
+A API aplica as migrations e popula o seed na subida, apenas em ambiente de desenvolvimento. Os usuários de exemplo criados pelo seed e a lista completa de comandos — testes, migrations, typecheck — estão em [CLAUDE.md](CLAUDE.md), seção "Comandos".
+
+**Fora de desenvolvimento, instalar é uma etapa explícita.** O mesmo executável da API aceita comandos que fazem a tarefa e terminam, sem abrir porta nenhuma:
+
+```bash
+# Schema, dados de referência e primeiro gestor, nesta ordem.
+docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e OpsDesk__Bootstrap__Password='uma-senha-provisoria'   api --setup
+```
+
+| Comando | O que faz |
+| --- | --- |
+| `--migrate` | aplica as migrations pendentes |
+| `--seed` | insere categorias, políticas de SLA e feriados (sem usuários de exemplo) |
+| `--bootstrap-admin` | cria o primeiro gestor a partir de `OpsDesk:Bootstrap` |
+| `--setup` | os três acima, na ordem |
+
+Migration continua fora da subida da aplicação de propósito: ninguém deve descobrir uma alteração de schema lendo log de inicialização.
+
+O gestor criado pelo bootstrap nasce com **troca de senha obrigatória** — a senha chegou por variável de ambiente, e variável de ambiente aparece em log de deploy, em `docker inspect` e no histórico do shell. Até a troca acontecer, a API recusa com 403 tudo fora de `/api/auth` e a interface prende a navegação na tela de troca. O bootstrap só age quando **não existe nenhum gestor**: a variável esquecida no orquestrador não ressuscita conta administrativa a cada deploy. Se o e-mail já pertencer a alguém, essa conta é promovida e mantém a senha que já tinha.
+
+O que ainda falta para uma instalação em branco ser confortável — readiness que reprove schema desatualizado, validação de configuração na subida, renovação de feriados — está na seção 18, em "Primeira execução: instalar em branco".
 
 ### Estado do código
 
 **O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
 
-Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. Perfis de técnico e gestor são definidos pelo seed ou direto no banco.
+Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; promover **os demais** a técnico ou gestor ainda é `UPDATE` no banco, até a tela de administração de usuários da 1.1.
 
 ---
 
@@ -831,6 +851,14 @@ Indicadores iniciais:
 
 ---
 
+### 13.8 Troca de senha
+
+Formulário com senha atual, nova senha e confirmação. Trocar a senha encerra as demais sessões do usuário e reabre a atual, para a pessoa não ser devolvida ao login logo depois de ter provado quem é.
+
+Atende dois casos com a mesma tela. Na troca voluntária é uma tela como as outras. Na **troca obrigatória** — o primeiro acesso do gestor criado pelo bootstrap — ela fica fora do layout do aplicativo, sem menu, e a navegação não sai dali: não há para onde ir, porque a API recusa todo o resto. A única outra saída é sair da conta.
+
+---
+
 ## 14. Entidades principais
 
 ### User
@@ -845,8 +873,11 @@ Campos:
 * PasswordHash;
 * Role;
 * IsActive;
+* MustChangePassword;
 * CreatedAt;
 * UpdatedAt.
+
+`MustChangePassword` marca senha provisória. Hoje nasce de um lugar só: o bootstrap do primeiro gestor, cuja senha chega por variável de ambiente. Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém a credencial de instalação valendo uma vez, e não para sempre.
 
 `PasswordHash` é anulável. A partir da versão 2.0, solicitantes identificados apenas por e-mail são criados automaticamente sem senha e não conseguem autenticar até definirem uma. Ver [docs/integracao-email.md](docs/integracao-email.md).
 
@@ -1039,6 +1070,14 @@ Pode acessar:
 
 ---
 
+### Senha provisória
+
+Corta transversalmente os três perfis. Enquanto `User.MustChangePassword` for verdadeiro, a pessoa só pode acessar `/api/auth` — entrar, ver quem é, trocar a senha e sair. Qualquer outra rota responde 403, com um `type` próprio no `ProblemDetails` para a interface distinguir isto de falta de permissão: uma tem saída, a outra é porta fechada.
+
+A regra é aplicada por middleware, e não por atributo em cada rota. O motivo é o mesmo da invariante 1 do [CLAUDE.md](CLAUDE.md): filtro que se declara rota a rota é filtro que a próxima rota esquece.
+
+---
+
 ## 16. Requisitos não funcionais
 
 ### Segurança
@@ -1136,34 +1175,20 @@ Cada item traz o que é, por que está na lista, e o que ainda precisa ser decid
 * reclassificação de prioridade e categoria, com recálculo de SLA;
 * SLA em horas úteis, com pausa e retomada;
 * categorias, prioridades e dashboard;
-* **anexos** em chamados e comentários, antecipados da 1.1.
+* **anexos** em chamados e comentários, antecipados da 1.1;
+* **instalação em branco**: comandos de migration, seed e bootstrap do primeiro gestor, com troca de senha obrigatória no primeiro acesso.
 
 ### Primeira execução: instalar em branco
 
-Hoje o projeto sobe pronto para uso **em desenvolvimento**, e apenas nele. A API aplica migration e roda o seed na subida só quando o ambiente é `Development`; em qualquer outro, `ApplyDatabaseStartupTasksAsync` retorna cedo e nada acontece.
+Até a 1.0 o projeto subia pronto para uso **em desenvolvimento**, e apenas nele. A API aplicava migration e seed na subida só quando o ambiente era `Development`; em qualquer outro, `ApplyDatabaseStartupTasksAsync` retornava cedo e nada acontecia. Quem clonasse e subisse em produção encontrava banco sem schema, zero categorias e políticas de SLA — abrir chamado respondia **500** —, zero feriados e zero usuários, sem caminho pela interface para o primeiro gestor existir. O ambiente de desenvolvimento escondia tudo isso, o que é justamente o que tornava o problema traiçoeiro: funcionava na máquina de quem escreveu.
 
-Quem clonar o repositório e subir em produção encontra, em ordem, isto:
+**Entregue: instalação como etapa explícita de deploy.** O executável da API aceita `--migrate`, `--seed`, `--bootstrap-admin` e `--setup`, faz a tarefa e termina, sem abrir porta. Os comandos e o exemplo de uso estão na seção 1, em "Como executar". A decisão entre comando explícito e execução automática na subida ficou com o comando, pelo mesmo argumento que já valia para a migration: ninguém deve descobrir alteração de banco pelo log de inicialização. O preço é conhecido e aceito — quem esquecer de rodar sobe um sistema que parece saudável e recusa o primeiro chamado, e é o que o item de readiness abaixo passa a acusar.
 
-* banco sem schema, até alguém rodar a migration à mão;
-* zero categorias e zero políticas de SLA — abrir chamado responde **500**, porque chamado sem prazo não entra em indicador nenhum e o serviço falha alto de propósito;
-* zero feriados — o cálculo de horas úteis passa a tratar feriado como dia útil, sem erro nenhum para indicar o problema;
-* zero usuários, e o cadastro pela tela sempre cria perfil **Usuário**: não há caminho pela interface para existir o primeiro gestor.
+**Entregue: o primeiro gestor, por variável de ambiente.** `OpsDesk__Bootstrap__Email` e `OpsDesk__Bootstrap__Password`, aplicadas uma única vez quando não existir nenhum gestor, com **troca de senha obrigatória no primeiro acesso** (`User.MustChangePassword`). As outras duas opções foram descartadas: o comando de linha dedicado exigiria um passo manual e acesso ao contêiner sem ganho real de segurança sobre isto, e "o primeiro usuário cadastrado vira gestor" é cómodo e perigoso — numa instância exposta antes de ser configurada, quem chegasse primeiro viraria administrador do sistema.
 
-O ambiente de desenvolvimento esconde tudo isso, o que é justamente o que torna o problema traiçoeiro: funciona na máquina de quem escreveu.
+O custo do caminho escolhido é a senha existir em configuração, que é lugar que vaza: log de deploy, `docker inspect`, histórico do shell. A troca obrigatória é o que paga esse custo, e por isso ela não é cosmética — enquanto a marca estiver de pé, a API recusa com 403 tudo fora de `/api/auth`, por middleware e não por atributo de rota, para que endpoint novo nasça coberto.
 
-**Seed de dados de referência em qualquer ambiente.** Categorias, políticas de SLA e feriados não são dados de exemplo, são pré-requisito de funcionamento. O `DatabaseSeeder` já é idempotente e já separa "dados de referência" de "usuários de exemplo" — falta um caminho para executá-lo fora de `Development`.
-
-*A decidir:* etapa explícita de deploy (um comando, como a migration) ou execução automática na subida em qualquer ambiente? A migration virou etapa explícita para que ninguém descubra alteração de banco pelo log de inicialização; o mesmo argumento vale aqui, e a recomendação é comando explícito — com a ressalva de que quem esquecer de rodar sobe um sistema que parece saudável e recusa o primeiro chamado.
-
-**O primeiro gestor.** É o item que trava tudo: sem um gestor não há quem atribua, reclassifique ou administre, e pela interface não existe como criar um.
-
-*A decidir entre três caminhos, e cada um tem um custo:*
-
-* **variáveis de ambiente de bootstrap** (`OpsDesk__Bootstrap__Email` e `__Password`), aplicadas uma única vez quando não existir nenhum gestor. Simples e automatizável; põe senha em variável de ambiente, então pede troca obrigatória no primeiro acesso;
-* **comando de linha** (`dotnet run --bootstrap-admin`, ou um `opsdesk-cli`), executado por quem tem acesso ao host. Nada de senha em configuração, mas exige um passo manual e acesso ao contêiner;
-* **o primeiro usuário cadastrado vira gestor.** É o mais cómodo e o mais perigoso: numa instância exposta antes de ser configurada, quem chegar primeiro vira administrador do sistema. Só aceitável com uma janela fechada por token de instalação.
-
-A recomendação é o primeiro, com troca de senha obrigatória no primeiro acesso — e o terceiro descartado.
+**Falta: promover os demais.** O bootstrap resolve o primeiro gestor, e só ele. Colocar um segundo técnico na equipe continua sendo `UPDATE` no banco até a tela de administração de usuários, na 1.1.
 
 **Feriados não se renovam sozinhos fora de desenvolvimento.** O seed cobre o ano corrente e os dois seguintes, e essa janela só "anda" porque roda a cada subida. Em produção, com seed executado uma vez, em algum ano o cálculo de horas úteis passa a contar feriado como expediente — em silêncio, e o sintoma aparece como prazo estranho, não como erro.
 

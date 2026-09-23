@@ -1,12 +1,29 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
 using OpsDesk.Infrastructure.Persistence;
+using OpsDesk.Infrastructure.Persistence.Seed;
 
 namespace OpsDesk.Tests.Integration;
 
 /// <summary>Montagem de cenário para os testes de integração.</summary>
 internal static class TestData
 {
+    /// <summary>
+    /// O seeder de verdade, com as dependências que o teste não quer montar.
+    ///
+    /// <paramref name="bootstrap"/> ausente é o caso comum: sem e-mail nem senha, o
+    /// bootstrap do primeiro gestor não faz nada, que é o que a maioria dos testes espera.
+    /// </summary>
+    internal static DatabaseSeeder NewSeeder(
+        OpsDeskDbContext db, BootstrapAdminOptions? bootstrap = null) =>
+        new(db,
+            new PasswordHasher<User>(),
+            Options.Create(bootstrap ?? new BootstrapAdminOptions()),
+            NullLogger<DatabaseSeeder>.Instance);
+
     internal static User NewUser(UserRole role, string? email = null) => new()
     {
         Name = $"Usuário {role}",

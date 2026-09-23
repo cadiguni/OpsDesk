@@ -53,3 +53,22 @@ public class LoginRequestValidator : AbstractValidator<LoginRequest>
         RuleFor(r => r.Password).NotEmpty().WithMessage("Informe sua senha.");
     }
 }
+
+public class ChangePasswordRequestValidator : AbstractValidator<ChangePasswordRequest>
+{
+    public ChangePasswordRequestValidator()
+    {
+        RuleFor(r => r.CurrentPassword)
+            .NotEmpty().WithMessage("Informe sua senha atual.");
+
+        RuleFor(r => r.NewPassword)
+            .NotEmpty().WithMessage("Informe a nova senha.")
+            .MinimumLength(PasswordPolicy.MinimumLength)
+                .WithMessage($"A senha deve ter no mínimo {PasswordPolicy.MinimumLength} caracteres.")
+            .MaximumLength(PasswordPolicy.MaximumLength)
+                .WithMessage($"A senha deve ter no máximo {PasswordPolicy.MaximumLength} caracteres.");
+
+        RuleFor(r => r.NewPasswordConfirmation)
+            .Equal(r => r.NewPassword).WithMessage("As senhas não conferem.");
+    }
+}

@@ -45,6 +45,12 @@ public static class AuthEndpoints
             .AllowAnonymous()
             .WithSummary("Encerra a sessão e revoga o refresh token.");
 
+        group.MapPost("/password", ChangePassword)
+            .ValidatingBody<ChangePasswordRequest>()
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
+            .WithSummary("Troca a senha do usuário da sessão e reabre a sessão.");
+
         group.MapGet("/me", Me)
             .RequireAuthorization()
             .WithSummary("Usuário da sessão atual.");
@@ -100,6 +106,23 @@ public static class AuthEndpoints
         return TypedResults.NoContent();
     }
 
+    private static async Task<IResult> ChangePassword(
+        ChangePasswordRequest request,
+        AuthService auth,
+        ICurrentUser currentUser,
+        HttpResponse response,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } userId)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var result = await auth.ChangePasswordAsync(userId, request, cancellationToken);
+
+        return Respond(result, response);
+    }
+
     private static async Task<IResult> Me(
         AuthService auth,
         ICurrentUser currentUser,
@@ -139,6 +162,12 @@ public static class AuthEndpoints
                     detail: invalid.Message,
                     statusCode: StatusCodes.Status401Unauthorized,
                     title: "Credenciais inválidas");
+
+            case AuthResult.PasswordUnchanged unchanged:
+                return TypedResults.Problem(
+                    detail: unchanged.Message,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Senha inalterada");
 
             case AuthResult.InvalidRefreshToken expired:
                 // A sessão acabou: limpa o cookie para o cliente não insistir em um token

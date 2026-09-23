@@ -22,6 +22,16 @@ public class User : IHasUpdatedAt
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Obriga a trocar a senha antes de usar o sistema.
+    ///
+    /// Nasce do bootstrap do primeiro gestor, cuja senha chega por variável de ambiente —
+    /// ou seja, por um canal que registra a credencial em configuração, em log de deploy e
+    /// em dump de ambiente. Enquanto isto for verdadeiro, a API recusa toda rota que não
+    /// seja a de autenticação, e a interface não deixa navegar para outro lugar.
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

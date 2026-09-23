@@ -62,6 +62,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const changePassword = useCallback(async (input: authApi.ChangePasswordInput) => {
+    setUser(await authApi.changePassword(input))
+  }, [])
+
   const signOut = useCallback(async () => {
     await authApi.logout()
     clearSession()
@@ -74,10 +78,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      changePassword,
+      mustChangePassword: user?.mustChangePassword ?? false,
       role: user?.role ?? null,
       isStaff: user ? isStaff(user.role) : false,
     }),
-    [user, isRestoring, signIn, signUp, signOut],
+    [user, isRestoring, signIn, signUp, signOut, changePassword],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

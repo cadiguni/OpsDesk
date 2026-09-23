@@ -7,8 +7,26 @@ public record RegisterRequest(string Name, string Email, string Password, string
 
 public record LoginRequest(string Email, string Password);
 
-/// <summary>Usuário autenticado, no formato que a interface consome.</summary>
-public record SessionUser(Guid Id, string Name, string Email, UserRole Role);
+/// <summary>
+/// Troca de senha pelo próprio usuário.
+///
+/// A senha atual é exigida mesmo havendo sessão válida: o token de acesso pode estar numa
+/// máquina deixada aberta, e trocar a senha é justamente a operação que fecha as outras
+/// sessões. Sem a senha atual, quem senta na cadeira de outra pessoa assume a conta.
+/// </summary>
+public record ChangePasswordRequest(
+    string CurrentPassword, string NewPassword, string NewPasswordConfirmation);
+
+/// <summary>
+/// Usuário autenticado, no formato que a interface consome.
+/// </summary>
+/// <param name="MustChangePassword">
+/// A senha atual foi entregue por um canal que não a mantém secreta — hoje, a variável de
+/// ambiente do bootstrap do primeiro gestor. Enquanto for verdadeiro, a API recusa tudo
+/// fora de <c>/api/auth</c> e a interface prende a navegação na tela de troca.
+/// </param>
+public record SessionUser(
+    Guid Id, string Name, string Email, UserRole Role, bool MustChangePassword);
 
 /// <summary>
 /// Resultado de uma operação de autenticação.
@@ -44,6 +62,17 @@ public abstract record AuthResult
     public sealed record EmailAlreadyUsed : AuthResult
     {
         public string Message => "Já existe uma conta com este e-mail.";
+    }
+
+    /// <summary>
+    /// A nova senha não pode ser igual à atual.
+    ///
+    /// Importa sobretudo na troca obrigatória: repetir a senha do bootstrap deixaria em
+    /// pé exatamente a credencial que a troca existe para aposentar.
+    /// </summary>
+    public sealed record PasswordUnchanged : AuthResult
+    {
+        public string Message => "A nova senha precisa ser diferente da atual.";
     }
 
     /// <summary>Refresh token ausente, expirado, revogado ou desconhecido.</summary>

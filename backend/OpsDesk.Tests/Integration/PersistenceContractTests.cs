@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
@@ -254,8 +253,7 @@ public class PersistenceContractTests(PostgresFixture fixture)
         await fixture.ResetAsync();
         await using var db = fixture.CreateContext();
 
-        var seeder = new DatabaseSeeder(
-            db, new PasswordHasher<User>(), NullLogger<DatabaseSeeder>.Instance);
+        var seeder = TestData.NewSeeder(db);
 
         await seeder.SeedAsync(includeDevelopmentUsers: true);
         var afterFirst = (
@@ -283,8 +281,7 @@ public class PersistenceContractTests(PostgresFixture fixture)
         await fixture.ResetAsync();
         await using var db = fixture.CreateContext();
 
-        var seeder = new DatabaseSeeder(
-            db, new PasswordHasher<User>(), NullLogger<DatabaseSeeder>.Instance);
+        var seeder = TestData.NewSeeder(db);
 
         await seeder.SeedAsync(includeDevelopmentUsers: false);
 
@@ -301,7 +298,7 @@ public class PersistenceContractTests(PostgresFixture fixture)
         await using var db = fixture.CreateContext();
 
         var hasher = new PasswordHasher<User>();
-        var seeder = new DatabaseSeeder(db, hasher, NullLogger<DatabaseSeeder>.Instance);
+        var seeder = TestData.NewSeeder(db);
         await seeder.SeedAsync(includeDevelopmentUsers: true);
 
         var user = await db.Users.SingleAsync(u => u.Role == UserRole.Manager);
@@ -318,8 +315,7 @@ public class PersistenceContractTests(PostgresFixture fixture)
         await fixture.ResetAsync();
         await using var db = fixture.CreateContext();
 
-        var seeder = new DatabaseSeeder(
-            db, new PasswordHasher<User>(), NullLogger<DatabaseSeeder>.Instance);
+        var seeder = TestData.NewSeeder(db);
         await seeder.SeedAsync(includeDevelopmentUsers: false);
 
         var holidays = await db.Holidays.Select(h => h.Date).ToListAsync();

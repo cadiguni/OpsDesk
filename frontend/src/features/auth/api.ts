@@ -6,6 +6,13 @@ export type SessionUser = {
   name: string
   email: string
   role: UserRole
+
+  /**
+   * A senha atual é provisória — hoje, a do bootstrap do primeiro gestor, que chegou por
+   * variável de ambiente. Enquanto for verdadeiro a API recusa tudo fora de `/api/auth`,
+   * então a interface não tem o que mostrar além da tela de troca.
+   */
+  mustChangePassword: boolean
 }
 
 export type AuthResponse = {
@@ -26,6 +33,12 @@ export type RegisterInput = {
   passwordConfirmation: string
 }
 
+export type ChangePasswordInput = {
+  currentPassword: string
+  newPassword: string
+  newPasswordConfirmation: string
+}
+
 export async function login(input: LoginInput): Promise<SessionUser> {
   const { data } = await api.post<AuthResponse>('/api/auth/login', input)
 
@@ -36,6 +49,21 @@ export async function login(input: LoginInput): Promise<SessionUser> {
 
 export async function register(input: RegisterInput): Promise<SessionUser> {
   const { data } = await api.post<AuthResponse>('/api/auth/register', input)
+
+  setAccessToken(data.accessToken)
+
+  return data.user
+}
+
+/**
+ * Troca a senha e assume a sessão que o servidor devolve.
+ *
+ * A troca revoga os refresh tokens anteriores, inclusive o desta aba. Guardar o novo
+ * token de acesso aqui é o que impede a pessoa de ser jogada para o login logo depois de
+ * ter acabado de provar quem é.
+ */
+export async function changePassword(input: ChangePasswordInput): Promise<SessionUser> {
+  const { data } = await api.post<AuthResponse>('/api/auth/password', input)
 
   setAccessToken(data.accessToken)
 

@@ -229,6 +229,24 @@ Enviar um arquivo cria um anexo **sem chamado**, visível só para quem enviou. 
 
 A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibilidade fica sem junção com a tabela de comentários, e o vínculo é o único ponto do sistema que escreve esse campo.
 
+### 4.17 Instalar é um comando do próprio executável da API
+
+Fora de `Development`, schema, dados de referência e primeiro gestor sobem por `--migrate`, `--seed`, `--bootstrap-admin` e `--setup`, passados ao mesmo binário que serve a API. O processo faz a tarefa e termina, sem abrir porta e sem iniciar os serviços em segundo plano.
+
+**Por quê o mesmo executável, e não um utilitário separado:** a imagem do contêiner já é essa, e as migrations já estão nela. Um `opsdesk-cli` seria uma segunda imagem para publicar, versionar e manter em sincronia com a primeira, carregando exatamente o mesmo código.
+
+**Por quê comando, e não execução automática na subida:** é o argumento da decisão 4.14 estendido. Alteração de schema não deve ser descoberta lendo log de inicialização, e o mesmo vale para a criação de uma conta administrativa. O custo é quem esquecer de rodar subir um sistema que parece saudável e recusa o primeiro chamado — e é por isso que o readiness do roadmap importa.
+
+### 4.18 A credencial de bootstrap vale uma vez
+
+O primeiro gestor nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePassword`. Enquanto a marca estiver de pé, um middleware recusa com 403 toda requisição autenticada fora de `/api/auth`.
+
+**Por quê a marca existe:** a senha chegou por variável de ambiente, que aparece em log de deploy, em `docker inspect` e no histórico do shell de quem instalou. Sem a troca obrigatória, uma credencial que passou por todos esses lugares seria a senha permanente do administrador do sistema.
+
+**Por quê middleware, e não filtro de endpoint:** filtro se declara rota a rota, e rota nova nasce sem ele — o mesmo raciocínio da decisão 4.1. Aqui o padrão é recusar, e abrir exceção exige dizer qual.
+
+**Por quê o bootstrap só age sem nenhum gestor:** a variável tende a ficar esquecida no orquestrador. Recriar a conta a cada deploy ressuscitaria, em silêncio, um administrador que alguém pode ter desativado de propósito.
+
 ---
 
 ## 5. Requisitos não funcionais na prática
@@ -238,7 +256,7 @@ A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibi
 | Paginação | paginação por cursor ou offset sempre no backend, com limite máximo de página |
 | Filtros | aplicados em SQL, nunca em memória |
 | Dashboard | consultas agregadas dedicadas, uma por indicador, sem carregar chamados. A ordenação por contagem acontece sobre o agregado, antes da projeção: ordenar pela propriedade de um record já projetado não traduz para SQL, e o EF Core recusa a query com uma mensagem que aponta para o `Join` da navegação, não para a ordenação |
-| Senhas | `PasswordHasher<T>`, nunca hash próprio |
+| Senhas | `PasswordHasher<T>`, nunca hash próprio. Troca de senha exige a senha atual e revoga as demais sessões |
 | Rate limiting | middleware nativo do ASP.NET Core, particionado por IP, com cota apertada para credencial (login e cadastro) e cota larga e separada para renovação de sessão |
 | Logs | estruturados, sem corpo de comentário nem dado pessoal desnecessário |
 
@@ -250,7 +268,7 @@ A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibi
 
 No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e aproxima o desenho de produção, onde Front Door ou Application Gateway ficam na frente dos dois. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
 
-O seed inicial cria as categorias da seção 7 do README, as políticas de SLA da seção 8 e um usuário de cada perfil, exclusivamente em ambiente de desenvolvimento.
+O seed inicial cria as categorias da seção 7 do README, as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
 
 ---
 

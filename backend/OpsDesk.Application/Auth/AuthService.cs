@@ -166,6 +166,51 @@ public class AuthService(
             ToSessionUser(user));
     }
 
+    /// <summary>
+    /// Troca a senha do próprio usuário e reabre a sessão.
+    ///
+    /// As demais sessões caem: trocar a senha é o que a pessoa faz quando desconfia que
+    /// alguém tem a credencial, e deixar refresh token antigo válido esvaziaria o gesto.
+    /// A sessão de quem trocou é reemitida na mesma resposta, para a interface não
+    /// devolver a pessoa ao login logo depois de ela ter provado quem é.
+    /// </summary>
+    public async Task<AuthResult> ChangePasswordAsync(
+        Guid userId, ChangePasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await Users().SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user is not { IsActive: true, PasswordHash: { } passwordHash })
+        {
+            return new AuthResult.InvalidCredentials();
+        }
+
+        if (passwordHasher.VerifyHashedPassword(user, passwordHash, request.CurrentPassword)
+            == PasswordVerificationResult.Failed)
+        {
+            return new AuthResult.InvalidCredentials();
+        }
+
+        // Comparada contra o hash, e não texto com texto: a senha atual chega em claro,
+        // mas o que temos guardado da antiga é o hash, e é ele que decide.
+        if (passwordHasher.VerifyHashedPassword(user, passwordHash, request.NewPassword)
+            != PasswordVerificationResult.Failed)
+        {
+            return new AuthResult.PasswordUnchanged();
+        }
+
+        user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+
+        // A senha agora é escolha da pessoa, e não mais um valor que passou por
+        // configuração. A trava sai.
+        user.MustChangePassword = false;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        await refreshTokens.RevokeAllForUserAsync(user.Id, cancellationToken);
+
+        return await IssueSessionAsync(user, cancellationToken);
+    }
+
     public Task LogoutAsync(string? presentedToken, CancellationToken cancellationToken = default) =>
         string.IsNullOrWhiteSpace(presentedToken)
             ? Task.CompletedTask
@@ -176,7 +221,7 @@ public class AuthService(
         Guid userId, CancellationToken cancellationToken = default) =>
         await Users()
             .Where(u => u.Id == userId && u.IsActive)
-            .Select(u => new SessionUser(u.Id, u.Name, u.Email, u.Role))
+            .Select(u => new SessionUser(u.Id, u.Name, u.Email, u.Role, u.MustChangePassword))
             .SingleOrDefaultAsync(cancellationToken);
 
     private async Task<AuthResult> IssueSessionAsync(User user, CancellationToken cancellationToken)
@@ -191,7 +236,7 @@ public class AuthService(
     private IQueryable<User> Users() => db.Users;
 
     private static SessionUser ToSessionUser(User user) =>
-        new(user.Id, user.Name, user.Email, user.Role);
+        new(user.Id, user.Name, user.Email, user.Role, user.MustChangePassword);
 
     /// <summary>
     /// E-mail é identificador de login: comparamos sempre em minúsculas e sem espaço nas

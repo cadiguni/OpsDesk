@@ -19,4 +19,13 @@ public static class OpsDeskClaims
     public const string Email = "email";
 
     public const string Role = "role";
+
+    /// <summary>
+    /// Presente, e valendo <c>"true"</c>, enquanto a senha for provisória.
+    ///
+    /// Vive no token para que a trava não custe uma consulta ao banco por requisição. O
+    /// atraso que isso introduz é limitado pela vida do token de acesso — quinze minutos,
+    /// e na prática nem isso, porque a troca reemite a sessão na mesma resposta.
+    /// </summary>
+    public const string MustChangePassword = "must_change_password";
 }

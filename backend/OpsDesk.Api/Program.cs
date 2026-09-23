@@ -123,6 +123,14 @@ try
 
     var app = builder.Build();
 
+    // Instalação do banco pela linha de comando, antes de qualquer coisa: o processo faz a
+    // tarefa e termina, sem abrir porta nenhuma. É como o schema e os dados de referência
+    // sobem fora de Development.
+    if (DatabaseCommands.Requested(args))
+    {
+        return await DatabaseCommands.RunAsync(app, args);
+    }
+
     await app.ApplyDatabaseStartupTasksAsync();
 
     app.UseSerilogRequestLogging();
@@ -149,6 +157,10 @@ try
     app.UseAuthentication();
     app.UseRateLimiter();
     app.UseAuthorization();
+
+    // Depois da autorização: assim quem chega sem sessão recebe o 401 de sempre, e o 403
+    // de senha provisória fica reservado a quem de fato está autenticado.
+    app.UsePasswordChangeRequired();
 
     app.MapHealthChecks("/health").AllowAnonymous();
     app.MapAuthEndpoints();

@@ -56,6 +56,7 @@ export type RefreshedSession = {
     name: string
     email: string
     role: UserRole
+    mustChangePassword: boolean
   }
 }
 
