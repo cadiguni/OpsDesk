@@ -1308,7 +1308,27 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 **E-mail de novo comentário público e de mudança de status.** Começar por aí.
 
-*A decidir:* serviço de envio (Azure Communication Services, SendGrid, SMTP corporativo); fila ou envio no mesmo request — envio síncrono amarra a resposta da API à disponibilidade do provedor, e a fila pede infraestrutura; e como evitar tempestade de e-mail em chamado muito ativo (agrupar por janela de tempo).
+**Decidido: envio pelo Microsoft Graph, configurado no próprio portal.** A empresa usa Microsoft 365. O envio é pela API `sendMail` do Graph, com um aplicativo registrado no Entra ID, e não por SMTP: a Microsoft anunciou a desativação da autenticação básica no SMTP do Exchange Online, e SMTP com OAuth dá o mesmo trabalho de registro sem vantagem. O remetente é a caixa de suporte — a mesma que a versão 2.0 vai monitorar —, para que "responder" no e-mail volte para ela.
+
+A configuração fica numa tela **Configurações → E-mail**, só para gestor, e não em variável de ambiente. O motivo decisivo é que o *client secret* do Entra ID expira, em no máximo 24 meses: em variável de ambiente, trocá-lo exige acesso ao servidor e deploy, e esquecer faz o sistema parar de mandar e-mail em silêncio. A tela tem:
+
+* envio ligado ou desligado;
+* endereço remetente e nome de exibição;
+* tenant, client id e client secret;
+* **enviar e-mail de teste**, que é o que de fato prova que a configuração funciona;
+* situação do último envio e validade do secret, com aviso antes de vencer.
+
+Regras da configuração:
+
+* **o secret é só de escrita.** A API nunca o devolve: a tela mostra "configurado em" e um botão de trocar. Devolvê-lo entregaria a credencial a qualquer sessão de gestor, inclusive a um token roubado;
+* **o secret é cifrado no banco** pelo Data Protection do ASP.NET, e **as chaves do Data Protection ficam em volume persistente.** Guardadas dentro do contêiner, um reinício gera chaves novas, o secret gravado deixa de ser decifrável e o e-mail para depois do deploy, sem erro que aponte a causa;
+* **mudança de configuração é auditada**: quem, o quê, quando — nunca o valor do secret.
+
+Pré-requisito do lado do Microsoft 365, que é do administrador do tenant: registrar o aplicativo com a permissão `Mail.Send` de aplicativo **e restringi-la à caixa de suporte** por política de acesso do Exchange. Sem a restrição, a permissão vale para toda caixa da empresa, e um secret vazado vira envio de e-mail em nome de qualquer pessoa.
+
+**Decidido: fila, e não envio no mesmo request.** A notificação vira uma linha numa tabela de saída na mesma transação da mudança que a gerou, e um serviço em segundo plano envia, com novas tentativas. Comentário nunca falha porque o Microsoft 365 está fora do ar, e nenhuma notificação se perde entre gravar a mudança e enviar. A fila é uma tabela no PostgreSQL que já existe, não infraestrutura nova.
+
+*A decidir:* quem recebe cada evento — o solicitante, com certeza; o responsável quando o solicitante responde; o gestor em algum caso? E como evitar tempestade de e-mail em chamado muito ativo (agrupar por janela de tempo).
 
 **Atenção, e não é detalhe:** a invariante 2 vale em canal novo. Nota interna e anexo interno **nunca** entram no corpo de um e-mail, e o destinatário de cada mensagem precisa ser derivado da mesma regra de visibilidade que a API usa — não de uma lista montada à mão no serviço de notificação. Todo endpoint novo que exponha comentário pede teste do caso negativo; o mesmo vale para todo canal novo.
 
