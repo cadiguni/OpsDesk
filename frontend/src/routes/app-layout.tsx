@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from 'react'
-import { Headphones, LayoutDashboard, LogOut, Plus, Ticket } from 'lucide-react'
+import { Headphones, LayoutDashboard, LogOut, Plus, Ticket, Users } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { ThemeSelect } from '@/components/theme-select'
@@ -23,6 +23,7 @@ export function AppLayout() {
         <nav aria-label="Navegação principal" className="flex gap-1 px-3 pb-3 md:flex-col md:pt-5">
           <SidebarLink to="/chamados" icon={<Ticket className="size-4" />}>Chamados</SidebarLink>
           {role === 'Manager' && <SidebarLink to="/dashboard" icon={<LayoutDashboard className="size-4" />}>Dashboard</SidebarLink>}
+          {role === 'Manager' && <SidebarLink to="/usuarios" icon={<Users className="size-4" />}>Usuários</SidebarLink>}
         </nav>
         {user && <div className="mt-auto hidden border-t p-4 md:block">
           <p className="truncate text-sm font-semibold">{user.name}</p>
@@ -31,7 +32,7 @@ export function AppLayout() {
       </aside>
       <header className="border-b bg-card/95">
         <div className="mx-auto flex min-h-16 max-w-screen-2xl flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
-          <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : 'Central de chamados'}</span>
+          <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : location.pathname === '/usuarios' ? 'Administração' : 'Central de chamados'}</span>
           <div className="flex flex-wrap items-center gap-3">
             <ThemeSelect />
             <Link to="/chamados/novo" className={cn(buttonVariants({ size: 'sm' }), 'hidden sm:inline-flex')}><Plus /> Novo chamado</Link>

@@ -13,6 +13,7 @@ import { CHANGE_PASSWORD_PATH, ProtectedRoute } from '@/routes/protected-route'
 import { Register } from '@/routes/register'
 import { TicketDetail } from '@/routes/ticket-detail'
 import { TicketList } from '@/routes/ticket-list'
+import { UserAdmin } from '@/routes/user-admin'
 
 export function App() {
   return (
@@ -38,6 +39,7 @@ export function App() {
                 <Route path="/chamados/novo" element={<NewTicket />} />
                 <Route path="/chamados/:id" element={<TicketDetail />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/usuarios" element={<UserAdmin />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

@@ -187,6 +187,7 @@ try
     app.MapTicketEndpoints();
     app.MapAttachmentEndpoints();
     app.MapDashboardEndpoints();
+    app.MapUserAdministrationEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

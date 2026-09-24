@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<TicketWorkflowService>();
         services.AddScoped<DashboardService>();
         services.AddScoped<UserDirectoryService>();
+        services.AddScoped<UserAdministrationService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();

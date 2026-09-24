@@ -14,9 +14,9 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 **O MVP da versão 1 está completo e rodando.** Os nove critérios de sucesso da seção 19 do README estão atendidos.
 
-**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico) e dashboard por consultas agregadas.
+**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico), dashboard por consultas agregadas e administração de usuários pelo gestor.
 
-**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, e dashboard com gráficos.
+**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, dashboard com gráficos, e administração de usuários.
 
 **Endpoints:**
 
@@ -31,11 +31,13 @@ POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
 POST   /api/tickets/{id}/classification   (prioridade e categoria; prioridade recalcula o SLA)
 GET    /api/categories               GET  /api/staff        GET /api/dashboard
 GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
+GET    /api/admin/users           (gestor; ativos e inativos, filtros, paginação)
+POST   /api/admin/users/{id}/role   POST /api/admin/users/{id}/activation
 POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-**Fora do escopo da versão 1, conforme o roadmap:** notificações, telas de administração de categorias e de usuários (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; promover os demais a técnico ou gestor continua sendo `UPDATE` no banco — não há tela para isso.
+**Fora do escopo da versão 1, conforme o roadmap:** notificações, tela de administração de categorias (versão 1.1), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e administração de usuários foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
 
 ## Documentação
 

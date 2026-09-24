@@ -80,7 +80,7 @@ O que ainda falta para uma instalação em branco ser confortável — renovaç�
 
 **O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
 
-Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e as telas de administração de categorias e de usuários ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; promover **os demais** a técnico ou gestor ainda é `UPDATE` no banco, até a tela de administração de usuários da 1.1.
+Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e a tela de administração de categorias ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; os demais são promovidos por ele na tela de administração de usuários, antecipada da 1.1.
 
 ---
 
@@ -214,7 +214,7 @@ Permissões:
 * acompanhar chamados vencidos;
 * visualizar indicadores por técnico, categoria e prioridade;
 * visualizar histórico completo;
-* gerenciar usuários futuramente;
+* gerenciar usuários: promover, rebaixar, desativar e reativar (seção 13.9);
 * configurar SLA futuramente.
 
 ---
@@ -727,7 +727,7 @@ Campos:
 
 Na versão 1, todo usuário cadastrado pelo portal será criado com perfil “Usuário”.
 
-Perfis técnicos e gestores poderão ser ajustados diretamente no banco, painel administrativo ou seed inicial.
+Perfis técnicos e gestores são atribuídos pelo gestor na administração de usuários (seção 13.9). O primeiro gestor vem do bootstrap.
 
 ---
 
@@ -859,6 +859,23 @@ Indicadores iniciais:
 Formulário com senha atual, nova senha e confirmação. Trocar a senha encerra as demais sessões do usuário e reabre a atual, para a pessoa não ser devolvida ao login logo depois de ter provado quem é.
 
 Atende dois casos com a mesma tela. Na troca voluntária é uma tela como as outras. Na **troca obrigatória** — o primeiro acesso do gestor criado pelo bootstrap — ela fica fora do layout do aplicativo, sem menu, e a navegação não sai dali: não há para onde ir, porque a API recusa todo o resto. A única outra saída é sair da conta.
+
+### 13.9 Administração de usuários
+
+Só gestor. Lista todos os usuários, ativos e desativados, com busca por nome ou e-mail e filtros por perfil e situação, paginada no servidor. Em cada linha: perfil, situação, marca de senha provisória e quantos chamados em aberto a pessoa tem sob responsabilidade.
+
+Ações:
+
+* **trocar o perfil** entre Usuário, Técnico e Gestor;
+* **desativar** e **reativar** a conta. Não existe exclusão: a pessoa é autora de chamados e comentários, e o histórico precisa continuar apontando para ela.
+
+Regras:
+
+* **o gestor não altera o próprio perfil nem desativa a própria conta.** Quem age é sempre um gestor ativo; se ele não pode se tirar do posto, o sistema nunca fica sem gestor — situação que não teria volta pela interface, e que o bootstrap também não resolve, porque só age quando não existe gestor nenhum;
+* **desativar, ou rebaixar a Usuário, quem é responsável por chamado em aberto é recusado** (409), com a lista dos chamados no corpo da resposta. O gestor reatribui antes. Aberto aqui é qualquer status não terminal — Resolvido conta, porque o solicitante ainda pode devolvê-lo. Chamado que a pessoa *abriu* não bloqueia nada: continua na fila e continua sendo atendido;
+* **rebaixar e desativar derrubam as sessões** da pessoa (todos os refresh tokens são revogados). O token de acesso já emitido vale até expirar, no máximo `Jwt:AccessTokenMinutes` (15 minutos por padrão); a administração de usuários confere o perfil de quem age no banco, para que essa janela não sirva para promover ninguém. **Promover não derruba nada**: a renovação seguinte já traz o perfil novo.
+
+As mudanças vão para o log estruturado, com quem fez e sobre quem. Não há trilha de auditoria de usuário no banco, como há para chamado — ver roadmap.
 
 ---
 
@@ -1069,7 +1086,8 @@ Pode acessar:
 * atribuição de responsáveis;
 * alteração de prioridade;
 * alteração de categoria;
-* visão geral da operação.
+* visão geral da operação;
+* administração de usuários: perfil e desativação, exceto a própria conta (seção 13.9).
 
 ---
 
@@ -1192,7 +1210,7 @@ Até a 1.0 o projeto subia pronto para uso **em desenvolvimento**, e apenas nele
 
 O custo do caminho escolhido é a senha existir em configuração, que é lugar que vaza: log de deploy, `docker inspect`, histórico do shell. A troca obrigatória é o que paga esse custo, e por isso ela não é cosmética — enquanto a marca estiver de pé, a API recusa com 403 tudo fora de `/api/auth`, por middleware e não por atributo de rota, para que endpoint novo nasça coberto.
 
-**Falta: promover os demais.** O bootstrap resolve o primeiro gestor, e só ele. Colocar um segundo técnico na equipe continua sendo `UPDATE` no banco até a tela de administração de usuários, na 1.1.
+**Entregue: promover os demais.** O bootstrap resolve o primeiro gestor; os seguintes, e os técnicos, saem da tela de administração de usuários (seção 13.9), antecipada da 1.1.
 
 **Feriados não se renovam sozinhos fora de desenvolvimento.** O seed cobre o ano corrente e os dois seguintes, e essa janela só "anda" porque roda a cada subida. Em produção, com seed executado uma vez, em algum ano o cálculo de horas úteis passa a contar feriado como expediente — em silêncio, e o sintoma aparece como prazo estranho, não como erro.
 
@@ -1216,15 +1234,17 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 ### Versão 1.1 — Melhorias operacionais
 
-**Tela de administração de usuários.** Hoje não há como promover alguém a técnico ou gestor sem `UPDATE` no banco, e nem como desativar quem saiu da empresa. Enquanto isso, toda mudança de equipe depende de acesso ao PostgreSQL.
+**Entregue antes do prazo: tela de administração de usuários.** Seção 13.9. As três decisões que estavam pendentes ficaram assim: só gestor administra; desativar ou rebaixar quem tem chamado em aberto exige reatribuir antes; e o gestor não mexe na própria conta.
 
-*A decidir:* quem pode promover (só gestor, presumivelmente); se desativar usuário com chamados abertos exige reatribuir antes; se o próprio gestor pode se rebaixar (provavelmente não — sistema sem gestor não tem volta pela interface).
+**Trilha de auditoria de usuário.** Troca de perfil e desativação hoje vão só para o log. Para chamado existe `TicketHistory`; para usuário, nada no banco responde "quem promoveu esta pessoa, e quando".
+
+*A decidir:* tabela própria preenchida por interceptor, no molde do `TicketHistory`, ou aceitar o log como fonte enquanto não houver pedido de auditoria formal.
 
 **Tela de administração de categorias.** Criar, renomear e desativar. A entidade e o `IsActive` já existem; falta a tela e os endpoints.
 
 *A decidir:* o que acontece com chamados de uma categoria desativada — a intenção é que continuem válidos e a categoria só saia dos seletores, que é o motivo de `IsActive` existir em vez de `DELETE`.
 
-**Testes de frontend.** Não existe nenhum: são 333 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+**Testes de frontend.** Não existe nenhum: são 373 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
 
 *A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
 
