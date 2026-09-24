@@ -37,7 +37,8 @@ public record TicketListItem(
     DateTimeOffset SlaResponseDueAt,
     DateTimeOffset SlaResolutionDueAt,
     DateTimeOffset? FirstRespondedAt,
-    DateTimeOffset? ResolvedAt);
+    DateTimeOffset? ResolvedAt,
+    DateTimeOffset UpdatedAt);
 
 /// <summary>Chamado completo, para a tela de detalhe (README, seção 13.5).</summary>
 public record TicketDetail(
@@ -86,6 +87,16 @@ public record TicketFilter(
 {
     /// <summary>Paginação, separada dos filtros para o limite máximo ficar no mesmo lugar.</summary>
     public PageRequest Page { get; init; } = new();
+
+    /// <summary>
+    /// Período de abertura: <see cref="CreatedFrom"/> inclusivo, <see cref="CreatedBefore"/>
+    /// exclusivo. São instantes, e não datas: "dia 10" começa à meia-noite de São Paulo, e
+    /// quem sabe disso é a interface (invariante 4). Intervalo semiaberto para que dois
+    /// períodos vizinhos não contem o mesmo chamado duas vezes.
+    /// </summary>
+    public DateTimeOffset? CreatedFrom { get; init; }
+
+    public DateTimeOffset? CreatedBefore { get; init; }
 }
 
 public enum TicketSort
@@ -97,7 +108,13 @@ public enum TicketSort
     ResolutionDueAtAscending,
 
     /// <summary>Crítica primeiro.</summary>
-    PriorityDescending
+    PriorityDescending,
+
+    /// <summary>
+    /// Mexido por último primeiro. Comentário conta como mexer: é a resposta do solicitante
+    /// que a equipe mais precisa ver subir na fila.
+    /// </summary>
+    UpdatedAtDescending
 }
 
 /// <summary>Categoria ativa, para os seletores da interface.</summary>

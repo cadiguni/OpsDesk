@@ -63,7 +63,7 @@ function ImageAttachment({ attachment }: { attachment: Attachment }) {
       </button>
 
       <figcaption className="text-muted-foreground flex items-center gap-1 px-2 py-1.5 text-xs">
-        {attachment.isInternal && <LockKeyhole className="text-sla-due-soon size-3 shrink-0" />}
+        {attachment.isInternal && <InternalMark className="size-3" />}
         <span className="truncate">{attachment.fileName}</span>
       </figcaption>
     </figure>
@@ -82,7 +82,7 @@ function FileAttachment({ attachment }: { attachment: Attachment }) {
       )}
     >
       {attachment.isInternal ? (
-        <LockKeyhole className="text-sla-due-soon size-4 shrink-0" />
+        <InternalMark className="size-4" />
       ) : (
         <FileText className="text-muted-foreground size-4 shrink-0" />
       )}
@@ -91,6 +91,20 @@ function FileAttachment({ attachment }: { attachment: Attachment }) {
       <span className="text-muted-foreground">{formatFileSize(attachment.sizeInBytes)}</span>
       <Download className="text-muted-foreground size-3.5 shrink-0" />
     </button>
+  )
+}
+
+/**
+ * Cadeado do anexo interno, com texto para leitor de tela. A cor e o ícone sozinhos não
+ * chegam a quem não enxerga a tela — e confundir anexo interno com público é justamente o
+ * erro que a marca existe para evitar.
+ */
+function InternalMark({ className }: { className: string }) {
+  return (
+    <>
+      <LockKeyhole aria-hidden className={cn('text-sla-due-soon shrink-0', className)} />
+      <span className="sr-only">Anexo interno: </span>
+    </>
   )
 }
 

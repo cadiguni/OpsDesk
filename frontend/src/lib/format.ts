@@ -26,6 +26,40 @@ export function formatDate(isoInstant: string): string {
   return dateFormatter.format(new Date(isoInstant))
 }
 
+const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: TIME_ZONE,
+  timeZoneName: 'longOffset',
+})
+
+/**
+ * Meia-noite de um dia de calendário em São Paulo, como instante ISO com deslocamento.
+ *
+ * É o que o filtro de período manda à API: "dia 10" começa à meia-noite daqui, não de
+ * Greenwich, e um chamado aberto às 23:30 do dia 9 não pode aparecer no dia 10. O
+ * deslocamento é consultado ao `Intl` em vez de fixado em -03:00 para que a conta continue
+ * certa se o horário de verão voltar.
+ *
+ * @param day data no formato `yyyy-mm-dd`, como a devolve um `<input type="date">`.
+ */
+export function startOfDayInSaoPaulo(day: string): string {
+  // Meio-dia UTC cai no mesmo dia de calendário em São Paulo, longe de qualquer virada.
+  const noon = new Date(`${day}T12:00:00Z`)
+  const name = offsetFormatter.formatToParts(noon).find((part) => part.type === 'timeZoneName')
+
+  // "GMT-03:00" vira "-03:00"; "GMT" sozinho é deslocamento zero.
+  const offset = name?.value.replace('GMT', '') || '+00:00'
+
+  return `${day}T00:00:00${offset}`
+}
+
+/** O dia seguinte a uma data `yyyy-mm-dd`, no mesmo formato. */
+export function nextDay(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + 1)
+
+  return date.toISOString().slice(0, 10)
+}
+
 /**
  * Distância até um prazo, em texto curto para a coluna de SLA da listagem.
  * Negativo quer dizer vencido.

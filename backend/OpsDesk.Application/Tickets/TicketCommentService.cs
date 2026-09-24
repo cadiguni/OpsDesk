@@ -120,6 +120,12 @@ public class TicketCommentService(
             ticket.FirstRespondedAt = now;
         }
 
+        // Comentário é atualização do chamado, para a ordenação "atualizados
+        // recentemente". Sem isto, a resposta do solicitante — o que a equipe mais precisa
+        // ver — não mexeria o chamado na fila, porque só o comentário é gravado. O valor
+        // exato vem do TimestampInterceptor; aqui basta marcar o chamado como alterado.
+        ticket.UpdatedAt = now;
+
         await db.SaveChangesAsync(cancellationToken);
 
         var item = await db.TicketComments

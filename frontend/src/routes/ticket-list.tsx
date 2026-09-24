@@ -14,10 +14,11 @@ import {
   type TicketStatus,
 } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
-import { useCategories, useTickets } from '@/features/tickets/queries'
+import { useCategories, useStaff, useTickets } from '@/features/tickets/queries'
 import { TicketCard, TicketCardSkeleton } from '@/features/tickets/ticket-card'
 import type { TicketSort } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
+import { formatDate, nextDay, startOfDayInSaoPaulo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const sortLabels: Record<TicketSort, string> = {
@@ -25,6 +26,7 @@ const sortLabels: Record<TicketSort, string> = {
   CreatedAtAscending: 'Mais antigos',
   ResolutionDueAtAscending: 'Prazo mais próximo',
   PriorityDescending: 'Prioridade',
+  UpdatedAtDescending: 'Atualizados recentemente',
 }
 
 /**
@@ -41,6 +43,7 @@ export function TicketList() {
   const { isStaff, user } = useSession()
   const [params, setParams] = useSearchParams()
   const categories = useCategories()
+  const staff = useStaff(isStaff)
 
   const status = params.getAll('status') as TicketStatus[]
   const priority = params.getAll('priority') as TicketPriority[]
@@ -53,6 +56,16 @@ export function TicketList() {
   // escolha de quem olha. Assim o mesmo endereço serve a qualquer pessoa da equipe.
   const mine = params.get('mine') === 'true'
   const overdue = params.get('overdue') === 'true'
+
+  // Responsável escolhido na lista da equipe. "Meus chamados" continua como atalho, e os
+  // dois se excluem: escolher um limpa o outro.
+  const assignedTechnicianId = params.get('assignedTechnicianId') ?? undefined
+
+  // Período em datas de calendário (`yyyy-mm-dd`), inclusivas nas duas pontas, que é como
+  // a pessoa pensa "de 1 a 15". A conversão para instante — meia-noite de São Paulo, e o
+  // fim como início do dia seguinte — acontece só na hora de chamar a API.
+  const from = params.get('from') ?? ''
+  const to = params.get('to') ?? ''
   const sort = (params.get('sort') as TicketSort | null) ?? 'CreatedAtDescending'
   const page = Number(params.get('page') ?? '1')
 
@@ -60,10 +73,12 @@ export function TicketList() {
     status: status.length > 0 ? status : undefined,
     priority: priority.length > 0 ? priority : undefined,
     categoryId,
-    assignedTechnicianId: mine ? user?.id : undefined,
+    assignedTechnicianId: mine ? user?.id : assignedTechnicianId,
     unassigned: unassigned || undefined,
     overdue: overdue || undefined,
     search: search || undefined,
+    createdFrom: from ? startOfDayInSaoPaulo(from) : undefined,
+    createdBefore: to ? startOfDayInSaoPaulo(nextDay(to)) : undefined,
     sort,
     page,
   })
@@ -119,6 +134,24 @@ export function TicketList() {
       : []),
     ...(search ? [{ key: 'search', label: `"${search}"`, clear: () => update({ search: null }) }] : []),
     ...(mine ? [{ key: 'mine', label: 'Meus chamados', clear: () => update({ mine: null }) }] : []),
+    ...(assignedTechnicianId
+      ? [
+          {
+            key: 'assigned',
+            label: staff.data?.find((item) => item.id === assignedTechnicianId)?.name ?? 'Responsável',
+            clear: () => update({ assignedTechnicianId: null }),
+          },
+        ]
+      : []),
+    ...(from || to
+      ? [
+          {
+            key: 'period',
+            label: periodLabel(from, to),
+            clear: () => update({ from: null, to: null }),
+          },
+        ]
+      : []),
     ...(unassigned
       ? [{ key: 'unassigned', label: 'Sem responsável', clear: () => update({ unassigned: null }) }]
       : []),
@@ -214,6 +247,45 @@ export function TicketList() {
               ))}
             </Select>
           </label>
+
+          {isStaff && (
+            <label className="grid gap-1.5 text-xs font-medium">
+              Responsável
+              <Select
+                value={mine ? (user?.id ?? '') : (assignedTechnicianId ?? '')}
+                onChange={(event) =>
+                  update({ assignedTechnicianId: event.target.value, mine: null, unassigned: null })
+                }
+              >
+                <option value="">Todos</option>
+                {staff.data?.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
+
+          <label className="grid gap-1.5 text-xs font-medium">
+            Aberto de
+            <Input
+              type="date"
+              value={from}
+              max={to || undefined}
+              onChange={(event) => update({ from: event.target.value })}
+            />
+          </label>
+
+          <label className="grid gap-1.5 text-xs font-medium">
+            até
+            <Input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(event) => update({ to: event.target.value })}
+            />
+          </label>
         </div>
 
         {/* Status vira faixa de alternadores em vez de select: são sete valores, a
@@ -238,13 +310,20 @@ export function TicketList() {
             <>
               <span aria-hidden className="bg-border mx-1 h-5 w-px" />
 
-              <FilterChip active={mine} onClick={() => update({ mine: mine ? null : 'true' })}>
+              <FilterChip
+                active={mine}
+                onClick={() =>
+                  update({ mine: mine ? null : 'true', assignedTechnicianId: null, unassigned: null })
+                }
+              >
                 <UserRound className="size-3.5" /> Meus chamados
               </FilterChip>
 
               <FilterChip
                 active={unassigned}
-                onClick={() => update({ unassigned: unassigned ? null : 'true' })}
+                onClick={() =>
+                  update({ unassigned: unassigned ? null : 'true', mine: null, assignedTechnicianId: null })
+                }
               >
                 <UserX className="size-3.5" /> Sem responsável
               </FilterChip>
@@ -352,6 +431,19 @@ export function TicketList() {
       )}
     </div>
   )
+}
+
+/** Rótulo do período no resumo de filtros ativos. */
+function periodLabel(from: string, to: string): string {
+  // As datas vêm como `yyyy-mm-dd`; formatadas pelo meio-dia de São Paulo, não há risco
+  // de o fuso do navegador empurrar o rótulo para o dia anterior.
+  const show = (day: string) => formatDate(startOfDayInSaoPaulo(day).replace('T00:00:00', 'T12:00:00'))
+
+  if (from && to) {
+    return `${show(from)} a ${show(to)}`
+  }
+
+  return from ? `A partir de ${show(from)}` : `Até ${show(to)}`
 }
 
 function FilterChip({

@@ -57,7 +57,7 @@ Se uma mudança de código contrariar um desses documentos, atualize o documento
 
 **Backend:** .NET 10, ASP.NET Core Web API, EF Core + Npgsql, PostgreSQL, JWT com refresh token, FluentValidation, Serilog, xUnit + Testcontainers.
 
-**Frontend:** React + TypeScript, Vite, React Router, TanStack Query, React Hook Form + Zod, shadcn/ui + Tailwind, TanStack Table, Recharts.
+**Frontend:** React + TypeScript, Vite, React Router, TanStack Query, React Hook Form + Zod, shadcn/ui + Tailwind, TanStack Table, Recharts, Vitest + Testing Library.
 
 **Não introduza** MediatR, AutoMapper nem repositório genérico sobre o EF Core. A escolha é deliberada e está justificada em `docs/arquitetura.md`, seção 4.9.
 
@@ -129,6 +129,7 @@ npm ci
 npm run dev        # http://localhost:5173
 npm run typecheck
 npm run lint
+npm test           # Vitest + Testing Library, em jsdom
 npm run build
 ```
 
@@ -176,6 +177,8 @@ Antes de considerar uma alteração concluída, verifique se ela tem cobertura q
 * ausência de comentário interno nas respostas destinadas ao solicitante;
 * a trava de senha provisória, inclusive o caso negativo: a rota nova recusa enquanto `MustChangePassword` estiver de pé?
 
+No frontend, os testes de componente ficam ao lado do arquivo testado (`*.test.tsx`) e montam a tela com `renderWithProviders`, de `src/test/render.tsx`, que injeta a sessão pelo contexto e simula a API com `vi.mock('@/features/tickets/api')`. Mudança que toque marcação de interno, filtros na URL ou ações de status precisa de teste ali.
+
 Testes de integração usam PostgreSQL real via Testcontainers. Não use o provider InMemory do EF Core: ele não reproduz sequences, `timestamptz` nem o comportamento transacional que o projeto depende.
 
 ## Armadilhas conhecidas
@@ -199,6 +202,8 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Volume do Docker herda o dono do caminho que existir na imagem.** A API roda como usuário sem privilégio (`USER $APP_UID`), e sem o `mkdir -p /var/opsdesk/attachments && chown` no Dockerfile o volume nasce pertencendo ao root: o envio de anexo falha com `UnauthorizedAccessException: Permission denied`. Só no container — `dotnet run` e os testes gravam em pasta do próprio usuário e passam. Trocar a raiz dos anexos exige repetir o `mkdir` com o dono certo, e recriar o volume (`docker compose down -v`), porque o dono é fixado no primeiro uso.
 * **`api.post` com `FormData` precisa de `'Content-Type': undefined`.** O cliente axios tem `application/json` como padrão; mantido, o multipart vai sem `boundary` e o servidor recusa. Remover o cabeçalho deixa o navegador montá-lo.
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
+* **Filtro de data chega com `-03:00` e precisa virar UTC antes da query.** Mesma recusa do Npgsql de deslocamento diferente de zero, agora em parâmetro de consulta: sem o `ToUniversalTime()` em `TicketFilterExtensions`, filtrar por período respondia 500. Há teste que falha sem a conversão (`Periodo_com_deslocamento_de_sao_paulo_respeita_a_virada_do_dia_local`).
+* **Instalar Vitest junto com o resto num só `npm install` falha** com `ERESOLVE` (`Found: vite@undefined`), por um ciclo de peer opcional entre `vitest` e `@vitest/browser-playwright`. Instalar o `vitest` sozinho primeiro resolve.
 * **Reabrir retoma o SLA, não o recomeça.** O tempo útil entre a resolução e a reabertura entra como pausa, e `ResolvedAt`/`ClosedAt` só são limpos depois disso — a retomada precisa da data de resolução. A janela de sete dias para chamado fechado mora em `ReopenPolicy`, não no grafo. Ver README, seção 5.9.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.

@@ -14,6 +14,7 @@ export type TicketListItem = {
   slaResolutionDueAt: string
   firstRespondedAt: string | null
   resolvedAt: string | null
+  updatedAt: string
 }
 
 export type TicketDetail = {
@@ -64,6 +65,7 @@ export type TicketSort =
   | 'CreatedAtAscending'
   | 'ResolutionDueAtAscending'
   | 'PriorityDescending'
+  | 'UpdatedAtDescending'
 
 export type TicketQuery = {
   status?: TicketStatus[]
@@ -73,6 +75,10 @@ export type TicketQuery = {
   unassigned?: boolean
   overdue?: boolean
   search?: string
+  /** Instante inicial, inclusivo. */
+  createdFrom?: string
+  /** Instante final, exclusivo. */
+  createdBefore?: string
   sort?: TicketSort
   page?: number
   pageSize?: number

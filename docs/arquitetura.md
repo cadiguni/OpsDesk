@@ -288,6 +288,6 @@ GitHub Actions (`.github/workflows/ci.yml`), em todo push e pull request, em tr�
 
 **Backend:** restore, build em Release, testes de unidade e de integração, e `ef migrations has-pending-model-changes` — que falha se alguém mudou uma entidade e esqueceu de gerar a migration. Os testes de integração usam o Docker do próprio runner, via Testcontainers; não há serviço de banco declarado no workflow, porque o ciclo de vida do container é do teste.
 
-**Frontend:** `npm ci`, typecheck, lint e build. A versão do Node vem do `frontend/.nvmrc`, para não existirem duas fontes de verdade sobre isso no repositório.
+**Frontend:** `npm ci`, typecheck, lint, testes (Vitest) e build. A versão do Node vem do `frontend/.nvmrc`, para não existirem duas fontes de verdade sobre isso no repositório.
 
 **Imagem da API:** `docker build` do Dockerfile, sem publicar. Serve para o Dockerfile não apodrecer em silêncio junto com o código.

@@ -134,6 +134,8 @@ public static class TicketEndpoints
         bool? overdue = null,
         string? search = null,
         TicketSort sort = TicketSort.CreatedAtDescending,
+        DateTimeOffset? createdFrom = null,
+        DateTimeOffset? createdBefore = null,
         int? page = null,
         int? pageSize = null)
     {
@@ -142,7 +144,9 @@ public static class TicketEndpoints
         {
             // PageRequest limita o tamanho; pedido maior é reduzido em silêncio, nunca
             // honrado. Ver PageRequest.MaxPageSize.
-            Page = new PageRequest(page, pageSize)
+            Page = new PageRequest(page, pageSize),
+            CreatedFrom = createdFrom,
+            CreatedBefore = createdBefore
         };
 
         var result = await tickets.ListAsync(filter, currentUser.Viewer, cancellationToken);

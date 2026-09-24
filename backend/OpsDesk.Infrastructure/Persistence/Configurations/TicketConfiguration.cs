@@ -54,6 +54,9 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         builder.HasIndex(t => t.Status);
         builder.HasIndex(t => t.CreatedAt);
 
+        // Ordenação por última atualização, na listagem.
+        builder.HasIndex(t => t.UpdatedAt);
+
         // Vencidos são consultados pelos dois prazos; sem isso o painel varre a tabela.
         builder.HasIndex(t => t.SlaResolutionDueAt);
         builder.HasIndex(t => t.SlaResponseDueAt);

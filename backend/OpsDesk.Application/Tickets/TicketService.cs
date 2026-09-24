@@ -135,7 +135,8 @@ public class TicketService(
                 t.SlaResponseDueAt,
                 t.SlaResolutionDueAt,
                 t.FirstRespondedAt,
-                t.ResolvedAt));
+                t.ResolvedAt,
+                t.UpdatedAt));
 
         return query.ToPagedResultAsync(filter.Page, cancellationToken);
     }

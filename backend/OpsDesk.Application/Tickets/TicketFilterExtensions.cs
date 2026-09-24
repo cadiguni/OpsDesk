@@ -53,6 +53,22 @@ public static class TicketFilterExtensions
                  (t.ResolvedAt == null && t.SlaResolutionDueAt < now)));
         }
 
+        // `ToUniversalTime()` não é enfeite. A interface manda o instante com o deslocamento
+        // de São Paulo, e o Npgsql recusa parâmetro `timestamptz` com deslocamento
+        // diferente de zero — mesmo sendo o instante certo. Sem a conversão, filtrar por
+        // período respondia 500.
+        if (filter.CreatedFrom is { } from)
+        {
+            var fromUtc = from.ToUniversalTime();
+            tickets = tickets.Where(t => t.CreatedAt >= fromUtc);
+        }
+
+        if (filter.CreatedBefore is { } before)
+        {
+            var beforeUtc = before.ToUniversalTime();
+            tickets = tickets.Where(t => t.CreatedAt < beforeUtc);
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var term = filter.Search.Trim().ToLower();
@@ -80,6 +96,7 @@ public static class TicketFilterExtensions
     {
         TicketSort.CreatedAtAscending => tickets.OrderBy(t => t.CreatedAt).ThenBy(t => t.Id),
         TicketSort.ResolutionDueAtAscending => tickets.OrderBy(t => t.SlaResolutionDueAt).ThenBy(t => t.Id),
+        TicketSort.UpdatedAtDescending => tickets.OrderByDescending(t => t.UpdatedAt).ThenBy(t => t.Id),
 
         // Prioridade é persistida como string, então ordenar pela coluna daria ordem
         // alfabética — Critical, High, Low, Medium — que não é ordem de urgência. O CASE

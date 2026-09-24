@@ -854,7 +854,9 @@ Filtros:
 * prioridade;
 * categoria;
 * responsável;
-* data de criação.
+* data de criação — período em datas de calendário, inclusivas nas duas pontas, contadas em horário de São Paulo: um chamado aberto às 23:30 do dia 9 é do dia 9.
+
+Ordenação: mais recentes, mais antigos, prazo mais próximo, prioridade, e **atualizados recentemente**. Nesta última, comentário conta como atualização — é a resposta do solicitante que a equipe mais precisa ver subir na fila.
 
 ---
 
@@ -1280,9 +1282,11 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 **Filtrar a lista de chamados por categoria desativada.** O filtro da lista usa o mesmo `/api/categories` dos seletores, que só traz as ativas. A equipe não consegue listar os chamados que ficaram numa categoria desativada, a não ser pela URL.
 
-**Testes de frontend.** Não existe nenhum: são 414 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+**Entregue: testes de frontend.** Vitest com Testing Library, rodando no CI (`npm test`). Cobrem o que dói, não tudo: marcação de comentário e anexo internos, filtros da lista reconstruídos da URL, as ações respeitando `allowedNextStatuses`, o aviso de reabertura e a conversão de período para o horário de São Paulo. A marca de anexo interno ganhou texto para leitor de tela no caminho — antes era só cor e ícone.
 
-*A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
+**Teste de ponta a ponta.** Playwright contra o perfil `web` do compose, cobrindo login, abertura e resposta. Ficou para depois de propósito: o que os testes de componente não pegam hoje é a integração com a API, e ela já tem 400+ testes do lado do servidor.
+
+*A decidir:* rodar no CI, que exige subir banco e API no job, ou só localmente antes de release.
 
 **Entregue: reabrir chamado.** Seção 5.9. Decidido: reabre o mesmo chamado; o solicitante reabre respondendo, a equipe pela ação de status; chamado fechado reabre por sete dias; o SLA continua de onde parou. A decisão corrigiu também a volta de "Resolvido" para "Em atendimento", que já existia e fazia o chamado voltar vencido pelo tempo parado.
 
@@ -1290,7 +1294,9 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 *A decidir:* contar pelo histórico, numa consulta agregada, ou manter um contador no chamado — o que é uma migration.
 
-**Paginação e filtros melhores.** Filtro por responsável e por período de abertura, busca que também olhe a descrição, e ordenação por última atualização. A busca atual cobre código e título, com `lower(coluna) LIKE`.
+**Entregue: filtros por responsável e período, e ordenação por última atualização.** Seção 13.6. O período viaja como instante com o deslocamento de São Paulo, e a API o converte para UTC antes da consulta — o Npgsql recusa parâmetro com deslocamento diferente de zero, e sem a conversão o filtro respondia 500.
+
+**Busca na descrição.** A busca atual cobre código e título, com `lower(coluna) LIKE`.
 
 *A decidir:* busca em descrição com `LIKE` degrada com volume. Se entrar, provavelmente vale `tsvector` com índice GIN — o que é uma migration e uma decisão de arquitetura, não um ajuste de query.
 
