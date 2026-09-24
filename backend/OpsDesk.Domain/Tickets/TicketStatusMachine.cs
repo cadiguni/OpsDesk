@@ -45,14 +45,29 @@ public static class TicketStatusMachine
             TicketStatus.Closed,
             TicketStatus.InProgress
         ],
-        // Fechado e cancelado são terminais na versão 1. A reabertura de chamado fechado
-        // está no roadmap (README, seção 4.1) e abrirá esta aresta quando existir.
-        [TicketStatus.Closed] = [],
+        // Reabertura (README, seção 5.9). A aresta existe sempre; a janela de dias em que
+        // ela vale depende do relógio e da configuração, e quem a aplica é a camada de
+        // aplicação — o grafo não sabe que horas são.
+        [TicketStatus.Closed] =
+        [
+            TicketStatus.InProgress
+        ],
+        // Cancelado é terminal: quem cancelou desistiu, e "o problema voltou" não se aplica.
         [TicketStatus.Cancelled] = []
     };
 
-    /// <summary>Status que não admitem mais nenhuma transição.</summary>
-    public static readonly TicketStatus[] Terminal = [TicketStatus.Closed, TicketStatus.Cancelled];
+    /// <summary>
+    /// Status encerrados: fora das filas de trabalho e fora da conta de "em aberto".
+    /// Fechado ainda pode ser reaberto dentro da janela; cancelado, nunca.
+    /// </summary>
+    public static readonly TicketStatus[] Finished = [TicketStatus.Closed, TicketStatus.Cancelled];
+
+    /// <summary>
+    /// Volta de um chamado dado como resolvido para atendimento. É a mesma transição com
+    /// ou sem fechamento no meio, e o SLA a trata igual: o tempo parado não conta.
+    /// </summary>
+    public static bool IsReopening(TicketStatus from, TicketStatus to) =>
+        from is TicketStatus.Resolved or TicketStatus.Closed && to == TicketStatus.InProgress;
 
     public static IReadOnlyList<TicketStatus> AllowedFrom(TicketStatus current) => Allowed[current];
 
@@ -76,7 +91,10 @@ public static class TicketStatusMachine
     /// <summary>O SLA de resolução fica pausado enquanto o chamado aguarda o solicitante.</summary>
     public static bool PausesResolutionSla(TicketStatus status) => status == TicketStatus.WaitingOnRequester;
 
-    /// <summary>Status que encerram a contagem de SLA de forma definitiva.</summary>
+    /// <summary>
+    /// Status que encerram a contagem de SLA. Definitivo só para cancelado: resolvido e
+    /// fechado retomam a contagem de onde pararam se o chamado for reaberto.
+    /// </summary>
     public static bool EndsSlaClock(TicketStatus status) =>
         status is TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled;
 }

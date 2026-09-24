@@ -26,7 +26,7 @@ public class TicketStatusMachineTests
             TicketStatus.InProgress, TicketStatus.Resolved, TicketStatus.Closed, TicketStatus.Cancelled
         ],
         [TicketStatus.Resolved] = [TicketStatus.Closed, TicketStatus.InProgress],
-        [TicketStatus.Closed] = [],
+        [TicketStatus.Closed] = [TicketStatus.InProgress],
         [TicketStatus.Cancelled] = []
     };
 
@@ -62,13 +62,18 @@ public class TicketStatusMachineTests
         }
     }
 
+    [Fact]
+    public void Cancelado_nao_admite_saida()
+    {
+        Assert.Empty(TicketStatusMachine.AllowedFrom(TicketStatus.Cancelled));
+    }
+
     [Theory]
     [InlineData(TicketStatus.Closed)]
     [InlineData(TicketStatus.Cancelled)]
-    public void Status_terminal_nao_admite_saida(TicketStatus terminal)
+    public void Fechado_e_cancelado_estao_encerrados(TicketStatus status)
     {
-        Assert.Empty(TicketStatusMachine.AllowedFrom(terminal));
-        Assert.Contains(terminal, TicketStatusMachine.Terminal);
+        Assert.Contains(status, TicketStatusMachine.Finished);
     }
 
     [Fact]
@@ -80,12 +85,22 @@ public class TicketStatusMachineTests
     }
 
     [Fact]
-    public void Chamado_fechado_nao_reabre_na_versao_1()
+    public void Chamado_fechado_so_sai_para_atendimento()
     {
-        foreach (var target in AllStatuses)
-        {
-            Assert.False(TicketStatusMachine.CanTransition(TicketStatus.Closed, target));
-        }
+        // Reabrir é voltar a trabalhar no chamado. Voltar para "Aberto" ou "Em triagem"
+        // devolveria à fila de entrada um chamado que já tem responsável e histórico.
+        Assert.Equal([TicketStatus.InProgress], TicketStatusMachine.AllowedFrom(TicketStatus.Closed));
+    }
+
+    [Theory]
+    [InlineData(TicketStatus.Resolved, TicketStatus.InProgress, true)]
+    [InlineData(TicketStatus.Closed, TicketStatus.InProgress, true)]
+    [InlineData(TicketStatus.WaitingOnRequester, TicketStatus.InProgress, false)]
+    [InlineData(TicketStatus.Resolved, TicketStatus.Closed, false)]
+    public void Reabertura_e_voltar_de_resolvido_ou_fechado_para_atendimento(
+        TicketStatus from, TicketStatus to, bool reopening)
+    {
+        Assert.Equal(reopening, TicketStatusMachine.IsReopening(from, to));
     }
 
     // ----- Permissão por perfil -----
@@ -135,8 +150,22 @@ public class TicketStatusMachineTests
         Assert.False(TicketStatusMachine.IsAllowedForRole(
             TicketStatus.InProgress, TicketStatus.WaitingOnRequester, UserRole.Requester));
 
+        // O solicitante reabre respondendo o chamado, e não pela mudança de status: a
+        // resposta é o motivo da reabertura, e reabrir sem dizer por quê é ruído na fila.
         Assert.False(TicketStatusMachine.IsAllowedForRole(
             TicketStatus.Resolved, TicketStatus.InProgress, UserRole.Requester));
+
+        Assert.False(TicketStatusMachine.IsAllowedForRole(
+            TicketStatus.Closed, TicketStatus.InProgress, UserRole.Requester));
+    }
+
+    [Theory]
+    [InlineData(UserRole.Manager)]
+    [InlineData(UserRole.Technician)]
+    public void Equipe_reabre_chamado_fechado(UserRole role)
+    {
+        Assert.True(TicketStatusMachine.IsAllowedForRole(
+            TicketStatus.Closed, TicketStatus.InProgress, role));
     }
 
     [Fact]

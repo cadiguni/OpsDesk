@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { CheckCheck, LockKeyhole, MessageSquare, Send } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,18 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
   // aperta Ctrl+V depois de tirar um print.
   const editor = useRef<HTMLTextAreaElement>(null)
 
-  const closed = ticket.status === 'Closed' || ticket.status === 'Cancelled'
+  // O solicitante reabre respondendo (README, seção 5.9): em resolvido sempre, em fechado
+  // até o fim da janela. A equipe reabre pela ação de status, então para ela fechado é
+  // fechado. O servidor decide de novo no envio — isto só evita oferecer o que ele recusa.
+  const reopenable =
+    !isStaff &&
+    (ticket.status === 'Resolved' ||
+      (ticket.status === 'Closed' &&
+        ticket.reopenableUntil !== null &&
+        new Date(ticket.reopenableUntil) > new Date()))
+
+  const closed =
+    ticket.status === 'Cancelled' || (ticket.status === 'Closed' && !reopenable)
 
   // Comentário só com anexo é legítimo — "segue o print" às vezes é o print e mais nada.
   const hasSomethingToSend = content.trim().length > 0 || uploadedIds(pending).length > 0
@@ -126,7 +138,19 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
 
       {closed ? (
         <p className="text-muted-foreground rounded-lg border border-dashed p-3 text-sm">
-          Este chamado está encerrado e não aceita novos comentários.
+          {ticket.status === 'Closed' && !isStaff ? (
+            <>
+              Este chamado foi fechado há muito tempo para ser reaberto. Se o problema voltou,{' '}
+              <Link to="/chamados/novo" className="text-primary font-medium underline underline-offset-2">
+                abra um novo chamado
+              </Link>
+              .
+            </>
+          ) : ticket.status === 'Closed' ? (
+            'Este chamado está fechado. Para comentar, reabra-o pelas ações do chamado.'
+          ) : (
+            'Este chamado está encerrado e não aceita novos comentários.'
+          )}
         </p>
       ) : (
         <div
@@ -168,6 +192,16 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
               ? 'Visível apenas para técnicos e gestores.'
               : 'Esta resposta ficará visível para o solicitante.'}
           </p>
+
+          {/* A consequência não é óbvia: um "obrigado" enviado aqui devolveria o chamado
+              para a fila. Por isso o aviso diz qual botão serve para confirmar. */}
+          {reopenable && (
+            <p className="text-sla-due-soon px-4 pt-1 text-xs">
+              {ticket.status === 'Closed'
+                ? 'Este chamado está fechado. Enviar uma resposta vai reabri-lo.'
+                : 'Enviar uma resposta vai reabrir o chamado. Se o problema foi resolvido, use "Enviar e fechar".'}
+            </p>
+          )}
 
           <Textarea
             ref={editor}

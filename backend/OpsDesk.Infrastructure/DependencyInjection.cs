@@ -60,6 +60,12 @@ public static class DependencyInjection
         services.AddMemoryCache();
 
         services
+            .AddOptions<TicketOptions>()
+            .Bind(configuration.GetSection(TicketOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services
             .AddOptions<AttachmentStorageOptions>()
             .Bind(configuration.GetSection(AttachmentStorageOptions.SectionName))
             .ValidateDataAnnotations()
@@ -82,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<AuthService>();
         services.AddScoped<TicketService>();
+        services.AddSingleton<ReopenPolicy>();
         services.AddScoped<TicketCommentService>();
         services.AddScoped<TicketWorkflowService>();
         services.AddScoped<DashboardService>();

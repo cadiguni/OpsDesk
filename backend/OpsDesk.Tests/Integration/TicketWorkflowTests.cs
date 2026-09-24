@@ -423,7 +423,7 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
     }
 
     [Fact]
-    public async Task Chamado_fechado_nao_se_move_mais()
+    public async Task Chamado_fechado_so_sai_por_reabertura()
     {
         var world = await SetUpAsync();
         var ticket = await OpenTicketAsync(world);
@@ -432,7 +432,8 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         await ChangeStatusAsync(world.Technician, ticket, TicketStatus.Resolved);
         await ChangeStatusAsync(world.Manager, ticket, TicketStatus.Closed);
 
-        foreach (var target in Enum.GetValues<TicketStatus>())
+        // "Em atendimento" é a reabertura, coberta em TicketReopenTests.
+        foreach (var target in Enum.GetValues<TicketStatus>().Where(s => s != TicketStatus.InProgress))
         {
             var response = await world.Manager.PostAsJsonAsync(
                 $"/api/tickets/{ticket}/status", new ChangeStatusRequest(target));

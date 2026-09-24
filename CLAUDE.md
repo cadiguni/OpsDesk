@@ -14,9 +14,9 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 **O MVP da versão 1 está completo e rodando.** Os nove critérios de sucesso da seção 19 do README estão atendidos.
 
-**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados, atribuição, histórico), dashboard por consultas agregadas e administração de usuários e de categorias pelo gestor.
+**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados com reabertura, atribuição, histórico), dashboard por consultas agregadas e administração de usuários e de categorias pelo gestor.
 
-**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status e atribuição, dashboard com gráficos, e administração de usuários e de categorias.
+**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status (inclusive reabrir) e atribuição, dashboard com gráficos, e administração de usuários e de categorias.
 
 **Endpoints:**
 
@@ -199,5 +199,6 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Volume do Docker herda o dono do caminho que existir na imagem.** A API roda como usuário sem privilégio (`USER $APP_UID`), e sem o `mkdir -p /var/opsdesk/attachments && chown` no Dockerfile o volume nasce pertencendo ao root: o envio de anexo falha com `UnauthorizedAccessException: Permission denied`. Só no container — `dotnet run` e os testes gravam em pasta do próprio usuário e passam. Trocar a raiz dos anexos exige repetir o `mkdir` com o dono certo, e recriar o volume (`docker compose down -v`), porque o dono é fixado no primeiro uso.
 * **`api.post` com `FormData` precisa de `'Content-Type': undefined`.** O cliente axios tem `application/json` como padrão; mantido, o multipart vai sem `boundary` e o servidor recusa. Remover o cabeçalho deixa o navegador montá-lo.
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
+* **Reabrir retoma o SLA, não o recomeça.** O tempo útil entre a resolução e a reabertura entra como pausa, e `ResolvedAt`/`ClosedAt` só são limpos depois disso — a retomada precisa da data de resolução. A janela de sete dias para chamado fechado mora em `ReopenPolicy`, não no grafo. Ver README, seção 5.9.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.

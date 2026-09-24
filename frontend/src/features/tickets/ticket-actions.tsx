@@ -65,6 +65,15 @@ const statusActions: Record<TicketStatus, StatusAction> = {
   },
 }
 
+/** Voltar de resolvido ou fechado para atendimento é reabrir, e o botão diz isso. */
+const reopenAction: StatusAction = { label: 'Reabrir chamado', icon: RotateCcw }
+
+function actionFor(from: TicketStatus, to: TicketStatus): StatusAction {
+  return to === 'InProgress' && (from === 'Resolved' || from === 'Closed')
+    ? reopenAction
+    : statusActions[to]
+}
+
 export function TicketActions({ ticket }: { ticket: TicketDetail }) {
   const { isStaff, user } = useSession()
   const changeStatus = useChangeStatus(ticket.id)
@@ -102,7 +111,7 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
 
           <div className="grid gap-2">
             {ticket.allowedNextStatuses.map((status) => {
-              const action = statusActions[status]
+              const action = actionFor(ticket.status, status)
               const Icon = action.icon
               const awaiting = confirming === status
 

@@ -181,6 +181,6 @@ public class CategoryAdministrationService(
             c.Description,
             c.IsActive,
             c.CreatedAt,
-            c.Tickets.Count(t => !TicketStatusMachine.Terminal.Contains(t.Status)),
+            c.Tickets.Count(t => !TicketStatusMachine.Finished.Contains(t.Status)),
             c.Tickets.Count));
 }

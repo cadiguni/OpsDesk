@@ -16,7 +16,7 @@ namespace OpsDesk.Application.Tickets;
 /// datas de resolução e fechamento.
 /// </summary>
 public class TicketWorkflowService(
-    IOpsDeskDbContext db, SlaClock sla, TicketService tickets, IClock clock)
+    IOpsDeskDbContext db, SlaClock sla, TicketService tickets, IClock clock, ReopenPolicy reopening)
 {
     public async Task<ChangeStatusResult> ChangeStatusAsync(
         Guid ticketId,
@@ -52,6 +52,11 @@ public class TicketWorkflowService(
         }
 
         var now = clock.UtcNow;
+
+        if (TicketStatusMachine.IsReopening(from, to) && !reopening.CanReopen(from, ticket.ClosedAt, now))
+        {
+            return new ChangeStatusResult.ReopenWindowExpired(reopening.WindowDays);
+        }
 
         ApplySlaEffects(ticket, from, to, now);
 
@@ -96,15 +101,17 @@ public class TicketWorkflowService(
                 ticket.ClosedAt = now;
                 break;
 
-            case TicketStatus.InProgress when from == TicketStatus.Resolved:
-                // Reabertura por retrabalho: a solução não resolveu. Limpamos a data de
-                // resolução porque o chamado voltou a estar em aberto — deixá-la
-                // preenchida faria o chamado nunca mais aparecer como vencido, por mais
-                // que se arrastasse.
+            case TicketStatus.InProgress when TicketStatusMachine.IsReopening(from, to):
+                // Reabertura: a solução não resolveu. O prazo retoma de onde parou, e só
+                // então as datas são limpas — a retomada precisa da data de resolução
+                // para saber quanto tempo o chamado ficou parado.
                 //
-                // Não se perde informação: a transição para "Resolvido" está no
-                // TicketHistory com data e autor, que é a trilha de auditoria de verdade.
+                // Limpar é necessário: com a data preenchida o chamado nunca mais
+                // apareceria como vencido, por mais que se arrastasse. Não se perde nada:
+                // resolução e fechamento estão no TicketHistory, com data e autor.
+                sla.ResumeAfterReopening(ticket, now);
                 ticket.ResolvedAt = null;
+                ticket.ClosedAt = null;
                 break;
         }
 

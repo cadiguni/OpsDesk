@@ -161,7 +161,7 @@ Permissões:
 * visualizar respostas dos técnicos;
 * acompanhar status;
 * anexar arquivos ao chamado e aos comentários;
-* solicitar reabertura de chamado futuramente.
+* reabrir o próprio chamado resolvido ou fechado, respondendo a ele (seção 5.9).
 
 Não pode:
 
@@ -336,7 +336,7 @@ O ciclo de vida não é um campo livre: cada status tem um conjunto fechado de d
 | Em atendimento | Em triagem, Aguardando usuário, Resolvido, Fechado, Cancelado |
 | Aguardando usuário | Em atendimento, Resolvido, Fechado, Cancelado |
 | Resolvido | Fechado, Em atendimento |
-| Fechado | — |
+| Fechado | Em atendimento, dentro da janela de reabertura (seção 5.9) |
 | Cancelado | — |
 
 Observações:
@@ -344,7 +344,7 @@ Observações:
 * **Aberto não vai direto para Resolvido.** Resolver sem passar por atendimento deixaria o chamado sem responsável e sem marco de resposta, e o indicador de SLA não teria o que medir.
 * **Fechamento direto pela equipe:** técnicos e gestores podem fechar qualquer chamado não terminal ao qual tenham acesso, inclusive com “Enviar e fechar”. O fechamento preenche `ResolvedAt` se ainda não houver resolução e encerra eventual pausa de SLA. O solicitante só fecha chamados já resolvidos.
 * **Resolvido volta para Em atendimento** quando a solução não resolveu. É o caminho de retrabalho antes do fechamento.
-* **Fechado e Cancelado são terminais na versão 1.** A reabertura de chamado fechado está no roadmap e abrirá essa transição quando existir.
+* **Fechado volta para Em atendimento** por reabertura, dentro de sete dias do fechamento (seção 5.9). **Cancelado é terminal:** quem cancelou desistiu, e "o problema voltou" não se aplica.
 
 Quem pode mover o chamado:
 
@@ -352,9 +352,28 @@ Quem pode mover o chamado:
 | --- | --- |
 | Gestor | qualquer uma da tabela acima |
 | Técnico | qualquer uma da tabela acima |
-| Usuário | cancelar o próprio chamado; fechar um chamado já resolvido, confirmando a solução |
+| Usuário | cancelar o próprio chamado; fechar um chamado já resolvido, confirmando a solução. A reabertura do solicitante não passa por aqui: ela acontece quando ele responde (seção 5.9) |
 
 O perfil autoriza a *transição*; o filtro de visibilidade é que decide *em qual chamado*. São verificações independentes, e as duas acontecem.
+
+### 5.9 Reabertura
+
+Reabrir devolve **o mesmo chamado** para "Em atendimento": mesmo código, mesma conversa, mesmo histórico. É o que o solicitante espera quando diz "o problema voltou", e é o que a versão 2.0 faz quando ele responde o e-mail de um chamado já encerrado.
+
+Quem reabre, e como:
+
+* **o solicitante reabre respondendo.** Um comentário dele em chamado "Resolvido" ou "Fechado" reabre o chamado junto com a resposta. Não há botão à parte: a resposta é o motivo da reabertura, e reabrir sem dizer por quê só acrescenta ruído à fila. "Enviar e fechar" em chamado resolvido é o gesto contrário, confirmar a solução, e não reabre nada. A interface avisa, acima do campo de resposta, que enviar vai reabrir;
+* **a equipe reabre pela ação "Reabrir chamado"**, que é a mudança de status para "Em atendimento". Comentário da equipe não reabre: em chamado resolvido ele pode ser só um detalhe da solução, e em chamado fechado é recusado até alguém reabrir — assim a decisão fica explícita no histórico.
+
+A janela:
+
+* **chamado fechado reabre por até sete dias** contados do fechamento (`Tickets:ReopenWindowDays`). Depois disso, a resposta é recusada com a orientação de abrir um chamado novo. Sem a janela, um "obrigado!" enviado meses depois ressuscitaria um chamado antigo — e na 2.0 qualquer resposta a uma thread velha de e-mail faria o mesmo;
+* **chamado resolvido reabre sempre**, porque ainda não foi dado como encerrado;
+* **chamado cancelado nunca reabre.**
+
+O SLA **continua de onde parou**. O tempo útil entre a resolução e a reabertura entra como pausa, como a espera pelo solicitante (seção 8.2): soma-se ao prazo de resolução e ao `SlaPausedBusinessMinutes`. Se faltavam três horas úteis quando o chamado foi resolvido, voltam três horas. Um chamado que já estava vencido ao ser resolvido volta vencido, porque aquele atraso foi real. As datas `ResolvedAt` e `ClosedAt` são limpas; as originais continuam no histórico, que registra a reabertura como evento próprio.
+
+As duas alternativas foram descartadas. Recomeçar o prazo do zero daria prazo cheio a cada reabertura, e o compromisso assumido na abertura deixaria de valer. Não descontar nada — o comportamento anterior da volta de "Resolvido" — fazia o chamado voltar vencido pelo tempo em que a equipe não tinha como agir.
 
 ---
 
@@ -503,7 +522,7 @@ Regras:
 * ao entrar em "Aguardando usuário", o instante da pausa é registrado;
 * ao sair de "Aguardando usuário", o tempo pausado é acumulado no chamado e `SlaResolutionDueAt` é recalculado somando o período pausado convertido em horas úteis;
 * o SLA de **resposta** não é pausado, porque ele mede o tempo até o primeiro retorno da equipe;
-* os status "Resolvido", "Fechado" e "Cancelado" encerram a contagem definitivamente.
+* os status "Resolvido", "Fechado" e "Cancelado" encerram a contagem. Só o cancelamento é definitivo: na reabertura, o tempo parado desde a resolução também conta como pausa (seção 5.9).
 
 Justificativa: sem essa pausa, o indicador de chamados vencidos passa a medir a demora do solicitante, e não o desempenho da equipe de TI.
 
@@ -681,7 +700,8 @@ Eventos que devem ser registrados:
 * adição de comentário;
 * resolução do chamado;
 * fechamento do chamado;
-* cancelamento do chamado.
+* cancelamento do chamado;
+* reabertura do chamado.
 
 Cada item de histórico deve conter:
 
@@ -1260,13 +1280,15 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 **Filtrar a lista de chamados por categoria desativada.** O filtro da lista usa o mesmo `/api/categories` dos seletores, que só traz as ativas. A equipe não consegue listar os chamados que ficaram numa categoria desativada, a não ser pela URL.
 
-**Testes de frontend.** Não existe nenhum: são 392 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+**Testes de frontend.** Não existe nenhum: são 414 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
 
 *A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
 
-**Reabrir chamado fechado.** `Fechado` e `Cancelado` são terminais na versão 1. É o que o usuário pede na primeira semana: "o problema voltou".
+**Entregue: reabrir chamado.** Seção 5.9. Decidido: reabre o mesmo chamado; o solicitante reabre respondendo, a equipe pela ação de status; chamado fechado reabre por sete dias; o SLA continua de onde parou. A decisão corrigiu também a volta de "Resolvido" para "Em atendimento", que já existia e fazia o chamado voltar vencido pelo tempo parado.
 
-*A decidir:* reabertura cria chamado novo vinculado ao antigo, ou reabre o mesmo? Reabrir o mesmo é mais simples e polui o indicador de tempo de resolução; chamado novo mantém os indicadores honestos e exige um campo de vínculo. Também falta decidir se o SLA reinicia.
+**Indicador de reabertura.** O histórico registra cada reabertura, mas o dashboard não conta nenhuma. Taxa de reabertura por técnico e por categoria é o indicador que mostra solução que não resolveu.
+
+*A decidir:* contar pelo histórico, numa consulta agregada, ou manter um contador no chamado — o que é uma migration.
 
 **Paginação e filtros melhores.** Filtro por responsável e por período de abertura, busca que também olhe a descrição, e ordenação por última atualização. A busca atual cobre código e título, com `lower(coluna) LIKE`.
 

@@ -46,6 +46,13 @@ public abstract record AddCommentResult
         public string Message => "Este chamado está encerrado e não aceita novos comentários.";
     }
 
+    /// <summary>Fechado há mais tempo que a janela de reabertura.</summary>
+    public sealed record ReopenWindowExpired(int WindowDays) : AddCommentResult
+    {
+        public string Message =>
+            $"Este chamado foi fechado há mais de {WindowDays} dia(s) e não pode mais ser reaberto. Abra um novo chamado.";
+    }
+
     public sealed record AttachmentsInvalid : AddCommentResult
     {
         public string Message =>
@@ -67,6 +74,13 @@ public abstract record ChangeStatusResult
     {
         public string Message =>
             $"Não é possível mudar de {From} para {To}, ou seu perfil não permite essa mudança.";
+    }
+
+    /// <summary>Fechado há mais tempo que a janela de reabertura.</summary>
+    public sealed record ReopenWindowExpired(int WindowDays) : ChangeStatusResult
+    {
+        public string Message =>
+            $"Este chamado foi fechado há mais de {WindowDays} dia(s) e não pode mais ser reaberto. Abra um novo chamado.";
     }
 }
 

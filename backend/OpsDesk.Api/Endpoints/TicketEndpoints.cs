@@ -206,6 +206,11 @@ public static class TicketEndpoints
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Chamado encerrado"),
 
+            AddCommentResult.ReopenWindowExpired expired => TypedResults.Problem(
+                detail: expired.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Prazo de reabertura encerrado"),
+
             _ => throw new InvalidOperationException(
                 $"Resultado de comentário não tratado: {result.GetType().Name}.")
         };
@@ -239,6 +244,11 @@ public static class TicketEndpoints
                 detail: rejected.Message,
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Transição não permitida"),
+
+            ChangeStatusResult.ReopenWindowExpired expired => TypedResults.Problem(
+                detail: expired.Message,
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Prazo de reabertura encerrado"),
 
             _ => throw new InvalidOperationException(
                 $"Resultado de mudança de status não tratado: {result.GetType().Name}.")

@@ -57,6 +57,37 @@ public class SlaClock(IBusinessCalendar calendar)
     }
 
     /// <summary>
+    /// Retoma o SLA de resolução na reabertura, de onde ele parou (README, seção 5.9).
+    ///
+    /// O tempo útil entre a resolução e a reabertura entra como pausa: soma-se ao prazo e
+    /// ao acumulado de <c>SlaPausedBusinessMinutes</c>, exatamente como a espera pelo
+    /// solicitante. Assim o chamado volta com o tempo que ainda tinha — e um chamado que
+    /// já estava vencido quando foi resolvido volta vencido, porque o atraso foi real.
+    ///
+    /// Recomeçar do zero daria prazo cheio a cada reabertura, e o compromisso assumido na
+    /// abertura deixaria de valer. Não fazer nada, o comportamento antigo, fazia o chamado
+    /// voltar vencido pelo tempo em que a equipe não tinha como agir.
+    /// </summary>
+    /// <returns>Minutos úteis acrescentados nesta retomada.</returns>
+    public int ResumeAfterReopening(Ticket ticket, DateTimeOffset reopenedAt)
+    {
+        if (ticket.ResolvedAt is not { } resolvedAt)
+        {
+            return 0;
+        }
+
+        var stoppedMinutes = calendar.BusinessMinutesBetween(resolvedAt, reopenedAt);
+
+        if (stoppedMinutes > 0)
+        {
+            ticket.SlaPausedBusinessMinutes += stoppedMinutes;
+            ticket.SlaResolutionDueAt = calendar.AddBusinessMinutes(ticket.SlaResolutionDueAt, stoppedMinutes);
+        }
+
+        return stoppedMinutes;
+    }
+
+    /// <summary>
     /// Registra o início da pausa, ao entrar em "Aguardando usuário".
     /// Chamar duas vezes seguidas não move o instante da pausa: o primeiro vale.
     /// </summary>

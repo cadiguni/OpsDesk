@@ -17,7 +17,11 @@ namespace OpsDesk.Application.Tickets;
 /// corta por <c>IsInternal</c> dentro do SQL.
 /// </summary>
 public class TicketCommentService(
-    IOpsDeskDbContext db, IClock clock, TicketWorkflowService workflow, AttachmentService attachments)
+    IOpsDeskDbContext db,
+    IClock clock,
+    TicketWorkflowService workflow,
+    AttachmentService attachments,
+    ReopenPolicy reopening)
 {
     public async Task<AddCommentResult> AddAsync(
         Guid ticketId,
@@ -41,14 +45,34 @@ public class TicketCommentService(
             return new AddCommentResult.TicketNotFound();
         }
 
-        if (ticket.Status is Domain.Enums.TicketStatus.Closed or Domain.Enums.TicketStatus.Cancelled)
+        var now = clock.UtcNow;
+
+        // Resposta do solicitante a chamado resolvido ou fechado reabre o chamado (README,
+        // seção 5.9). É o mesmo gesto da versão 2.0, em que responder o e-mail reabre: a
+        // resposta é o motivo, e a reabertura vem junto, sem botão à parte. "Enviar e
+        // fechar" é o oposto — confirmar a solução — e não reabre nada.
+        var reopens = !author.IsStaff
+                      && !request.CloseTicket
+                      && ticket.Status is TicketStatus.Resolved or TicketStatus.Closed;
+
+        if (ticket.Status == TicketStatus.Cancelled
+            || (ticket.Status == TicketStatus.Closed && !reopens))
         {
-            // Resolvido continua aceitando comentário de propósito: é onde o solicitante diz
-            // que o problema voltou. Fechado e cancelado são finais.
+            // A equipe não comenta em chamado fechado: reabre pela mudança de status, que
+            // deixa a decisão explícita no histórico, e então comenta.
             return new AddCommentResult.TicketClosed();
         }
 
-        var now = clock.UtcNow;
+        if (reopens && !reopening.CanReopen(ticket.Status, ticket.ClosedAt, now))
+        {
+            return new AddCommentResult.ReopenWindowExpired(reopening.WindowDays);
+        }
+
+        if (reopens)
+        {
+            workflow.ApplySlaEffects(ticket, ticket.Status, TicketStatus.InProgress, now);
+            ticket.Status = TicketStatus.InProgress;
+        }
 
         if (request.CloseTicket)
         {

@@ -18,7 +18,7 @@ namespace OpsDesk.Application.Tickets;
 /// então não existe caminho em que um filtro esquecido exponha chamado de terceiro.
 /// </summary>
 public class TicketService(
-    IOpsDeskDbContext db, SlaClock sla, IClock clock, AttachmentService attachments)
+    IOpsDeskDbContext db, SlaClock sla, IClock clock, AttachmentService attachments, ReopenPolicy reopening)
 {
     /// <param name="author">Quem está autenticado — nem sempre é o solicitante do chamado.</param>
     public async Task<CreateTicketResult> CreateAsync(
@@ -244,7 +244,7 @@ public class TicketService(
         bool SlaPaused,
         int SlaPausedBusinessMinutes);
 
-    private static TicketDetail ToDetail(TicketDetailRow row, TicketViewer viewer) => new(
+    private TicketDetail ToDetail(TicketDetailRow row, TicketViewer viewer) => new(
         row.Id,
         row.Code,
         row.Title,
@@ -271,9 +271,14 @@ public class TicketService(
         // Os destinos que este perfil pode escolher. A interface usa isto para montar o
         // seletor de status; a verificação de verdade acontece na mudança de status,
         // contra a mesma máquina de estados.
+        //
+        // A reabertura depende também da janela de dias, que o grafo não conhece.
         [.. TicketStatusMachine
             .AllowedFrom(row.Status)
-            .Where(next => TicketStatusMachine.IsAllowedForRole(row.Status, next, viewer.Role))]);
+            .Where(next => TicketStatusMachine.IsAllowedForRole(row.Status, next, viewer.Role))
+            .Where(next => !TicketStatusMachine.IsReopening(row.Status, next)
+                           || reopening.CanReopen(row.Status, row.ClosedAt, clock.UtcNow))],
+        reopening.ReopenableUntil(row.Status, row.ClosedAt));
 }
 
 public abstract record CreateTicketResult

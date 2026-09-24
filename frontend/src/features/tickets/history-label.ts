@@ -51,6 +51,9 @@ export function describeHistoryEntry(entry: TicketHistoryEntry): string {
 
     case 'Cancelled':
       return `${author} cancelou o chamado`
+
+    case 'Reopened':
+      return `${author} reabriu o chamado`
   }
 }
 

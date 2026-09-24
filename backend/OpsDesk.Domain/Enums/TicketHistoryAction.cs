@@ -13,5 +13,8 @@ public enum TicketHistoryAction
     InternalCommentAdded,
     Resolved,
     Closed,
-    Cancelled
+    Cancelled,
+
+    /// <summary>Resolvido ou fechado de volta para atendimento.</summary>
+    Reopened
 }

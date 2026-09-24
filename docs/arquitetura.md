@@ -191,9 +191,11 @@ Definir o responsável mexe só no responsável. A seção 10 do README diz que 
 
 **Por quê:** a máquina de estados é a única coisa no sistema que muda status, e uma ação que altera dois campos por conta própria torna o histórico mais difícil de ler — dois eventos aparecem sem que ninguém tenha pedido o segundo — e a operação mais difícil de prever. Assumir e iniciar atendimento são dois cliques, e cada um fica separado na trilha de auditoria.
 
-### 4.11 Reabrir chamado resolvido limpa `ResolvedAt`
+### 4.11 Reabrir chamado limpa `ResolvedAt` e `ClosedAt`, e o SLA retoma de onde parou
 
-Quando um chamado volta de "Resolvido" para "Em atendimento", a data de resolução é apagada.
+Quando um chamado volta de "Resolvido" ou "Fechado" para "Em atendimento", as datas de resolução e de fechamento são apagadas — depois que `SlaClock.ResumeAfterReopening` usou a de resolução para somar ao prazo o tempo útil em que o chamado ficou parado. As regras estão na seção 5.9 do README.
+
+A janela de reabertura de chamado fechado depende do relógio e da configuração, e por isso mora em `ReopenPolicy`, na Application, e não no `TicketStatusMachine`: o grafo diz que a aresta existe, a política diz se ela ainda vale para aquele chamado.
 
 **Por quê:** mantê-la faria o chamado nunca mais aparecer como vencido, por mais que a reabertura se arrastasse — `IsResolutionOverdue` depende de `ResolvedAt` ser nulo. A informação não se perde: a transição para "Resolvido" está no `TicketHistory` com data e autor, que é a trilha de auditoria de verdade. O campo na tabela é o estado atual, não o histórico.
 

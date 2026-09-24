@@ -149,7 +149,7 @@ Neste caso:
 * se o chamado estava "Resolvido" ou "Fechado", ele é **reaberto** para "Em atendimento", mantendo o mesmo código e todo o histórico;
 * o evento é registrado no histórico do chamado.
 
-Reabertura por resposta de e-mail tem um limite: mensagens que chegam mais de trinta dias após o fechamento criam um chamado novo, referenciando o anterior no corpo. Sem esse corte, uma thread antiga ressuscita indefinidamente um chamado já encerrado.
+Reabertura por resposta de e-mail tem um limite, o mesmo da reabertura pelo portal (README, seção 5.9): mensagens que chegam depois da janela de reabertura — sete dias do fechamento, em `Tickets:ReopenWindowDays` — criam um chamado novo, referenciando o anterior no corpo. Sem esse corte, uma thread antiga ressuscita indefinidamente um chamado já encerrado.
 
 ### 4.5 Identificação do solicitante
 

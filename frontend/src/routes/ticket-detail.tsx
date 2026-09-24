@@ -206,7 +206,7 @@ function TicketSla({ ticket }: { ticket: TicketDetailModel }) {
 
             {ticket.slaPausedBusinessMinutes > 0 && (
               <Row
-                label="Tempo em espera"
+                label="Tempo pausado"
                 value={`${Math.round(ticket.slaPausedBusinessMinutes / 60)} h úteis`}
               />
             )}

@@ -6,7 +6,7 @@ Na conversa do chamado, **Enviar** publica o comentário e mantém o status. **E
 
 - Técnicos e gestores podem fechar chamados não terminais dentro da sua visibilidade.
 - O solicitante pode enviar uma confirmação e fechar seu próprio chamado quando ele estiver resolvido.
-- Chamados fechados ou cancelados não aceitam novos comentários.
+- Chamados cancelados não aceitam novos comentários. Chamado fechado aceita resposta do solicitante dentro da janela de reabertura, e ela o reabre (README, seção 5.9); a equipe reabre pela ação de status antes de comentar.
 - A opção aparece conforme `allowedNextStatuses`, calculado pela API. A autorização também é verificada no servidor.
 - Texto vazio ou acima de 10.000 caracteres é recusado. Durante o envio, os controles ficam desabilitados; se houver erro, o rascunho é preservado e uma mensagem aparece.
 - Uma nota interna continua invisível ao solicitante e não conta como primeira resposta pública.

@@ -40,6 +40,8 @@ export type TicketDetail = {
   slaPaused: boolean
   slaPausedBusinessMinutes: number
   allowedNextStatuses: TicketStatus[]
+  /** Fechado: até quando ainda pode ser reaberto. Nulo nos demais status. */
+  reopenableUntil: string | null
 }
 
 export type CategoryOption = {
@@ -98,6 +100,7 @@ export type TicketHistoryAction =
   | 'Resolved'
   | 'Closed'
   | 'Cancelled'
+  | 'Reopened'
 
 export type TicketHistoryEntry = {
   id: string

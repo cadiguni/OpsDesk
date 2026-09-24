@@ -63,7 +63,10 @@ public record TicketDetail(
     DateTimeOffset? ClosedAt,
     bool SlaPaused,
     int SlaPausedBusinessMinutes,
-    IReadOnlyList<TicketStatus> AllowedNextStatuses);
+    IReadOnlyList<TicketStatus> AllowedNextStatuses,
+    // Fechado: até quando uma resposta do solicitante, ou a equipe, ainda o reabre.
+    // Nulo nos demais status.
+    DateTimeOffset? ReopenableUntil);
 
 /// <summary>
 /// Filtros da listagem. Todos opcionais e todos aplicados em SQL.

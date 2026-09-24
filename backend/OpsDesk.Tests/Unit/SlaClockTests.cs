@@ -200,4 +200,64 @@ public class SlaClockTests
         Assert.False(ticket.IsResponseOverdue(At(30, 10)));
         Assert.False(ticket.IsResolutionOverdue(At(30, 10)));
     }
+
+    // ----- Reabertura -----
+
+    private static Ticket Resolved(DateTimeOffset resolvedAt, DateTimeOffset resolutionDueAt) => new()
+    {
+        Status = TicketStatus.Resolved,
+        SlaResponseDueAt = At(1, 10),
+        SlaResolutionDueAt = resolutionDueAt,
+        ResolvedAt = resolvedAt
+    };
+
+    [Fact]
+    public void Reabertura_devolve_o_tempo_que_faltava_quando_resolveu()
+    {
+        // Resolvido segunda às 10:00 com prazo às 13:00: faltavam três horas úteis.
+        // Reaberto quarta às 10:00, as mesmas três horas levam o prazo para 13:00 de quarta.
+        var ticket = Resolved(At(1, 10), At(1, 13));
+
+        var stoppedMinutes = Clock().ResumeAfterReopening(ticket, At(3, 10));
+
+        Assert.Equal(20 * 60, stoppedMinutes);
+        Assert.Equal(20 * 60, ticket.SlaPausedBusinessMinutes);
+        Assert.Equal(At(3, 13), ticket.SlaResolutionDueAt);
+    }
+
+    [Fact]
+    public void Chamado_resolvido_ja_vencido_volta_vencido()
+    {
+        // O atraso aconteceu antes da resolução e foi real; reabrir não o apaga.
+        var ticket = Resolved(At(1, 15), At(1, 13));
+
+        Clock().ResumeAfterReopening(ticket, At(2, 9));
+
+        Assert.Equal(At(1, 17), ticket.SlaResolutionDueAt);
+        Assert.True(ticket.SlaResolutionDueAt < At(2, 9));
+    }
+
+    [Fact]
+    public void Reabertura_fora_do_expediente_nao_mexe_no_prazo()
+    {
+        var ticket = Resolved(At(1, 18, 30), At(2, 12));
+
+        var stoppedMinutes = Clock().ResumeAfterReopening(ticket, At(1, 20));
+
+        Assert.Equal(0, stoppedMinutes);
+        Assert.Equal(At(2, 12), ticket.SlaResolutionDueAt);
+    }
+
+    [Fact]
+    public void Reabertura_soma_ao_tempo_ja_pausado()
+    {
+        // A espera pelo solicitante e o tempo parado depois da resolução são o mesmo tipo
+        // de tempo: nenhum dos dois é da equipe. A reclassificação reaplica os dois juntos.
+        var ticket = Resolved(At(1, 10), At(1, 13));
+        ticket.SlaPausedBusinessMinutes = 30;
+
+        Clock().ResumeAfterReopening(ticket, At(1, 11));
+
+        Assert.Equal(90, ticket.SlaPausedBusinessMinutes);
+    }
 }

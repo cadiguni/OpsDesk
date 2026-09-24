@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
+using OpsDesk.Domain.Tickets;
 
 namespace OpsDesk.Infrastructure.Persistence.Interceptors;
 
@@ -95,10 +96,11 @@ public class TicketHistoryInterceptor(ICurrentUser currentUser, IClock clock) : 
 
         if (Changed(entry, t => t.Status, out var previousStatus, out var newStatus))
         {
-            // Resolvido, fechado e cancelado ganham ação própria porque o README lista
-            // esses três eventos separadamente. Um registro por mudança, nunca dois.
+            // Resolvido, fechado, cancelado e reaberto ganham ação própria porque o README
+            // lista esses eventos separadamente. Um registro por mudança, nunca dois.
             var action = newStatus switch
             {
+                _ when TicketStatusMachine.IsReopening(previousStatus, newStatus) => TicketHistoryAction.Reopened,
                 TicketStatus.Resolved => TicketHistoryAction.Resolved,
                 TicketStatus.Closed => TicketHistoryAction.Closed,
                 TicketStatus.Cancelled => TicketHistoryAction.Cancelled,

@@ -191,7 +191,7 @@ public class UserAdministrationService(
         db.Tickets
             .AsNoTracking()
             .Where(t => t.AssignedTechnicianId == userId
-                        && !TicketStatusMachine.Terminal.Contains(t.Status))
+                        && !TicketStatusMachine.Finished.Contains(t.Status))
             .OrderBy(t => t.CreatedAt)
             .Select(t => new BlockingTicket(t.Id, t.Code, t.Title, t.Status))
             .ToListAsync(cancellationToken);
@@ -223,5 +223,5 @@ public class UserAdministrationService(
             u.MustChangePassword,
             u.CreatedAt,
             db.Tickets.Count(t => t.AssignedTechnicianId == u.Id
-                                  && !TicketStatusMachine.Terminal.Contains(t.Status))));
+                                  && !TicketStatusMachine.Finished.Contains(t.Status))));
 }
