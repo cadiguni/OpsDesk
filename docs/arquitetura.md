@@ -276,7 +276,7 @@ O primeiro gestor nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePass
 
 No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e aproxima o desenho de produção, onde Front Door ou Application Gateway ficam na frente dos dois. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
 
-O seed inicial cria as categorias da seção 7 do README, as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
+O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhuma: depois da instalação o catálogo é do gestor), as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
 
 ---
 

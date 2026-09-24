@@ -67,22 +67,26 @@ public class DatabaseSeeder(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Catálogo inicial de categorias, só em banco sem nenhuma.
+    ///
+    /// Depois da instalação o catálogo é do gestor, que renomeia e desativa pela tela de
+    /// administração. Comparar por nome, como antes, recriava a categoria renomeada a
+    /// cada subida em desenvolvimento e a cada <c>--seed</c> em produção: renomear "VPN"
+    /// para "Acesso remoto" terminava com as duas no seletor. Desativada não conta como
+    /// ausente pelo mesmo motivo — desativar é decisão, e o seed não a desfaz.
+    /// </summary>
     private async Task SeedCategoriesAsync(CancellationToken cancellationToken)
     {
-        var existing = await db.Categories
-            .Select(c => c.Name)
-            .ToListAsync(cancellationToken);
-
-        var missing = Categories
-            .Where(c => !existing.Contains(c.Name))
-            .Select(c => new Category { Name = c.Name, Description = c.Description })
-            .ToList();
-
-        if (missing.Count > 0)
+        if (await db.Categories.AnyAsync(cancellationToken))
         {
-            db.Categories.AddRange(missing);
-            logger.LogInformation("Seed: {Count} categorias adicionadas.", missing.Count);
+            return;
         }
+
+        db.Categories.AddRange(
+            Categories.Select(c => new Category { Name = c.Name, Description = c.Description }));
+
+        logger.LogInformation("Seed: {Count} categorias adicionadas.", Categories.Length);
     }
 
     private async Task SeedSlaPoliciesAsync(CancellationToken cancellationToken)

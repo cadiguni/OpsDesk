@@ -188,6 +188,7 @@ try
     app.MapAttachmentEndpoints();
     app.MapDashboardEndpoints();
     app.MapUserAdministrationEndpoints();
+    app.MapCategoryAdministrationEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

@@ -64,7 +64,7 @@ docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e Ops
 | Comando | O que faz |
 | --- | --- |
 | `--migrate` | aplica as migrations pendentes |
-| `--seed` | insere categorias, políticas de SLA e feriados (sem usuários de exemplo) |
+| `--seed` | insere categorias (só em banco sem nenhuma), políticas de SLA e feriados (sem usuários de exemplo) |
 | `--bootstrap-admin` | cria o primeiro gestor a partir de `OpsDesk:Bootstrap` |
 | `--setup` | os três acima, na ordem |
 
@@ -80,7 +80,7 @@ O que ainda falta para uma instalação em branco ser confortável — renovaç�
 
 **O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
 
-Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações e a tela de administração de categorias ficam para a 1.1; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; os demais são promovidos por ele na tela de administração de usuários, antecipada da 1.1.
+Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações ficam para a 1.2; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; os demais são promovidos por ele na tela de administração de usuários. As administrações de usuários e de categorias também foram antecipadas da 1.1.
 
 ---
 
@@ -444,6 +444,8 @@ As categorias iniciais serão:
 * Outros.
 
 Cada chamado deverá estar associado a uma categoria.
+
+Esta lista é o catálogo **inicial**: o seed a cria só quando não existe categoria nenhuma. Depois disso o catálogo é do gestor, pela tela da seção 13.10 — o seed não recria categoria renomeada nem reativa categoria desativada.
 
 Na versão 1, a categoria poderá ser selecionada pelo usuário na abertura do chamado.
 
@@ -877,6 +879,19 @@ Regras:
 
 As mudanças vão para o log estruturado, com quem fez e sobre quem. Não há trilha de auditoria de usuário no banco, como há para chamado — ver roadmap.
 
+### 13.10 Administração de categorias
+
+Só gestor. Lista todas as categorias, ativas e desativadas, com busca por nome e filtro por situação, e quantos chamados cada uma tem, no total e em aberto.
+
+Ações: **criar**, **editar** nome e descrição, **desativar** e **reativar**. Não existe exclusão.
+
+Regras:
+
+* **categoria desativada sai dos seletores** — abertura e reclassificação a recusam —, e **os chamados que já estão nela continuam válidos**, exibindo o nome dela normalmente. É para isso que `IsActive` existe em vez de `DELETE`. No detalhe do chamado, o seletor de categoria mostra a atual marcada "(desativada)": dá para tirar o chamado dela, não para colocar outro;
+* **o nome é único sem diferenciar maiúsculas**, contando as desativadas. "VPN" e "vpn" no mesmo catálogo dividiriam o dashboard, que agrupa por nome;
+* **renomear não reescreve o histórico**: o histórico guarda o identificador da categoria, não o nome;
+* **a última categoria ativa não pode ser desativada** (409). Sem nenhuma, ninguém abre chamado e o `/ready` reprova a instalação.
+
 ---
 
 ## 14. Entidades principais
@@ -1087,7 +1102,8 @@ Pode acessar:
 * alteração de prioridade;
 * alteração de categoria;
 * visão geral da operação;
-* administração de usuários: perfil e desativação, exceto a própria conta (seção 13.9).
+* administração de usuários: perfil e desativação, exceto a própria conta (seção 13.9);
+* administração de categorias: criar, editar, desativar e reativar (seção 13.10).
 
 ---
 
@@ -1240,11 +1256,11 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 *A decidir:* tabela própria preenchida por interceptor, no molde do `TicketHistory`, ou aceitar o log como fonte enquanto não houver pedido de auditoria formal.
 
-**Tela de administração de categorias.** Criar, renomear e desativar. A entidade e o `IsActive` já existem; falta a tela e os endpoints.
+**Entregue antes do prazo: tela de administração de categorias.** Seção 13.10. A decisão pendente ficou como a intenção previa: chamado de categoria desativada continua válido, e a categoria só sai dos seletores. Implementar revelou uma armadilha no seed, que comparava por nome e por isso recriava a categoria renomeada a cada subida; ele agora só semeia em banco sem categoria nenhuma.
 
-*A decidir:* o que acontece com chamados de uma categoria desativada — a intenção é que continuem válidos e a categoria só saia dos seletores, que é o motivo de `IsActive` existir em vez de `DELETE`.
+**Filtrar a lista de chamados por categoria desativada.** O filtro da lista usa o mesmo `/api/categories` dos seletores, que só traz as ativas. A equipe não consegue listar os chamados que ficaram numa categoria desativada, a não ser pela URL.
 
-**Testes de frontend.** Não existe nenhum: são 373 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
+**Testes de frontend.** Não existe nenhum: são 392 testes no backend e zero no cliente, e o job de CI roda typecheck, lint e build. Não é caso de cobrir tudo; é caso de cobrir o que dói — marcação visual de comentário e anexo internos, filtros da lista sobrevivendo à URL, e as ações respeitando `allowedNextStatuses`.
 
 *A decidir:* Vitest com Testing Library para componente, e se vale um teste de ponta a ponta com Playwright ou se isso fica para depois.
 

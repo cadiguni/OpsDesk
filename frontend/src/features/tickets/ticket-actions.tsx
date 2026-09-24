@@ -167,6 +167,14 @@ export function TicketActions({ ticket }: { ticket: TicketDetail }) {
               disabled={classification.isPending || categories.isPending}
               aria-label="Categoria do chamado"
             >
+              {/* O seletor só recebe categorias ativas. Chamado numa categoria desativada
+                  continua nela, e sem esta opção o navegador mostraria a primeira da
+                  lista como se fosse a atual. Desabilitada: dá para sair dela, não voltar. */}
+              {categories.data && !categories.data.some((category) => category.id === ticket.categoryId) && (
+                <option value={ticket.categoryId} disabled>
+                  {ticket.categoryName} (desativada)
+                </option>
+              )}
               {categories.data?.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}

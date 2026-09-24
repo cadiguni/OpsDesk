@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
+using OpsDesk.Application.Categories;
 using OpsDesk.Application.Dashboard;
 using OpsDesk.Application.Sla;
 using OpsDesk.Application.Tickets;
@@ -86,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<DashboardService>();
         services.AddScoped<UserDirectoryService>();
         services.AddScoped<UserAdministrationService>();
+        services.AddScoped<CategoryAdministrationService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();

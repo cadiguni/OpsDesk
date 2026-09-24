@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { SessionProvider } from '@/features/auth/session'
 import { queryClient } from '@/lib/query-client'
 import { AppLayout } from '@/routes/app-layout'
+import { CategoryAdmin } from '@/routes/category-admin'
 import { ChangePassword } from '@/routes/change-password'
 import { Dashboard } from '@/routes/dashboard'
 import { Login } from '@/routes/login'
@@ -40,6 +41,7 @@ export function App() {
                 <Route path="/chamados/:id" element={<TicketDetail />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/usuarios" element={<UserAdmin />} />
+                <Route path="/categorias" element={<CategoryAdmin />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>
