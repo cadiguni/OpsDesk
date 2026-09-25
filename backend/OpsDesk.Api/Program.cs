@@ -113,6 +113,7 @@ try
 
     builder.Services.AddHostedService<PendingAttachmentCleanup>();
     builder.Services.AddHostedService<OutboundEmailDispatcher>();
+    builder.Services.AddHostedService<SlaAlertScheduler>();
 
     builder.Services.AddOpenApi();
 

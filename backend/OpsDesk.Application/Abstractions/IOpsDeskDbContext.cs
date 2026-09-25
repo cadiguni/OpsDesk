@@ -46,5 +46,7 @@ public interface IOpsDeskDbContext
 
     DbSet<SettingsAuditEntry> SettingsAudit { get; }
 
+    DbSet<SlaAlert> SlaAlerts { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

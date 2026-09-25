@@ -26,7 +26,18 @@ export function describeNotification(item: NotificationItem): string {
 
     case 'StatusChanged':
       return `${actor} mudou o status para ${statusLabel(item.detail)}`
+
+    // Alerta de SLA não tem autor: quem avisa é o relógio.
+    case 'SlaDueSoon':
+      return `O prazo de ${deadlineLabel(item.detail)} está perto de vencer`
+
+    case 'SlaOverdue':
+      return `O prazo de ${deadlineLabel(item.detail)} venceu`
   }
+}
+
+function deadlineLabel(value: string | null): string {
+  return value === 'Response' ? 'resposta' : 'resolução'
 }
 
 function statusLabel(value: string | null): string {

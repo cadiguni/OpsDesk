@@ -61,6 +61,7 @@ public class OpsDeskApiFactory(
                 // Despacho periódico desligado pelo mesmo motivo da varredura de anexos: o
                 // envio da fila é exercitado diretamente, em teste próprio.
                 ["EmailDispatch:DispatchIntervalSeconds"] = "0",
+                ["SlaAlerts:IntervalMinutes"] = "0",
 
                 // Varredura desligada: teste que dependa de tarefa periódica é teste que
                 // falha por horário. A limpeza é exercitada diretamente, em teste próprio.

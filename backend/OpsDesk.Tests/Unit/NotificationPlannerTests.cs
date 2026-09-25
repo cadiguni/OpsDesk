@@ -204,7 +204,7 @@ public class NotificationPlannerTests
             Change(Technician, TicketStatus.Resolved, TicketStatus.InProgress, comments: Public(Technician)),
             Technician.Id, Now, Email);
 
-        Assert.Empty(planned.InApp);
+        Assert.DoesNotContain(planned.InApp, n => n.UserId == Technician.Id);
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public class NotificationPlannerTests
         var planned = NotificationPlanner.Plan(
             Change(Technician, TicketStatus.WaitingOnRequester, TicketStatus.InProgress), Manager.Id, Now, Email);
 
-        var notification = Assert.Single(planned.InApp);
+        var notification = Assert.Single(planned.InApp, n => n.UserId == Technician.Id);
         Assert.Equal(NotificationKind.StatusChanged, notification.Kind);
         Assert.Equal(nameof(TicketStatus.WaitingOnRequester), notification.Detail);
     }
@@ -301,11 +301,62 @@ public class NotificationPlannerTests
         Assert.Empty(planned.InApp);
     }
 
+    // ----- Portal para o solicitante -----
+
     [Fact]
-    public void Solicitante_nao_recebe_notificacao_no_portal()
+    public void Resposta_publica_da_equipe_tambem_chega_ao_sino_do_solicitante()
     {
         var planned = NotificationPlanner.Plan(
             Change(Technician, comments: Public(Technician)), Technician.Id, Now, Email);
+
+        var notification = Assert.Single(planned.InApp, n => n.UserId == Requester.Id);
+        Assert.Equal(NotificationKind.CommentAdded, notification.Kind);
+    }
+
+    [Fact]
+    public void Sino_do_solicitante_funciona_com_o_email_desligado()
+    {
+        var planned = NotificationPlanner.Plan(
+            Change(Technician, comments: Public(Technician)), Technician.Id, Now, email: null);
+
+        Assert.Contains(planned.InApp, n => n.UserId == Requester.Id);
+    }
+
+    [Fact]
+    public void Nota_interna_nao_chega_ao_sino_do_solicitante()
+    {
+        var planned = NotificationPlanner.Plan(
+            Change(Technician, comments: Internal(Technician)), Technician.Id, Now, Email);
+
+        Assert.DoesNotContain(planned.InApp, n => n.UserId == Requester.Id);
+    }
+
+    [Fact]
+    public void Enviar_e_fechar_avisa_o_solicitante_do_fechamento_uma_vez()
+    {
+        var planned = NotificationPlanner.Plan(
+            Change(Technician, TicketStatus.Closed, TicketStatus.InProgress, comments: Public(Technician)),
+            Technician.Id, Now, Email);
+
+        var notification = Assert.Single(planned.InApp, n => n.UserId == Requester.Id);
+        Assert.Equal(NotificationKind.StatusChanged, notification.Kind);
+        Assert.Equal(nameof(TicketStatus.Closed), notification.Detail);
+    }
+
+    [Fact]
+    public void Solicitante_nao_e_avisado_no_sino_da_propria_resposta()
+    {
+        var planned = NotificationPlanner.Plan(
+            Change(Technician, comments: Public(Requester)), Requester.Id, Now, Email);
+
+        Assert.DoesNotContain(planned.InApp, n => n.UserId == Requester.Id);
+    }
+
+    [Fact]
+    public void Atribuicao_nao_avisa_o_solicitante()
+    {
+        var planned = NotificationPlanner.Plan(
+            Change(Technician, assigneeChanged: true), Manager.Id, Now, Email);
 
         Assert.DoesNotContain(planned.InApp, n => n.UserId == Requester.Id);
     }

@@ -73,6 +73,12 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services
+            .AddOptions<SlaAlertOptions>()
+            .Bind(configuration.GetSection(SlaAlertOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services
             .AddOptions<AttachmentStorageOptions>()
             .Bind(configuration.GetSection(AttachmentStorageOptions.SectionName))
             .ValidateDataAnnotations()
@@ -111,6 +117,7 @@ public static class DependencyInjection
         services.AddScoped<EmailOutboxService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
+        services.AddScoped<SlaAlertService>();
         services.AddScoped<DatabaseSeeder>();
 
         // Interceptors são escopados porque o de histórico depende do usuário da requisição.

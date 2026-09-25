@@ -10,7 +10,7 @@ import { NotificationBell } from '@/features/notifications/notification-bell'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
-  const { user, signOut, role, isStaff } = useSession()
+  const { user, signOut, role } = useSession()
   const location = useLocation()
 
   return (
@@ -38,7 +38,7 @@ export function AppLayout() {
           <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : ['/usuarios', '/categorias', '/configuracoes/email'].includes(location.pathname) ? 'Administração' : 'Central de chamados'}</span>
           <div className="flex flex-wrap items-center gap-3">
             <ThemeSelect />
-            {isStaff && <NotificationBell />}
+            <NotificationBell />
             <Link to="/chamados/novo" className={cn(buttonVariants({ size: 'sm' }), 'hidden sm:inline-flex')}><Plus /> Novo chamado</Link>
             <Button variant="ghost" size="sm" onClick={() => void signOut()}><LogOut /> Sair</Button>
           </div>

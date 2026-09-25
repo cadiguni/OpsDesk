@@ -45,7 +45,8 @@ public record PlannedNotifications(IReadOnlyList<Notification> InApp, IReadOnlyL
 /// Três regras de destinatário:
 ///
 /// <list type="bullet">
-/// <item>o <b>solicitante</b> recebe e-mail de comentário público e de mudança de status;</item>
+/// <item>o <b>solicitante</b> recebe e-mail e notificação no portal de comentário público e
+/// de mudança de status — o portal vale também com o e-mail desligado ou no spam;</item>
 /// <item>o <b>responsável</b> recebe notificação no portal — o gestor, só quando o chamado
 /// está no nome dele, porque é a mesma regra;</item>
 /// <item>ninguém é avisado da própria ação.</item>
@@ -63,6 +64,7 @@ public static class NotificationPlanner
         var emails = new List<OutboundEmail>();
 
         PlanInApp(change, actorId, now, inApp);
+        PlanRequesterInApp(change, actorId, now, inApp);
 
         if (email is not null && EmailFor(change, actorId, now, email) is { } message)
         {
@@ -125,6 +127,42 @@ public static class NotificationPlanner
         {
             into.Add(New(responsible, change, NotificationKind.StatusChanged, actorId, now,
                 detail: change.CurrentStatus.ToString()));
+        }
+    }
+
+    // ----- Portal: o solicitante -----
+
+    /// <summary>
+    /// Os mesmos eventos do e-mail, no sino. Mudança de status vence o comentário quando os
+    /// dois vêm juntos: em "enviar e fechar", o que muda a vida do solicitante é o
+    /// chamado ter sido fechado, e a resposta ele lê ao abrir.
+    /// </summary>
+    private static void PlanRequesterInApp(
+        TicketChange change, Guid? actorId, DateTimeOffset now, List<Notification> into)
+    {
+        var requester = change.Requester;
+
+        // Solicitante que também é o responsável já foi tratado como responsável: uma
+        // notificação por pessoa por gravação.
+        if (Reachable(requester, change, actorId) is null || requester.Id == change.CurrentAssignee?.Id)
+        {
+            return;
+        }
+
+        // A mesma regra do e-mail: nota interna não conta, nem para solicitante da equipe.
+        // O sino mostra só o tipo, mas "fulano comentou" de uma nota que a pessoa não vai
+        // encontrar ao abrir o chamado é aviso sobre algo invisível.
+        var replied = change.Comments.Any(c => !c.IsInternal && c.AuthorId != requester.Id);
+        var statusChanged = change.PreviousStatus is { } from && from != change.CurrentStatus;
+
+        if (statusChanged)
+        {
+            into.Add(New(requester, change, NotificationKind.StatusChanged, actorId, now,
+                detail: change.CurrentStatus.ToString()));
+        }
+        else if (replied)
+        {
+            into.Add(New(requester, change, NotificationKind.CommentAdded, actorId, now));
         }
     }
 

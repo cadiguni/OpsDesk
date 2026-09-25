@@ -19,5 +19,11 @@ public enum NotificationKind
     StatusChanged,
 
     /// <summary>O chamado voltou de resolvido ou fechado para atendimento.</summary>
-    Reopened
+    Reopened,
+
+    /// <summary>Um prazo de SLA está perto de vencer. <c>Detail</c> diz qual.</summary>
+    SlaDueSoon,
+
+    /// <summary>Um prazo de SLA venceu. <c>Detail</c> diz qual.</summary>
+    SlaOverdue
 }

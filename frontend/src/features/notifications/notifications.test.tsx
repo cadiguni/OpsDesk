@@ -41,6 +41,14 @@ describe('describeNotification', () => {
     )
   })
 
+  it.each([
+    ['SlaDueSoon', 'Response', 'O prazo de resposta está perto de vencer'],
+    ['SlaDueSoon', 'Resolution', 'O prazo de resolução está perto de vencer'],
+    ['SlaOverdue', 'Resolution', 'O prazo de resolução venceu'],
+  ] as const)('alerta de SLA %s %s', (kind, detail, text) => {
+    expect(describeNotification(item({ kind, detail, actorName: null }))).toBe(text)
+  })
+
   it('atribui ao sistema quando ninguém agiu', () => {
     expect(describeNotification(item({ actorName: null }))).toBe('O sistema passou o chamado para você')
   })

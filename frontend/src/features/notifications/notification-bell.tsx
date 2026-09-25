@@ -6,11 +6,9 @@ import { useUnreadCount } from '@/features/notifications/queries'
 import { cn } from '@/lib/utils'
 
 /**
- * Sino com o contador de não lidas.
- *
- * Só para a equipe: é o responsável pelo chamado quem recebe aviso no portal, e o
- * solicitante recebe por e-mail (README, seção 18). Um sino que nunca toca, na tela do
- * solicitante, seria um enfeite consultando o servidor a cada minuto.
+ * Sino com o contador de não lidas, para todo perfil: o responsável recebe os avisos do
+ * atendimento e os alertas de SLA; o solicitante, os mesmos avisos que vão por e-mail —
+ * que chegam aqui mesmo com o e-mail desligado ou parado no spam (README, seção 18).
  */
 export function NotificationBell() {
   const unread = useUnreadCount(true)

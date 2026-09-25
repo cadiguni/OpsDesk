@@ -96,6 +96,20 @@ public class NotificationTests(PostgresFixture fixture) : TicketTestBase(fixture
     }
 
     [Fact]
+    public async Task Resposta_da_equipe_chega_ao_sino_do_solicitante_mesmo_com_email_desligado()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        await CommentAsync(world.Technician, ticket, "Pode testar agora?");
+        await CommentAsync(world.Technician, ticket, "Nota só da equipe.", isInternal: true);
+
+        var item = Assert.Single((await NotificationsAsync(world.Requester)).Items);
+        Assert.Equal(NotificationKind.CommentAdded, item.Kind);
+        Assert.Empty(await OutboxAsync());
+    }
+
+    [Fact]
     public async Task Atribuicao_avisa_quem_recebe_e_quem_perde_mas_nao_quem_fez()
     {
         var world = await SetUpAsync();

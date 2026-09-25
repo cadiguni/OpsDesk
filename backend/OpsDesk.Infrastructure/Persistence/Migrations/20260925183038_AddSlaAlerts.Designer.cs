@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OpsDesk.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using OpsDesk.Infrastructure.Persistence;
 namespace OpsDesk.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(OpsDeskDbContext))]
-    partial class OpsDeskDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925183038_AddSlaAlerts")]
+    partial class AddSlaAlerts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

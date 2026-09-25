@@ -8,7 +8,7 @@ import { errorMessage } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-/** Notificações do responsável pelo chamado (README, seção 18, versão 1.2). */
+/** Notificações do usuário: avisos de chamado e alertas de SLA (README, seção 18, versão 1.2). */
 export function Notifications() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
@@ -40,7 +40,7 @@ export function Notifications() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Notificações</h1>
           <p className="text-muted-foreground text-sm">
-            Chamados sob sua responsabilidade que mudaram.
+            O que mudou nos seus chamados.
           </p>
         </div>
 

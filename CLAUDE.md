@@ -42,9 +42,9 @@ POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-**Versão 1.2 entregue:** e-mail ao solicitante pelo Microsoft Graph, configurado pelo gestor no portal, com fila de saída; notificação no portal ao responsável. Falta dela: alertas de SLA.
+**Versão 1.2 entregue:** e-mail ao solicitante pelo Microsoft Graph, configurado pelo gestor no portal, com fila de saída; notificação no portal ao solicitante e ao responsável; alertas de SLA no portal (25% do prazo restante e vencimento).
 
-**Fora do escopo, conforme o roadmap:** alertas de SLA, ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e as administrações de usuários e de categorias foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
+**Fora do escopo, conforme o roadmap:** ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e as administrações de usuários e de categorias foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
 
 ## Documentação
 
@@ -211,6 +211,7 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
 * **Filtro de data chega com `-03:00` e precisa virar UTC antes da query.** Mesma recusa do Npgsql de deslocamento diferente de zero, agora em parâmetro de consulta: sem o `ToUniversalTime()` em `TicketFilterExtensions`, filtrar por período respondia 500. Há teste que falha sem a conversão (`Periodo_com_deslocamento_de_sao_paulo_respeita_a_virada_do_dia_local`).
 * **Instalar Vitest junto com o resto num só `npm install` falha** com `ERESOLVE` (`Found: vite@undefined`), por um ciclo de peer opcional entre `vitest` e `@vitest/browser-playwright`. Instalar o `vitest` sozinho primeiro resolve.
+* **Alerta de SLA compara prazo, não chamado.** O registro de alerta dado (`SlaAlert`) tem o prazo na chave única, para que prazo movido — pausa, reabertura, reclassificação — possa alertar de novo. Vencimento com mais de 24 horas não alerta: sem esse corte, a primeira verificação depois de um deploy, ou de a tarefa ficar parada, avisaria de uma vez todos os chamados vencidos da história.
 * **As chaves do Data Protection precisam de volume persistente.** Elas cifram o client secret do e-mail. Sem `DataProtection:KeysPath` apontando para um volume, cada deploy gera chaves novas, o secret gravado vira ilegível e o e-mail para — sem erro, a não ser a mensagem na tela de configuração dias depois. Por isso `KeysPath` é obrigatório (a API não sobe sem ele), a subida grava um arquivo de sonda na pasta, e o Dockerfile cria `/var/opsdesk/keys` com o dono certo, como faz com os anexos.
 * **`WebUtility.HtmlEncode` transforma acento em entidade** (`Concluído` vira `Conclu&#237;do`). É HTML válido e todo cliente de e-mail exibe normalmente, mas teste que procura texto em português no corpo do e-mail precisa decodificar antes.
 * **Reabrir retoma o SLA, não o recomeça.** O tempo útil entre a resolução e a reabertura entra como pausa, e `ResolvedAt`/`ClosedAt` só são limpos depois disso — a retomada precisa da data de resolução. A janela de sete dias para chamado fechado mora em `ReopenPolicy`, não no grafo. Ver README, seção 5.9.

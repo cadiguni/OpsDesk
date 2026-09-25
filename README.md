@@ -1306,11 +1306,11 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 Era a maior lacuna funcional do produto: ninguém descobria que um chamado mudou a não ser abrindo a tela. O técnico não sabia que foi atribuído, e o solicitante não sabia que a resposta chegou.
 
-**Entregue: e-mail ao solicitante e notificação no portal ao responsável.**
+**Entregue: e-mail e notificação no portal ao solicitante, e notificação no portal ao responsável.**
 
 Quem recebe o quê:
 
-| Evento | Solicitante (e-mail) | Responsável (portal) |
+| Evento | Solicitante (e-mail e portal) | Responsável (portal) |
 | --- | --- | --- |
 | Resposta pública da equipe | sim | sim, se foi outra pessoa |
 | Nota interna | **nunca** | sim, se foi outra pessoa |
@@ -1318,6 +1318,9 @@ Quem recebe o quê:
 | Mudança de status | sim | sim, se foi outra pessoa |
 | Reabertura | — (foi ele quem reabriu) | sim ("reabriu") |
 | Atribuição | — | quem recebe e quem perde o chamado |
+| Prazo de SLA perto de vencer ou vencido | — | sim (ver alertas de SLA, abaixo) |
+
+O solicitante recebe no portal os mesmos avisos do e-mail, e no portal eles chegam mesmo com o envio de e-mail desligado ou parado no spam. Quando resposta e mudança de status vêm juntas, como em "enviar e fechar", o aviso do portal é o da mudança de status — é o que muda a vida dele; a resposta ele lê ao abrir.
 
 * **o gestor não recebe nada por ser gestor**: recebe no portal quando o chamado está no nome dele, pela mesma regra de qualquer responsável;
 * **ninguém é avisado da própria ação**;
@@ -1357,11 +1360,17 @@ Com o envio desligado, **nenhum e-mail entra na fila** — ligar o envio não di
 
 **Atenção, e não é detalhe:** a invariante 2 vale em canal novo. Nota interna e anexo interno **nunca** entram no corpo de um e-mail, e o destinatário de cada mensagem precisa ser derivado da mesma regra de visibilidade que a API usa — não de uma lista montada à mão no serviço de notificação. Todo endpoint novo que exponha comentário pede teste do caso negativo; o mesmo vale para todo canal novo.
 
-**Entregue: notificações na interface.** Sino no cabeçalho, só para a equipe, com o número de não lidas; tela de notificações com filtro de não lidas e "marcar todas como lidas". O contador consulta a API a cada minuto com a aba visível — tempo real exigiria conexão aberta com o servidor, que fica para quando fizer falta.
+**Entregue: notificações na interface.** Sino no cabeçalho, para todos os perfis, com o número de não lidas; tela de notificações com filtro de não lidas e "marcar todas como lidas". O contador consulta a API a cada minuto com a aba visível — tempo real exigiria conexão aberta com o servidor, que fica para quando fizer falta.
 
-**Alertas de SLA.** Aviso antes do vencimento, não depois. Depende de tarefa agendada, então vem depois do canal de e-mail existir.
+**Entregue: alertas de SLA no portal.** Dois avisos por prazo — resposta e resolução —: um quando resta **25% do prazo da prioridade**, em horas úteis, e outro quando ele vence. Proporcional porque um valor fixo chegaria tarde para o crítico ou cedo para o de baixa prioridade: crítico, com 4 horas de resolução, avisa com 1 hora; média, com 30, avisa com 7h30.
 
-*A decidir:* quem recebe — responsável, gestor, ou os dois; e com quanta antecedência, em horas úteis.
+* **quem recebe:** o responsável. Chamado sem responsável, ou com responsável desativado, avisa os gestores — do contrário o alerta mais importante, o do chamado que ninguém pegou, não iria para ninguém. O solicitante não recebe: o prazo é compromisso da equipe;
+* **só no portal**, sem e-mail;
+* **prazo que não corre não alerta:** resposta já dada, chamado resolvido, fechado ou cancelado, e resolução pausada enquanto aguarda o solicitante;
+* **um aviso por prazo.** Quando o prazo se move — pausa encerrada, reabertura, reclassificação —, o prazo novo pode alertar de novo;
+* **vencimento com mais de 24 horas não alerta.** Sem esse corte, a primeira verificação depois do deploy avisaria de uma vez todos os chamados vencidos da história; para eles existe o filtro de vencidos.
+
+A verificação roda a cada cinco minutos no processo da API (`SlaAlerts:IntervalMinutes`; a fração é `SlaAlerts:WarningPercent`). Com várias réplicas, todas verificam, e um índice único no banco garante um aviso só.
 
 ### Versão 2.0 — Integrações
 

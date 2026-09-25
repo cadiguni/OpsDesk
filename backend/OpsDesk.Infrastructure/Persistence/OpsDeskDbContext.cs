@@ -36,6 +36,8 @@ public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
 
     public DbSet<SettingsAuditEntry> SettingsAudit => Set<SettingsAuditEntry>();
 
+    public DbSet<SlaAlert> SlaAlerts => Set<SlaAlert>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasSequence<long>(TicketCodeSequence).StartsAt(1).IncrementsBy(1);

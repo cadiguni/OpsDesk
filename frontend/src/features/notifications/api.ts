@@ -8,6 +8,8 @@ export type NotificationKind =
   | 'CommentAdded'
   | 'StatusChanged'
   | 'Reopened'
+  | 'SlaDueSoon'
+  | 'SlaOverdue'
 
 export type NotificationItem = {
   id: string
@@ -16,7 +18,7 @@ export type NotificationItem = {
   ticketCode: string
   ticketTitle: string
   actorName: string | null
-  /** Hoje, o status novo em `StatusChanged`. */
+  /** O status novo em `StatusChanged`; o prazo (`Response`, `Resolution`) nos alertas de SLA. */
   detail: string | null
   createdAt: string
   readAt: string | null
