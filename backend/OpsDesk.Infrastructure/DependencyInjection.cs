@@ -1,21 +1,28 @@
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Categories;
 using OpsDesk.Application.Dashboard;
+using OpsDesk.Application.Notifications;
 using OpsDesk.Application.Sla;
 using OpsDesk.Application.Tickets;
 using OpsDesk.Application.Users;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Infrastructure.Authentication;
+using OpsDesk.Infrastructure.Email;
 using OpsDesk.Infrastructure.Persistence;
 using OpsDesk.Infrastructure.Persistence.Interceptors;
 using OpsDesk.Infrastructure.Persistence.Seed;
+using OpsDesk.Infrastructure.Security;
 using OpsDesk.Infrastructure.Storage;
 using OpsDesk.Infrastructure.Time;
 
@@ -74,6 +81,9 @@ public static class DependencyInjection
         // Sem estado por requisição: uma instância serve todas.
         services.AddSingleton<IAttachmentStorage, FileSystemAttachmentStorage>();
 
+        AddCredentialProtection(services);
+        AddEmail(services, configuration);
+
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
@@ -96,6 +106,9 @@ public static class DependencyInjection
         services.AddScoped<UserAdministrationService>();
         services.AddScoped<CategoryAdministrationService>();
         services.AddScoped<AttachmentService>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<EmailSettingsService>();
+        services.AddScoped<EmailOutboxService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
         services.AddScoped<DatabaseSeeder>();
@@ -103,6 +116,7 @@ public static class DependencyInjection
         // Interceptors são escopados porque o de histórico depende do usuário da requisição.
         services.AddScoped<TimestampInterceptor>();
         services.AddScoped<TicketHistoryInterceptor>();
+        services.AddScoped<TicketNotificationInterceptor>();
 
         services.AddDbContext<OpsDeskDbContext>((provider, options) => options
             // A connection string é resolvida aqui dentro, quando o contexto é criado, e
@@ -116,9 +130,50 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(
                 provider.GetRequiredService<TimestampInterceptor>(),
-                provider.GetRequiredService<TicketHistoryInterceptor>()));
+                provider.GetRequiredService<TicketHistoryInterceptor>(),
+                provider.GetRequiredService<TicketNotificationInterceptor>()));
 
         return services;
+    }
+
+    /// <summary>
+    /// Cifra das credenciais guardadas no banco — hoje, o client secret do envio de e-mail.
+    ///
+    /// O repositório de chaves é configurado pelas options, resolvidas quando o Data
+    /// Protection é usado, e não lido do <c>IConfiguration</c> aqui: ler configuração
+    /// durante o registro congela o valor daquele instante (ver CLAUDE.md).
+    /// </summary>
+    private static void AddCredentialProtection(IServiceCollection services)
+    {
+        services
+            .AddOptions<DataProtectionSettings>()
+            .BindConfiguration(DataProtectionSettings.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddDataProtection().SetApplicationName("OpsDesk");
+
+        services
+            .AddOptions<KeyManagementOptions>()
+            .Configure<IOptions<DataProtectionSettings>, ILoggerFactory>((keys, settings, loggers) =>
+                keys.XmlRepository = new FileSystemXmlRepository(
+                    new DirectoryInfo(Path.GetFullPath(settings.Value.KeysPath)), loggers));
+
+        services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+    }
+
+    private static void AddEmail(IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<EmailDispatchOptions>()
+            .Bind(configuration.GetSection(EmailDispatchOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Trinta segundos: o despachante envia em lote, e um provedor pendurado não pode
+        // prender a rodada inteira.
+        services.AddHttpClient<IEmailSender, GraphEmailSender>(client =>
+            client.Timeout = TimeSpan.FromSeconds(30));
     }
 
     private static string ConnectionString(IServiceProvider provider) =>

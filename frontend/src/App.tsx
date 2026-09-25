@@ -7,9 +7,11 @@ import { AppLayout } from '@/routes/app-layout'
 import { CategoryAdmin } from '@/routes/category-admin'
 import { ChangePassword } from '@/routes/change-password'
 import { Dashboard } from '@/routes/dashboard'
+import { EmailSettingsPage } from '@/routes/email-settings'
 import { Login } from '@/routes/login'
 import { NewTicket } from '@/routes/new-ticket'
 import { NotFound } from '@/routes/not-found'
+import { Notifications } from '@/routes/notifications'
 import { CHANGE_PASSWORD_PATH, ProtectedRoute } from '@/routes/protected-route'
 import { Register } from '@/routes/register'
 import { TicketDetail } from '@/routes/ticket-detail'
@@ -42,6 +44,8 @@ export function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/usuarios" element={<UserAdmin />} />
                 <Route path="/categorias" element={<CategoryAdmin />} />
+                <Route path="/configuracoes/email" element={<EmailSettingsPage />} />
+                <Route path="/notificacoes" element={<Notifications />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

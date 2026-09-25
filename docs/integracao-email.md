@@ -242,6 +242,8 @@ A integração de recebimento pressupõe a de envio, entregue junto na versão 2
 
 O canal de envio é o da 1.2 (README, seção 18): Microsoft Graph, configurado pelo gestor no portal, com fila de saída. O remetente é a caixa monitorada, para que a resposta do solicitante volte para ela e caia na etapa 4.4.
 
+Até esta integração existir, o e-mail da 1.2 avisa que respostas a ele não são lidas. Entregar a ingestão inclui tirar esse aviso do `NotificationPlanner` e acrescentar os cabeçalhos `In-Reply-To` e `References` descritos abaixo.
+
 Quando um técnico comenta publicamente em um chamado de origem `Email`, o solicitante recebe a resposta por e-mail, com:
 
 * o código do chamado no assunto, no formato `[OPS-000123]`;

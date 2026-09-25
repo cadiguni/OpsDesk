@@ -25,6 +25,10 @@ dist-ssr/
 !frontend/.env.development
 appsettings.*.local.json
 
+# Chaves do Data Protection do `dotnet run` em desenvolvimento. Cifram credencial: nunca
+# vão para o repositório.
+data-protection-keys/
+
 # Editores
 .idea/
 *.swp

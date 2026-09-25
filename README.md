@@ -1304,9 +1304,28 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 ### Versão 1.2 — Notificações
 
-É a maior lacuna funcional do produto: hoje ninguém descobre que um chamado mudou a não ser abrindo a tela. O técnico não sabe que foi atribuído, e o solicitante não sabe que a resposta chegou.
+Era a maior lacuna funcional do produto: ninguém descobria que um chamado mudou a não ser abrindo a tela. O técnico não sabia que foi atribuído, e o solicitante não sabia que a resposta chegou.
 
-**E-mail de novo comentário público e de mudança de status.** Começar por aí.
+**Entregue: e-mail ao solicitante e notificação no portal ao responsável.**
+
+Quem recebe o quê:
+
+| Evento | Solicitante (e-mail) | Responsável (portal) |
+| --- | --- | --- |
+| Resposta pública da equipe | sim | sim, se foi outra pessoa |
+| Nota interna | **nunca** | sim, se foi outra pessoa |
+| Resposta do solicitante | — | sim ("respondeu") |
+| Mudança de status | sim | sim, se foi outra pessoa |
+| Reabertura | — (foi ele quem reabriu) | sim ("reabriu") |
+| Atribuição | — | quem recebe e quem perde o chamado |
+
+* **o gestor não recebe nada por ser gestor**: recebe no portal quando o chamado está no nome dele, pela mesma regra de qualquer responsável;
+* **ninguém é avisado da própria ação**;
+* **uma gravação, um aviso por pessoa.** "Enviar e fechar" é um e-mail com a resposta e o novo status, não dois;
+* **o e-mail avisa que respostas a ele não são lidas.** Até a versão 2.0 ninguém lê a caixa de suporte, e uma resposta por e-mail se perderia sem que a pessoa soubesse. O aviso sai quando a ingestão existir;
+* **abertura de chamado não gera aviso** — nem para o solicitante, que acabou de abri-lo, nem para a equipe, que o vê na fila.
+
+**Como funciona por dentro.** Um interceptor do EF Core, irmão do que grava o histórico, olha o que mudou em cada gravação — comentário novo, status, responsável — e grava as notificações e os e-mails na mesma transação. Aviso que depende de cada serviço lembrar de chamar alguma coisa funciona até o primeiro endpoint novo; aqui o gatilho é o dado. A regra de quem recebe o quê mora numa função pura, `NotificationPlanner`, e cada destinatário passa pela mesma regra de visibilidade da API: responsável que deixou de ser da equipe não recebe nota interna, e a notificação some do sino de quem deixou de enxergar o chamado.
 
 **Decidido: envio pelo Microsoft Graph, configurado no próprio portal.** A empresa usa Microsoft 365. O envio é pela API `sendMail` do Graph, com um aplicativo registrado no Entra ID, e não por SMTP: a Microsoft anunciou a desativação da autenticação básica no SMTP do Exchange Online, e SMTP com OAuth dá o mesmo trabalho de registro sem vantagem. O remetente é a caixa de suporte — a mesma que a versão 2.0 vai monitorar —, para que "responder" no e-mail volte para ela.
 
@@ -1328,11 +1347,17 @@ Pré-requisito do lado do Microsoft 365, que é do administrador do tenant: regi
 
 **Decidido: fila, e não envio no mesmo request.** A notificação vira uma linha numa tabela de saída na mesma transação da mudança que a gerou, e um serviço em segundo plano envia, com novas tentativas. Comentário nunca falha porque o Microsoft 365 está fora do ar, e nenhuma notificação se perde entre gravar a mudança e enviar. A fila é uma tabela no PostgreSQL que já existe, não infraestrutura nova.
 
-*A decidir:* quem recebe cada evento — o solicitante, com certeza; o responsável quando o solicitante responde; o gestor em algum caso? E como evitar tempestade de e-mail em chamado muito ativo (agrupar por janela de tempo).
+Com o envio desligado, **nenhum e-mail entra na fila** — ligar o envio não dispara uma avalanche de avisos antigos. Os que já estavam na fila esperam. Cada e-mail tem até cinco tentativas, espaçadas em 1, 5, 15 e 60 minutos; depois disso fica como desistido, contado na tela de configuração.
+
+**Agrupar e-mails de chamado muito ativo.** Hoje cada gravação com resposta pública ou mudança de status é um e-mail. Numa conversa rápida, são vários e-mails em poucos minutos.
+
+*A decidir:* se isso incomodar na prática, agrupar por janela de tempo (segurar o e-mail alguns minutos e juntar o que chegar nesse intervalo). Não fizemos antes de ver o uso real, porque atrasar o aviso também tem custo.
+
+**Despacho com mais de uma réplica.** O despachante roda no processo da API; com duas réplicas, as duas podem pegar o mesmo e-mail na mesma rodada. Resolve-se com `EmailDispatch:DispatchIntervalSeconds = 0` em todas menos uma, ou com trava por linha na seleção.
 
 **Atenção, e não é detalhe:** a invariante 2 vale em canal novo. Nota interna e anexo interno **nunca** entram no corpo de um e-mail, e o destinatário de cada mensagem precisa ser derivado da mesma regra de visibilidade que a API usa — não de uma lista montada à mão no serviço de notificação. Todo endpoint novo que exponha comentário pede teste do caso negativo; o mesmo vale para todo canal novo.
 
-**Notificações internas na interface.** Sino com contador, lidas e não lidas.
+**Entregue: notificações na interface.** Sino no cabeçalho, só para a equipe, com o número de não lidas; tela de notificações com filtro de não lidas e "marcar todas como lidas". O contador consulta a API a cada minuto com a aba visível — tempo real exigiria conexão aberta com o servidor, que fica para quando fizer falta.
 
 **Alertas de SLA.** Aviso antes do vencimento, não depois. Depende de tarefa agendada, então vem depois do canal de e-mail existir.
 

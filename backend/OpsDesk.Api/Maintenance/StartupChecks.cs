@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using OpsDesk.Infrastructure.Security;
 using OpsDesk.Infrastructure.Storage;
 
 namespace OpsDesk.Api.Maintenance;
@@ -24,6 +25,7 @@ internal static class StartupChecks
 
         ValidateCorsOrigins(app, logger);
         ValidateAttachmentRoot(app, logger);
+        ValidateDataProtectionKeys(app, logger);
     }
 
     /// <summary>
@@ -102,5 +104,37 @@ internal static class StartupChecks
         }
 
         logger.LogInformation("Raiz dos anexos pronta em {Root}.", root);
+    }
+
+    /// <summary>
+    /// Pasta das chaves do Data Protection existe e aceita escrita.
+    ///
+    /// Mesmo caso da raiz de anexos, com sintoma pior: sem permissão, a chave nova não é
+    /// gravada, e o client secret salvo na tela deixa de ser legível no próximo reinício —
+    /// o e-mail para, e a mensagem aparece na tela de configuração dias depois.
+    /// </summary>
+    private static void ValidateDataProtectionKeys(WebApplication app, ILogger logger)
+    {
+        var root = Path.GetFullPath(
+            app.Services.GetRequiredService<IOptions<DataProtectionSettings>>().Value.KeysPath);
+
+        var probe = Path.Combine(root, $".opsdesk-write-probe-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(root);
+
+            File.WriteAllText(probe, string.Empty);
+            File.Delete(probe);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                $"A pasta de chaves do Data Protection '{root}' não aceita escrita. Em " +
+                "contêiner, ela precisa ser um volume do usuário da aplicação — ver o mkdir " +
+                "e o chown do Dockerfile.", ex);
+        }
+
+        logger.LogInformation("Chaves do Data Protection em {Root}.", root);
     }
 }

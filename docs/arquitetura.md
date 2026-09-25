@@ -259,6 +259,12 @@ O primeiro gestor nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePass
 
 ---
 
+### 4.20 Notificações nascem de um interceptor, e a regra é uma função pura
+
+E-mail e notificação no portal são gerados pelo `TicketNotificationInterceptor`, na mesma transação que grava a mudança, a partir do que o `ChangeTracker` mostra: comentário novo, status ou responsável diferente. A decisão de quem recebe o quê fica no `NotificationPlanner`, que recebe o que mudou e devolve as linhas a gravar, sem tocar em banco.
+
+**Por quê interceptor:** o argumento do histórico (4.2). Aviso chamado de dentro de cada serviço funciona até o primeiro endpoint novo que esquecer. **Por quê função pura:** é onde mora a invariante 2 no canal novo — nota interna nunca vira e-mail —, e regra de autorização se prende com teste unitário exaustivo, não com teste de ponta a ponta caso a caso. **Por quê fila na mesma transação:** mudança gravada tem aviso gravado, mudança desfeita não tem; e o envio, que depende do Microsoft 365, fica fora do tempo de resposta da API.
+
 ## 5. Requisitos não funcionais na prática
 
 | Requisito | Como é atendido |

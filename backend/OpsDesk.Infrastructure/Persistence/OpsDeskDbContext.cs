@@ -28,6 +28,14 @@ public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<OutboundEmail> OutboundEmails => Set<OutboundEmail>();
+
+    public DbSet<EmailSettings> EmailSettings => Set<EmailSettings>();
+
+    public DbSet<SettingsAuditEntry> SettingsAudit => Set<SettingsAuditEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasSequence<long>(TicketCodeSequence).StartsAt(1).IncrementsBy(1);

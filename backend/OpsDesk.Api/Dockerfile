@@ -32,7 +32,10 @@ COPY --from=build /app .
 # primeiro uso. Sem este mkdir, o volume nasce pertencendo ao root, a API roda como
 # usuário sem privilégio, e o envio de anexo falha com "Permission denied" — só no
 # container, nunca no `dotnet run` nem nos testes.
-RUN mkdir -p /var/opsdesk/attachments && chown -R $APP_UID:$APP_UID /var/opsdesk
+#
+# O mesmo vale para a pasta de chaves do Data Protection, com um agravante: sem escrita,
+# a chave não é salva e o client secret do e-mail fica ilegível no reinício seguinte.
+RUN mkdir -p /var/opsdesk/attachments /var/opsdesk/keys && chown -R $APP_UID:$APP_UID /var/opsdesk
 
 # Usuário sem privilégio, já presente nas imagens oficiais.
 USER $APP_UID

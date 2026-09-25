@@ -48,10 +48,14 @@ services:
       # Anexos ficam no volume, e não na imagem: um novo deploy não pode levar embora o
       # print que o solicitante mandou.
       AttachmentStorage__RootPath: "/var/opsdesk/attachments"
+      # Chaves que cifram o client secret do e-mail. Em volume pelo mesmo motivo dos
+      # anexos, com consequência pior: chave perdida é secret ilegível e e-mail parado.
+      DataProtection__KeysPath: "/var/opsdesk/keys"
     ports:
       - "8080:8080"
     volumes:
       - attachments-data:/var/opsdesk/attachments
+      - keys-data:/var/opsdesk/keys
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -91,3 +95,4 @@ services:
 volumes:
   postgres-data:
   attachments-data:
+  keys-data:

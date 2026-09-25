@@ -38,5 +38,13 @@ public interface IOpsDeskDbContext
 
     DbSet<RefreshToken> RefreshTokens { get; }
 
+    DbSet<Notification> Notifications { get; }
+
+    DbSet<OutboundEmail> OutboundEmails { get; }
+
+    DbSet<EmailSettings> EmailSettings { get; }
+
+    DbSet<SettingsAuditEntry> SettingsAudit { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

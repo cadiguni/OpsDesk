@@ -35,11 +35,16 @@ GET    /api/admin/users           (gestor; ativos e inativos, filtros, paginaç�
 POST   /api/admin/users/{id}/role   POST /api/admin/users/{id}/activation
 GET    /api/admin/categories      POST /api/admin/categories   (gestor)
 PUT    /api/admin/categories/{id}  POST /api/admin/categories/{id}/activation
+GET    /api/notifications   GET /api/notifications/unread-count   (as do próprio usuário)
+POST   /api/notifications/{id}/read   POST /api/notifications/read-all
+GET    /api/admin/settings/email   PUT /api/admin/settings/email   POST /api/admin/settings/email/test   (gestor)
 POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-**Fora do escopo da versão 1, conforme o roadmap:** notificações (versão 1.2), ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e as administrações de usuários e de categorias foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
+**Versão 1.2 entregue:** e-mail ao solicitante pelo Microsoft Graph, configurado pelo gestor no portal, com fila de saída; notificação no portal ao responsável. Falta dela: alertas de SLA.
+
+**Fora do escopo, conforme o roadmap:** alertas de SLA, ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e as administrações de usuários e de categorias foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
 
 ## Documentação
 
@@ -157,6 +162,8 @@ Estas regras não são preferências de estilo. Quebrá-las é bug, e em alguns 
 8. **Senha usa `PasswordHasher<T>`.** Nunca hash artesanal, nunca MD5 ou SHA sem KDF.
 9. **Anexo nasce pendente, e é o vínculo que define a visibilidade.** Enviar cria um anexo sem chamado, visível só para quem enviou; a abertura ou o comentário é que o vincula e copia o `IsInternal`. Nunca vincule anexo enviado por outra pessoa, e nunca torne um anexo visível antes de saber a que comentário ele pertence.
 10. **Senha provisória só serve para trocar a si mesma.** Enquanto `User.MustChangePassword` for verdadeiro, nenhuma rota fora de `/api/auth` responde — a trava é o middleware `UsePasswordChangeRequired`, e não um atributo por rota, para que endpoint novo nasça coberto. Não a substitua por verificação rota a rota nem a contorne em serviço: a credencial do bootstrap chega por variável de ambiente, e é essa trava que a faz valer uma vez em vez de para sempre.
+11. **Aviso de chamado nasce do dado, não do serviço.** Notificação e e-mail são gerados pelo `TicketNotificationInterceptor`, na mesma transação da mudança, e a regra de quem recebe o quê mora no `NotificationPlanner`. Não chame envio de e-mail de dentro de serviço: endpoint novo que grave comentário, status ou responsável já notifica sozinho. E-mail só para o solicitante e **nunca** com nota interna — há teste fixando os dois (`Nota_interna_nunca_vira_email`, `Nota_interna_nao_entra_no_email_de_outro_evento_da_mesma_gravacao`).
+12. **Credencial guardada no banco é só de escrita e cifrada.** O client secret do e-mail passa pelo `ISecretProtector` (Data Protection) e nenhuma resposta da API o devolve. Configuração nova com credencial segue o mesmo desenho.
 
 ## Convenções
 
@@ -204,6 +211,8 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * "Aguardando usuário" pausa o SLA de resolução, mas **não** o de resposta. Ver README, seção 8.2.
 * **Filtro de data chega com `-03:00` e precisa virar UTC antes da query.** Mesma recusa do Npgsql de deslocamento diferente de zero, agora em parâmetro de consulta: sem o `ToUniversalTime()` em `TicketFilterExtensions`, filtrar por período respondia 500. Há teste que falha sem a conversão (`Periodo_com_deslocamento_de_sao_paulo_respeita_a_virada_do_dia_local`).
 * **Instalar Vitest junto com o resto num só `npm install` falha** com `ERESOLVE` (`Found: vite@undefined`), por um ciclo de peer opcional entre `vitest` e `@vitest/browser-playwright`. Instalar o `vitest` sozinho primeiro resolve.
+* **As chaves do Data Protection precisam de volume persistente.** Elas cifram o client secret do e-mail. Sem `DataProtection:KeysPath` apontando para um volume, cada deploy gera chaves novas, o secret gravado vira ilegível e o e-mail para — sem erro, a não ser a mensagem na tela de configuração dias depois. Por isso `KeysPath` é obrigatório (a API não sobe sem ele), a subida grava um arquivo de sonda na pasta, e o Dockerfile cria `/var/opsdesk/keys` com o dono certo, como faz com os anexos.
+* **`WebUtility.HtmlEncode` transforma acento em entidade** (`Concluído` vira `Conclu&#237;do`). É HTML válido e todo cliente de e-mail exibe normalmente, mas teste que procura texto em português no corpo do e-mail precisa decodificar antes.
 * **Reabrir retoma o SLA, não o recomeça.** O tempo útil entre a resolução e a reabertura entra como pausa, e `ResolvedAt`/`ClosedAt` só são limpos depois disso — a retomada precisa da data de resolução. A janela de sete dias para chamado fechado mora em `ReopenPolicy`, não no grafo. Ver README, seção 5.9.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.

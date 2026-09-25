@@ -1,8 +1,12 @@
 using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using OpsDesk.Application.Abstractions;
 
 namespace OpsDesk.Tests.Integration;
 
@@ -33,6 +37,12 @@ public class OpsDeskApiFactory(
     private readonly string _attachmentRoot =
         Path.Combine(Path.GetTempPath(), $"opsdesk-tests-{Guid.NewGuid():N}");
 
+    /// <summary>
+    /// Envio de e-mail falso, compartilhado pelos testes desta fábrica. Nenhum teste fala
+    /// com o Microsoft Graph de verdade; quem quer conferir o que sairia olha aqui.
+    /// </summary>
+    public FakeEmailSender Email { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -46,6 +56,11 @@ public class OpsDeskApiFactory(
                 ["Jwt:Audience"] = "opsdesk-tests",
                 ["Cors:AllowedOrigins:0"] = "https://localhost",
                 ["AttachmentStorage:RootPath"] = _attachmentRoot,
+                ["DataProtection:KeysPath"] = Path.Combine(_attachmentRoot, "keys"),
+
+                // Despacho periódico desligado pelo mesmo motivo da varredura de anexos: o
+                // envio da fila é exercitado diretamente, em teste próprio.
+                ["EmailDispatch:DispatchIntervalSeconds"] = "0",
 
                 // Varredura desligada: teste que dependa de tarefa periódica é teste que
                 // falha por horário. A limpeza é exercitada diretamente, em teste próprio.
@@ -64,6 +79,12 @@ public class OpsDeskApiFactory(
                 ["RateLimiting:UploadsPerMinute"] = uploadsPerMinute.ToString(),
                 ["Jwt:RefreshTokenGraceSeconds"] = refreshGraceSeconds.ToString(),
             }));
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Email);
+        });
     }
 
     protected override void Dispose(bool disposing)

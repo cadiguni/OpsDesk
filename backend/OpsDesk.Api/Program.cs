@@ -112,6 +112,7 @@ try
         options.MultipartBodyLengthLimit = 32 * 1024 * 1024);
 
     builder.Services.AddHostedService<PendingAttachmentCleanup>();
+    builder.Services.AddHostedService<OutboundEmailDispatcher>();
 
     builder.Services.AddOpenApi();
 
@@ -189,6 +190,7 @@ try
     app.MapDashboardEndpoints();
     app.MapUserAdministrationEndpoints();
     app.MapCategoryAdministrationEndpoints();
+    app.MapNotificationEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

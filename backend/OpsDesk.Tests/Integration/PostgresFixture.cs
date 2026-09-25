@@ -85,7 +85,8 @@ public class PostgresFixture : IAsyncLifetime
 
         await db.Database.ExecuteSqlRawAsync(
             """
-            TRUNCATE TABLE ticket_attachments, ticket_history, ticket_comments, tickets,
+            TRUNCATE TABLE notifications, outbound_emails, email_settings, settings_audit,
+                           ticket_attachments, ticket_history, ticket_comments, tickets,
                            refresh_tokens, users, categories, sla_policies, holidays
             RESTART IDENTITY CASCADE;
             ALTER SEQUENCE ticket_code_seq RESTART WITH 1;
