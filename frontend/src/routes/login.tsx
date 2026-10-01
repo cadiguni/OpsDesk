@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { usePublicOptions } from '@/features/auth/options'
 import { useSession } from '@/features/auth/session-context'
 import { loginSchema, type LoginFields } from '@/features/auth/schemas'
 import { errorMessage } from '@/lib/api'
@@ -15,6 +16,8 @@ import { errorMessage } from '@/lib/api'
 /** Tela de login (README, seção 13.1). */
 export function Login() {
   const { signIn } = useSession()
+  const options = usePublicOptions()
+  const organization = options.data?.organizationName ?? 'OpsDesk'
   const navigate = useNavigate()
   const location = useLocation()
   const [failure, setFailure] = useState<string | null>(null)
@@ -44,7 +47,7 @@ export function Login() {
       <div className="mb-5 flex justify-end"><ThemeSelect /></div>
       <Card>
         <CardHeader>
-          <CardTitle>Entrar no OpsDesk</CardTitle>
+          <CardTitle>Entrar no {organization}</CardTitle>
           <CardDescription>Acesse com seu e-mail corporativo.</CardDescription>
         </CardHeader>
 
@@ -83,16 +86,25 @@ export function Login() {
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? 'Entrando…' : 'Entrar'}
             </Button>
+
+            {/* Só aparece quando funciona: sem e-mail configurado, o link não chegaria. */}
+            {options.data?.passwordResetAvailable && (
+              <Link to="/esqueci-senha" className="text-primary text-center text-sm hover:underline">
+                Esqueci minha senha
+              </Link>
+            )}
           </form>
         </CardContent>
       </Card>
 
-      <p className="text-muted-foreground mt-6 text-center text-sm">
-        Ainda não tem conta?{' '}
-        <Link to="/cadastro" className="text-primary font-medium hover:underline">
-          Cadastre-se
-        </Link>
-      </p>
+      {options.data?.allowSelfRegistration !== false && (
+        <p className="text-muted-foreground mt-6 text-center text-sm">
+          Ainda não tem conta?{' '}
+          <Link to="/cadastro" className="text-primary font-medium hover:underline">
+            Cadastre-se
+          </Link>
+        </p>
+      )}
     </div>
   )
 }

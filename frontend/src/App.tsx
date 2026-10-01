@@ -8,13 +8,19 @@ import { CategoryAdmin } from '@/routes/category-admin'
 import { ChangePassword } from '@/routes/change-password'
 import { Dashboard } from '@/routes/dashboard'
 import { EmailSettingsPage } from '@/routes/email-settings'
+import { ForgotPassword } from '@/routes/forgot-password'
+import { GeneralSettingsPage } from '@/routes/general-settings'
+import { HolidayAdmin } from '@/routes/holiday-admin'
+import { InboundEmails } from '@/routes/inbound-emails'
 import { Login } from '@/routes/login'
 import { NewTicket } from '@/routes/new-ticket'
 import { NotFound } from '@/routes/not-found'
 import { Notifications } from '@/routes/notifications'
 import { CHANGE_PASSWORD_PATH, ProtectedRoute } from '@/routes/protected-route'
 import { Register } from '@/routes/register'
+import { ResetPassword } from '@/routes/reset-password'
 import { TicketDetail } from '@/routes/ticket-detail'
+import { TicketImport } from '@/routes/ticket-import'
 import { TicketList } from '@/routes/ticket-list'
 import { UserAdmin } from '@/routes/user-admin'
 
@@ -28,6 +34,8 @@ export function App() {
           <Routes>
             <Route path="/entrar" element={<Login />} />
             <Route path="/cadastro" element={<Register />} />
+            <Route path="/esqueci-senha" element={<ForgotPassword />} />
+            <Route path="/redefinir-senha" element={<ResetPassword />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Fora do AppLayout de propósito: enquanto a senha for provisória não há
@@ -44,6 +52,11 @@ export function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/usuarios" element={<UserAdmin />} />
                 <Route path="/categorias" element={<CategoryAdmin />} />
+                <Route path="/feriados" element={<HolidayAdmin />} />
+                <Route path="/importacao" element={<TicketImport />} />
+                <Route path="/emails" element={<InboundEmails />} />
+                <Route path="/configuracoes" element={<Navigate to="/configuracoes/geral" replace />} />
+                <Route path="/configuracoes/geral" element={<GeneralSettingsPage />} />
                 <Route path="/configuracoes/email" element={<EmailSettingsPage />} />
                 <Route path="/notificacoes" element={<Notifications />} />
                 <Route path="*" element={<NotFound />} />

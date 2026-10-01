@@ -4,6 +4,24 @@ import * as settingsApi from '@/features/settings/api'
 
 const keys = {
   email: ['settings', 'email'] as const,
+  general: ['settings', 'general'] as const,
+}
+
+export function useGeneralSettings(enabled: boolean) {
+  return useQuery({ queryKey: keys.general, queryFn: settingsApi.getGeneralSettings, enabled })
+}
+
+export function useUpdateGeneralSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: settingsApi.updateGeneralSettings,
+    onSuccess: (saved) => {
+      queryClient.setQueryData(keys.general, saved)
+      // O nome da organização e a política aparecem na tela de login e no menu.
+      void queryClient.invalidateQueries({ queryKey: ['auth-options'] })
+    },
+  })
 }
 
 export function useEmailSettings(enabled: boolean) {

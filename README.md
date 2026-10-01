@@ -16,6 +16,7 @@ Este documento é a especificação funcional do produto. Os detalhes técnicos 
 | [docs/atendimento-e-aparencia.md](docs/atendimento-e-aparencia.md) | enviar e fechar, interface de atendimento, temas e roteiro de validação |
 | [docs/arquitetura.md](docs/arquitetura.md) | stack, estrutura do repositório, decisões de arquitetura e justificativas |
 | [docs/integracao-email.md](docs/integracao-email.md) | ingestão de chamados por e-mail e caixa de SPAM (versão 2.0) |
+| [docs/instalacao.md](docs/instalacao.md) | instalação em produção: HTTPS, atualização, backup, Azure Blob, réplicas |
 | [CLAUDE.md](CLAUDE.md) | instruções para agentes de IA que trabalham no repositório |
 
 ### Como executar
@@ -67,6 +68,7 @@ docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e Ops
 | `--seed` | insere categorias (só em banco sem nenhuma), políticas de SLA e feriados (sem usuários de exemplo) |
 | `--bootstrap-admin` | cria o primeiro gestor a partir de `OpsDesk:Bootstrap` |
 | `--setup` | os três acima, na ordem |
+| `--seed-demo` | dados de demonstração: cinco pessoas e oito chamados. Recusa banco que já tem chamado |
 
 Migration continua fora da subida da aplicação de propósito: ninguém deve descobrir uma alteração de schema lendo log de inicialização.
 
@@ -74,13 +76,18 @@ O gestor criado pelo bootstrap nasce com **troca de senha obrigatória** — a s
 
 `/health` e `/ready` respondem perguntas diferentes. O primeiro diz se o processo está vivo e o banco alcançável — é o que decide **reiniciar** o contêiner. O segundo acrescenta schema na versão da aplicação e dados de referência presentes — é o que decide **mandar tráfego**, e quem esquecer o `--setup` é acusado ali, com o comando que falta no corpo da resposta.
 
-O que ainda falta para uma instalação em branco ser confortável — renovação de feriados, exemplo de compose com segredos, backup dos dois volumes — está na seção 18, em "Primeira execução: instalar em branco".
+**Para produção**, o caminho é a pasta [deploy/](deploy): compose com Caddy na borda e HTTPS, segredos gerados num `.env` fora do repositório, e scripts de backup e restauração. O passo a passo está em [docs/instalacao.md](docs/instalacao.md).
 
 ### Estado do código
 
-**O MVP da versão 1 está completo.** Os nove critérios de sucesso da seção 19 estão atendidos: cadastro e abertura de chamado, atendimento com comentários e mudança de status, atribuição de técnico, visão completa para o gestor, autorização por perfil, histórico de alterações, dashboard, execução local por Docker Compose e este README explicando como rodar.
+**O roadmap até a versão 2.0 está entregue.** Os nove critérios de sucesso da seção 19 estão atendidos desde a versão 1, e depois dela vieram:
 
-Fora do escopo da versão 1, conforme o roadmap da seção 18: notificações ficam para a 1.2; a ingestão de e-mail e a caixa de SPAM ficam para a 2.0. Anexos estavam na 1.1 e foram antecipados — chamado de suporte sem print de tela obriga a conversa a acontecer por e-mail, fora do sistema. O primeiro gestor sai do comando de bootstrap; os demais são promovidos por ele na tela de administração de usuários. As administrações de usuários e de categorias também foram antecipadas da 1.1.
+* **1.1, operação:** administração de usuários, com cadastro, convite, redefinição de senha e trilha de auditoria; administração de categorias e de feriados; configurações gerais; reabertura de chamado; busca na descrição; filtros por responsável, período e categoria desativada; dashboard por período, com cumprimento de SLA e reabertura por técnico; testes de frontend e de ponta a ponta;
+* **1.2, notificações:** e-mail ao solicitante pelo Microsoft Graph, configurado no portal, com fila de saída; notificações no portal; alertas de SLA;
+* **2.0, integrações:** abertura de chamado por e-mail, caixa de SPAM, e importação de CSV, JSON e das exportações do Freshdesk e do Freshservice;
+* **produção:** compose com HTTPS, backup e restauração testados, dados de demonstração, anexos no Azure Blob e forwarded headers.
+
+O que continua aberto, com a decisão pendente de cada item, está no fim da seção 18.
 
 ---
 
@@ -139,7 +146,7 @@ A versão 1 será um MVP funcional, com foco nas principais regras de negócio d
 * aplicativo mobile;
 * fluxo avançado de aprovação.
 
-Essas funcionalidades poderão ser adicionadas em versões futuras.
+Essas funcionalidades poderão ser adicionadas em versões futuras. Várias já foram — e-mail nos dois sentidos, caixa de SPAM, importação por arquivo e das exportações do Freshdesk e do Freshservice. A seção 18 conta o que entrou em cada versão.
 
 ---
 
@@ -161,7 +168,9 @@ Permissões:
 * visualizar respostas dos técnicos;
 * acompanhar status;
 * anexar arquivos ao chamado e aos comentários;
-* reabrir o próprio chamado resolvido ou fechado, respondendo a ele (seção 5.9).
+* reabrir o próprio chamado resolvido ou fechado, respondendo a ele (seção 5.9);
+* responder pelo e-mail de aviso, quando houver caixa monitorada (versão 2.0);
+* definir a própria senha por link, em "Esqueci minha senha" ou pelo convite (seção 13.13).
 
 Não pode:
 
@@ -190,7 +199,8 @@ Permissões:
 * alterar categoria;
 * alterar prioridade, se permitido;
 * marcar chamado como resolvido;
-* visualizar histórico do chamado.
+* visualizar histórico do chamado;
+* revisar os e-mails recebidos e a caixa de SPAM (seção 13.15).
 
 Não pode:
 
@@ -214,8 +224,11 @@ Permissões:
 * acompanhar chamados vencidos;
 * visualizar indicadores por técnico, categoria e prioridade;
 * visualizar histórico completo;
-* gerenciar usuários: promover, rebaixar, desativar e reativar (seção 13.9);
-* configurar SLA futuramente.
+* gerenciar usuários: cadastrar, promover, rebaixar, desativar, reativar e redefinir senha (seção 13.9);
+* administrar feriados (seção 13.11) e as configurações gerais e de e-mail (seção 13.12);
+* importar chamados de outra ferramenta (seção 13.14);
+* excluir mensagem da caixa de SPAM;
+* alterar a tabela de SLA, futuramente.
 
 ---
 
@@ -507,7 +520,7 @@ Expediente padrão da versão 1:
 * segunda a sexta-feira;
 * das 08:00 às 18:00;
 * fuso horário `America/Sao_Paulo`;
-* feriados nacionais cadastrados em tabela.
+* feriados nacionais, renovados sozinhos, e os que o gestor cadastrar (seção 13.11).
 
 O expediente é fixo na versão 1 e não é configurável pela interface.
 
@@ -534,6 +547,8 @@ Justificativa: sem essa pausa, o indicador de chamados vencidos passa a medir a 
 * **SLA de resolução**: encerrado quando o chamado entra em "Resolvido". O instante é gravado em `ResolvedAt`. No fechamento direto pela equipe, a resolução é registrada junto com o fechamento; se já existia uma data de resolução, ela é preservada.
 
 Chamados cancelados não entram nos indicadores de SLA.
+
+**Chamados importados também não** — os de origem CSV, API externa, Freshdesk e Freshservice (seção 13.14). Eles foram atendidos antes de o prazo do OpsDesk existir: medi-los encheria o dashboard de "vencidos" que ninguém poderia ter evitado, e o alerta de SLA dispararia sobre chamado de anos atrás. Ficam fora do contador de vencidos, do filtro de vencidos, do dashboard por período e dos alertas, e o detalhe do chamado diz por quê. A regra mora num lugar só, `TicketSla.MeasuredSources`, com o espelho `slaMeasuredSources` na interface.
 
 ---
 
@@ -573,19 +588,18 @@ Quem registrou o chamado fica no `TicketHistory`, na entrada de criação. O cam
 
 O chamado nasce sem responsável, como qualquer outro: registrar em nome de alguém não é assumir o atendimento.
 
-Na versão 1, a origem será sempre:
+A origem do chamado é uma destas:
 
-* Portal.
+| Origem | De onde vem |
+| --- | --- |
+| Portal | aberto na interface |
+| E-mail | mensagem à caixa monitorada ([docs/integracao-email.md](docs/integracao-email.md)) |
+| CSV | importação de planilha (seção 13.14) |
+| API externa | importação de arquivo JSON (seção 13.14) |
+| Freshdesk, Freshservice | importação da exportação dessas ferramentas (seção 13.14) |
+| GLPI | reservada; ainda sem importação |
 
-Em versões futuras, poderá ser:
-
-* Portal;
-* E-mail;
-* CSV;
-* Freshdesk;
-* Freshservice;
-* GLPI;
-* API externa.
+Só Portal e E-mail entram nos indicadores de SLA (seção 8.3).
 
 ---
 
@@ -656,7 +670,7 @@ Chamado e comentário aceitam arquivo: print da tela, log, planilha, PDF — o q
 Regras:
 
 * até **10 MB por arquivo**, e a lista de tipos aceitos é fechada: imagem, PDF, texto, CSV, zip, documento e planilha do Office, e mensagem de e-mail. O que não está na lista é recusado, e não aceito por omissão;
-* o conteúdo **não** fica no banco. Vai para o armazenamento configurado — disco com volume no ambiente local —, e o banco guarda metadados e a chave;
+* o conteúdo **não** fica no banco. Vai para o armazenamento configurado — disco com volume, ou Azure Blob Storage quando a API roda em mais de uma réplica ([docs/instalacao.md](docs/instalacao.md), seção 7) —, e o banco guarda metadados e a chave;
 * **o anexo herda a visibilidade do comentário.** Arquivo enviado numa nota interna é tão restrito quanto o texto dela: não aparece na listagem do solicitante e o download direto pelo identificador responde 404. A regra da seção 11 vale para o arquivo, não só para o texto;
 * anexo da abertura é público, como a descrição;
 * anexo de chamado que o usuário não pode ver não é baixável, pela mesma verificação que esconde o chamado.
@@ -718,7 +732,7 @@ Exemplo:
 
 ---
 
-## 13. Telas da versão 1
+## 13. Telas
 
 ### 13.1 Login
 
@@ -732,7 +746,10 @@ Campos:
 Ações:
 
 * entrar;
-* acessar tela de cadastro, se permitido.
+* acessar tela de cadastro, quando o autocadastro estiver ligado (seção 13.12);
+* "Esqueci minha senha", quando o envio de e-mail estiver configurado (seção 13.13).
+
+A tela pergunta à API o que oferecer (`GET /api/auth/options`, anônimo), em vez de mostrar link que levaria a uma recusa.
 
 ---
 
@@ -750,6 +767,8 @@ Campos:
 Na versão 1, todo usuário cadastrado pelo portal será criado com perfil “Usuário”.
 
 Perfis técnicos e gestores são atribuídos pelo gestor na administração de usuários (seção 13.9). O primeiro gestor vem do bootstrap.
+
+O cadastro segue as configurações gerais (seção 13.12): com o autocadastro desligado, a API recusa com 403 e a tela de login não mostra o link; com uma lista de domínios, e-mail de outro domínio é recusado com 400.
 
 ---
 
@@ -805,7 +824,8 @@ Deve exibir:
 * solicitante;
 * técnico responsável;
 * data de criação;
-* prazo de SLA;
+* origem;
+* prazo de SLA — ou, em chamado importado, o aviso de que ele fica fora dos indicadores (seção 8.3);
 * comentários;
 * anexos, junto da mensagem a que pertencem;
 * histórico.
@@ -876,6 +896,16 @@ Indicadores iniciais:
 * chamados por status;
 * chamados por técnico.
 
+**Período.** Abaixo da foto da fila, o mesmo painel responde "como fomos?": últimos 7, 30 ou 90 dias — a escolha fica na URL —, comparados com o período anterior de mesmo tamanho. Indicadores:
+
+* chamados abertos e resolvidos;
+* **cumprimento do prazo de resposta**, sobre os chamados abertos no período. Prazo ainda correndo não conta a favor nem contra;
+* **cumprimento do prazo de resolução**, sobre os resolvidos no período, já descontadas as pausas;
+* **taxa de reabertura**: reaberturas registradas no histórico durante o período, sobre as resoluções. É o indicador de solução que não resolveu;
+* os mesmos três por técnico.
+
+Percentual sem base aparece como "—", e não como 0%: "ninguém cumpriu" e "não havia o que medir" são coisas diferentes. Tudo vem de consultas agregadas, como o resto do dashboard, e o período tem no máximo um ano.
+
 ---
 
 ### 13.8 Troca de senha
@@ -890,8 +920,18 @@ Só gestor. Lista todos os usuários, ativos e desativados, com busca por nome o
 
 Ações:
 
+* **cadastrar** uma pessoa, com nome, e-mail e perfil;
+* **redefinir a senha** de alguém;
 * **trocar o perfil** entre Usuário, Técnico e Gestor;
-* **desativar** e **reativar** a conta. Não existe exclusão: a pessoa é autora de chamados e comentários, e o histórico precisa continuar apontando para ela.
+* **desativar** e **reativar** a conta. Não existe exclusão: a pessoa é autora de chamados e comentários, e o histórico precisa continuar apontando para ela;
+* **ver o histórico** da conta.
+
+**Cadastro e redefinição entregam o acesso de um de dois jeitos**, conforme o envio de e-mail esteja configurado:
+
+* **com e-mail:** a pessoa recebe um link para definir a própria senha, válido por três dias. O gestor nunca vê nem escolhe a senha de ninguém. Na redefinição, a senha antiga deixa de valer na hora, e não só quando o link for usado — redefinir é o que se faz quando se desconfia da senha;
+* **sem e-mail:** a tela mostra uma senha provisória **uma única vez**, para o gestor repassar, e a conta nasce com troca obrigatória no primeiro acesso, a mesma trava do bootstrap.
+
+Redefinir derruba as sessões abertas da pessoa.
 
 Regras:
 
@@ -899,7 +939,7 @@ Regras:
 * **desativar, ou rebaixar a Usuário, quem é responsável por chamado em aberto é recusado** (409), com a lista dos chamados no corpo da resposta. O gestor reatribui antes. Aberto aqui é qualquer status não terminal — Resolvido conta, porque o solicitante ainda pode devolvê-lo. Chamado que a pessoa *abriu* não bloqueia nada: continua na fila e continua sendo atendido;
 * **rebaixar e desativar derrubam as sessões** da pessoa (todos os refresh tokens são revogados). O token de acesso já emitido vale até expirar, no máximo `Jwt:AccessTokenMinutes` (15 minutos por padrão); a administração de usuários confere o perfil de quem age no banco, para que essa janela não sirva para promover ninguém. **Promover não derruba nada**: a renovação seguinte já traz o perfil novo.
 
-As mudanças vão para o log estruturado, com quem fez e sobre quem. Não há trilha de auditoria de usuário no banco, como há para chamado — ver roadmap.
+**Trilha de auditoria.** Cadastro, troca de perfil, desativação, reativação, troca de senha, redefinição pelo gestor e senha definida por link ficam registrados em `UserAuditEntry`, com quem fez, quando, e valor anterior e novo quando houver. A tela mostra o histórico de cada conta. Como o `TicketHistory`, a tabela é preenchida por interceptor do EF Core e não aceita alteração. Senha nunca entra no registro, só o fato de ela ter mudado.
 
 ### 13.10 Administração de categorias
 
@@ -913,6 +953,77 @@ Regras:
 * **o nome é único sem diferenciar maiúsculas**, contando as desativadas. "VPN" e "vpn" no mesmo catálogo dividiriam o dashboard, que agrupa por nome;
 * **renomear não reescreve o histórico**: o histórico guarda o identificador da categoria, não o nome;
 * **a última categoria ativa não pode ser desativada** (409). Sem nenhuma, ninguém abre chamado e o `/ready` reprova a instalação.
+
+### 13.11 Feriados
+
+Só gestor. Os feriados de um ano, com navegação entre anos, ligados e desligados.
+
+* **Os nacionais vêm do sistema e se renovam sozinhos.** Uma tarefa diária garante o ano corrente e os dois seguintes (`Holidays:RenewalIntervalHours`; zero desliga). Antes, em produção, a janela só andava com o seed, e em algum ano o cálculo de horas úteis passaria a contar feriado como expediente — em silêncio;
+* **nacional se desliga, não se apaga**, para a empresa que trabalha no dia. A renovação respeita a escolha: não religa o que o gestor desligou;
+* **o gestor cadastra os que a tabela nacional não tem**: municipal, estadual, recesso de fim de ano. Data já ocupada é recusada (409). Esses ele pode apagar;
+* **mudar um feriado vale para os chamados abertos dali em diante.** Prazo de chamado já aberto não é recalculado: é o compromisso assumido na abertura.
+
+### 13.12 Configurações
+
+Só gestor, em duas abas.
+
+**Geral:**
+
+* **nome da organização**, que aparece no login, no menu e nos e-mails de convite e de senha;
+* **autocadastro**, ligado ou desligado. Desligado, só o gestor cria contas;
+* **domínios de e-mail aceitos no autocadastro**, como `empresa.com.br`. A comparação é exata: `empresa.com.br` não aceita `outra-empresa.com.br` nem `sub.empresa.com.br`. Lista vazia aceita qualquer domínio. A mesma lista serve à caixa monitorada configurada para aceitar só domínios internos.
+
+**E-mail:** envio pelo Microsoft Graph e caixas monitoradas — ver seção 18, versão 1.2, e [docs/integracao-email.md](docs/integracao-email.md).
+
+Toda mudança de configuração é auditada: quem, o quê e quando, nunca o valor de um secret.
+
+### 13.13 Definir senha: esqueci minha senha e convite
+
+Duas portas para a mesma tela, `/redefinir-senha`, aberta por um link enviado por e-mail:
+
+* **Esqueci minha senha**, a partir do login. A resposta é sempre a mesma, exista ou não a conta: o formulário não pode servir para descobrir quem tem cadastro. O link vale **uma hora**;
+* **convite**, enviado quando o gestor cadastra uma pessoa ou redefine a senha dela (seção 13.9). Vale **três dias**.
+
+Regras:
+
+* o link é de uso único, e pedir outro invalida o anterior;
+* só o hash do token fica no banco, como no refresh token;
+* definir a senha derruba as outras sessões e limpa a marca de senha provisória;
+* o corpo do e-mail com o link é apagado da fila de saída depois do envio. A fila guarda o que foi enviado para diagnóstico, e um link de senha guardado ali seria uma credencial esquecida no banco;
+* é também por aqui que quem foi cadastrado sem senha — pela caixa de e-mail ou pela importação — passa a entrar no portal, e reencontra os próprios chamados.
+
+Sem envio de e-mail configurado, nada disso aparece: a tela de login esconde o link e o gestor recebe senha provisória no lugar do convite.
+
+### 13.14 Importação de chamados
+
+Só gestor. Traz o histórico de outra ferramenta, em dois passos: **conferir** e **importar**.
+
+| Origem | Arquivo | Colunas reconhecidas |
+| --- | --- | --- |
+| Modelo do OpsDesk | CSV ou JSON (lista de objetos) | `titulo` e `solicitante_email` obrigatórias; `descricao`, `solicitante_nome`, `categoria`, `prioridade`, `status`, `responsavel_email`, `criado_em`, `resolvido_em`, `fechado_em`, `codigo_externo` |
+| Freshdesk | exportação de tickets em CSV | `Ticket ID`, `Subject`, `Description`, `Status`, `Priority`, `Type`, `Agent`, `Created time`, `Resolved time`, `Closed time`, e nome e e-mail do contato |
+| Freshservice | exportação de tickets em CSV | `Ticket Id`, `Subject`, `Description`, `Status`, `Priority`, `Category`, `Agent`, `Created Date`, `Resolved Date`, `Closed Date`, e-mail do solicitante |
+
+A tela oferece o modelo do OpsDesk para baixar. A integração com o Freshdesk e o Freshservice é pelo **arquivo de exportação** das duas ferramentas, e não pela API delas: importação é uma migração feita uma vez, e o arquivo dispensa guardar credencial de outro sistema.
+
+**Conferir** lê o arquivo inteiro e não grava nada. Diz quantas linhas entrariam, quantas já foram importadas antes, quantos solicitantes seriam criados, e quais linhas seriam puladas e por quê, com o número da linha no arquivo. Só depois aparece o botão de importar.
+
+Regras:
+
+* **CSV com vírgula ou ponto e vírgula**, descoberto pelo cabeçalho: o Excel em português salva com ponto e vírgula. Campo entre aspas, com quebra de linha dentro, é lido normalmente. O arquivo precisa estar em UTF-8 ("CSV UTF-8" no Excel);
+* **importar de novo não duplica.** O identificador da origem vai para `ExternalId`, e linha já importada é pulada;
+* **solicitante desconhecido vira usuário sem senha**, como na caixa de e-mail. Ele reencontra os chamados quando definir uma senha (seção 13.13);
+* **categoria pelo nome**, sem diferenciar maiúsculas; sem correspondência, "Outros";
+* **responsável pelo e-mail, ou pelo nome quando ele é único na equipe.** Nome que dois técnicos compartilham não é adivinhado: o chamado entra sem responsável;
+* **status e prioridade** em português ou nos nomes da ferramenta de origem ("Pending" vira Aguardando usuário, "Urgent" vira Crítica). Vazio é Aberto e Média; valor desconhecido pula a linha;
+* **datas sem fuso são hora de São Paulo**, nos formatos `2026-09-30 14:00` e `30/09/2026 14:00`; com fuso explícito, vale o do arquivo;
+* **importar não notifica ninguém** — nem e-mail, nem portal. A abertura entra no histórico, em nome do gestor que importou;
+* **chamado importado fica fora dos indicadores de SLA** (seção 8.3);
+* até 10 MB e 5.000 linhas por arquivo.
+
+### 13.15 E-mails recebidos e caixa de SPAM
+
+Técnico e gestor. As mensagens recebidas pela caixa monitorada, em abas: **SPAM**, **Falhas**, **Processados**, **Duplicados** e **Regras**. Ações na mensagem retida: não é spam (vira chamado ou resposta), não é spam e liberar o remetente, confirmar e bloquear o remetente, bloquear o domínio. Falha pode ser reprocessada. Só o gestor exclui. Especificação completa em [docs/integracao-email.md](docs/integracao-email.md).
 
 ---
 
@@ -934,9 +1045,9 @@ Campos:
 * CreatedAt;
 * UpdatedAt.
 
-`MustChangePassword` marca senha provisória. Hoje nasce de um lugar só: o bootstrap do primeiro gestor, cuja senha chega por variável de ambiente. Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém a credencial de instalação valendo uma vez, e não para sempre.
+`MustChangePassword` marca senha provisória. Nasce do bootstrap do primeiro gestor, cuja senha chega por variável de ambiente, e da senha provisória que o gestor recebe ao cadastrar ou redefinir alguém sem e-mail configurado (seção 13.9). Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém uma credencial que passou pela mão de outra pessoa valendo uma vez, e não para sempre.
 
-`PasswordHash` é anulável. A partir da versão 2.0, solicitantes identificados apenas por e-mail são criados automaticamente sem senha e não conseguem autenticar até definirem uma. Ver [docs/integracao-email.md](docs/integracao-email.md).
+`PasswordHash` é anulável. Conta sem senha não autentica até a pessoa definir uma por link (seção 13.13). Nasce assim o solicitante que chegou pela caixa de e-mail ou pela importação, a pessoa convidada pelo gestor e a conta cuja senha o gestor redefiniu por e-mail.
 
 ---
 
@@ -970,8 +1081,8 @@ Campos:
 Observações:
 
 * `Code` é gerado por *sequence* do PostgreSQL, no formato `OPS-000123`;
-* `Source` identifica a origem do chamado e vale `Portal` na versão 1;
-* `ExternalId` guarda o identificador da origem externa, como o `Message-ID` do e-mail que gerou o chamado;
+* `Source` identifica a origem do chamado (seção 9.1) e decide se ele entra nos indicadores de SLA (seção 8.3);
+* `ExternalId` guarda o identificador da origem externa — o `Message-ID` do e-mail que gerou o chamado, ou o código do chamado na ferramenta de onde foi importado. É único por origem, e é o que impede a mesma mensagem ou a mesma linha de virar dois chamados;
 * `FirstRespondedAt` fecha o SLA de resposta;
 * `SlaPausedAt` e `SlaPausedBusinessMinutes` sustentam a pausa descrita na seção 8.2.
 
@@ -1047,9 +1158,13 @@ Campos:
 
 * Id;
 * Date;
-* Name.
+* Name;
+* IsActive;
+* IsCustom.
 
-O seed popula os feriados nacionais do ano corrente e dos dois seguintes, calculando as datas móveis a partir da Páscoa. Carnaval e Corpus Christi entram na lista: são ponto facultativo federal, mas a equipe de suporte não está de plantão, e SLA contando hora útil em dia sem ninguém atendendo é indicador mentiroso.
+`IsCustom` separa o feriado cadastrado pelo gestor do nacional, que vem do sistema; `IsActive` desliga um feriado sem apagá-lo (seção 13.11).
+
+O seed popula os feriados nacionais do ano corrente e dos dois seguintes, calculando as datas móveis a partir da Páscoa, e uma tarefa diária mantém essa janela andando. Carnaval e Corpus Christi entram na lista: são ponto facultativo federal, mas a equipe de suporte não está de plantão, e SLA contando hora útil em dia sem ninguém atendendo é indicador mentiroso.
 
 ---
 
@@ -1071,9 +1186,71 @@ Campos:
 
 ---
 
+### UserAuditEntry
+
+Trilha de auditoria de conta (seção 13.9). Append-only, preenchida por interceptor, como o `TicketHistory`.
+
+Campos:
+
+* Id;
+* UserId;
+* Action — `Created`, `RoleChanged`, `Deactivated`, `Reactivated`, `PasswordChanged`, `PasswordReset` ou `PasswordSetByLink`;
+* PreviousValue;
+* NewValue;
+* ChangedById;
+* CreatedAt.
+
+---
+
+### PasswordResetToken
+
+Link de definição de senha (seção 13.13). Só o hash fica no banco.
+
+Campos:
+
+* Id;
+* UserId;
+* TokenHash;
+* ExpiresAt;
+* UsedAt;
+* CreatedAt.
+
+---
+
+### SystemSettings
+
+Configurações gerais (seção 13.12). Uma linha só.
+
+Campos:
+
+* Id;
+* OrganizationName;
+* AllowSelfRegistration;
+* AllowedEmailDomains;
+* UpdatedById;
+* CreatedAt;
+* UpdatedAt.
+
+---
+
+### Entidades de apoio
+
+Existem para sustentar uma funcionalidade e não aparecem como tela própria:
+
+| Entidade | Para quê |
+| --- | --- |
+| `TicketAttachment` | metadados do anexo; o conteúdo fica no armazenamento (seção 11.1) |
+| `Notification` | aviso no portal, por pessoa (seção 18, versão 1.2) |
+| `OutboundEmail` | fila de saída de e-mail |
+| `EmailSettings` | configuração do envio pelo Graph, com o secret cifrado |
+| `SettingsAuditEntry` | quem mudou qual configuração, e quando |
+| `SlaAlert` | alerta de SLA já dado, com o prazo na chave |
+
+---
+
 ### Entidades da versão 2.0
 
-A ingestão de e-mail acrescenta `EmailAccount`, `InboundEmail` e `SpamRule`. Elas estão especificadas em [docs/integracao-email.md](docs/integracao-email.md) e não fazem parte da versão 1.
+A ingestão de e-mail acrescenta `EmailAccount`, `InboundEmail` e `SpamRule`, especificadas em [docs/integracao-email.md](docs/integracao-email.md). A seção 9 dele registra os campos que mudaram na implementação.
 
 ---
 
@@ -1104,12 +1281,14 @@ Pode acessar:
 * chamados sem responsável;
 * chamados atribuídos a ele, pelo filtro "Meus chamados";
 * comentários internos;
-* histórico dos chamados que pode atender.
+* histórico dos chamados que pode atender;
+* e-mails recebidos e caixa de SPAM, sem excluir mensagem.
 
 Não pode acessar:
 
 * configurações globais do sistema;
-* gerenciamento completo de usuários, na versão 1.
+* administração de usuários, categorias e feriados;
+* importação de chamados.
 
 ---
 
@@ -1124,8 +1303,12 @@ Pode acessar:
 * alteração de prioridade;
 * alteração de categoria;
 * visão geral da operação;
-* administração de usuários: perfil e desativação, exceto a própria conta (seção 13.9);
-* administração de categorias: criar, editar, desativar e reativar (seção 13.10).
+* administração de usuários: cadastro, perfil, desativação e redefinição de senha, exceto na própria conta (seção 13.9);
+* administração de categorias: criar, editar, desativar e reativar (seção 13.10);
+* administração de feriados (seção 13.11);
+* configurações gerais e de e-mail (seção 13.12);
+* importação de chamados (seção 13.14);
+* exclusão de mensagem da caixa de SPAM.
 
 ---
 
@@ -1205,17 +1388,21 @@ Descartados de forma deliberada:
 * Docker e Docker Compose;
 * PostgreSQL em container;
 * backend em container;
-* Mailpit em container, a partir da versão 2.0, para testar a ingestão de e-mail;
-* frontend em container futuramente.
+* frontend em container, no perfil `web`, servido por nginx;
+* Playwright para os testes de ponta a ponta, contra o perfil `web`.
+
+### Produção
+
+* compose próprio em `deploy/`, com Caddy na borda (HTTPS por CA interna ou Let's Encrypt);
+* anexos em volume ou no Azure Blob Storage, com Managed Identity;
+* GitHub Actions para build e testes, inclusive os de ponta a ponta.
 
 ### Infraestrutura futura
 
 * Azure Container Apps ou App Service;
 * Azure Database for PostgreSQL;
-* Azure Blob Storage;
 * Azure Front Door;
-* Application Insights;
-* GitHub Actions.
+* Application Insights.
 
 ---
 
@@ -1250,9 +1437,7 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 **Entregue: promover os demais.** O bootstrap resolve o primeiro gestor; os seguintes, e os técnicos, saem da tela de administração de usuários (seção 13.9), antecipada da 1.1.
 
-**Feriados não se renovam sozinhos fora de desenvolvimento.** O seed cobre o ano corrente e os dois seguintes, e essa janela só "anda" porque roda a cada subida. Em produção, com seed executado uma vez, em algum ano o cálculo de horas úteis passa a contar feriado como expediente — em silêncio, e o sintoma aparece como prazo estranho, não como erro.
-
-*A decidir:* renovar por tarefa agendada, reexecutar o seed em cada deploy, ou criar tela de administração de feriados (que também resolve feriado municipal, que nenhuma tabela nacional tem).
+**Entregue: feriados que se renovam, e tela para administrá-los.** O seed cobria o ano corrente e os dois seguintes, e essa janela só "andava" porque rodava a cada subida em desenvolvimento. Em produção, em algum ano o cálculo de horas úteis passaria a contar feriado como expediente — em silêncio. Decidido: as duas coisas. Uma tarefa diária mantém a janela, e a tela da seção 13.11 resolve o que nenhuma tabela nacional tem, o feriado municipal e o recesso.
 
 **Entregue: validação de configuração na subida.** `Jwt:SigningKey`, connection string e `AttachmentStorage` já falhavam cedo. Entraram os casos que subiam calados: raiz de anexos sem permissão de escrita (um arquivo de sonda na subida, em vez do `Permission denied` no primeiro upload) e fuso de expediente inválido — `BusinessHoursOptions` declarava `ValidateOnStart` sem validador registrado, ou seja, não validava nada; agora fuso inexistente, expediente invertido e lista de dias úteis vazia derrubam a subida com mensagem.
 
@@ -1260,47 +1445,39 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 **Entregue: readiness separado de liveness.** O `/health` responde se o processo está vivo e o banco alcançável, e é o que decide reiniciar o contêiner. O `/ready` acrescenta schema na versão da aplicação e dados de referência presentes, e é o que decide mandar tráfego; o corpo da resposta traz o comando que falta. Os testes de readiness ficam **fora** do `/health` de propósito: reiniciar o contêiner não aplica migration nem roda seed, e incluí-los daria um laço de reinício sem diagnóstico.
 
-**Compose e segredos para quem não é desenvolvedor.** O compose atual traz chave JWT de desenvolvimento embutida, e está escrito nele que é só para isso. Falta um exemplo de subida séria: segredo injetado por `docker secret` ou cofre, senha de banco fora do arquivo, volumes nomeados para banco e anexos, e um `.env.example` do backend documentando cada variável obrigatória.
+**Entregue: compose de produção.** Pasta `deploy/`, com Caddy na borda (HTTPS por CA interna ou Let's Encrypt, HSTS e CSP), banco e API sem porta publicada, segredos num `.env` fora do repositório gerado com valores aleatórios por `new-env.sh`, volumes nomeados e um `.env.example` comentado. Guia em [docs/instalacao.md](docs/instalacao.md). O `docker secret` ficou de fora: no compose sem Swarm ele é um arquivo montado, sem ganho real sobre o `.env` com permissão restrita, e o cofre de verdade é assunto do orquestrador de quem for hospedar.
 
 **Imagem do frontend com endereço de API definido no build.** `VITE_API_URL` é embutido em tempo de compilação, então a mesma imagem não serve a dois domínios. Hoje isso não incomoda porque o nginx do perfil `web` põe SPA e API na mesma origem; incomodaria numa topologia com domínios separados.
 
 *A decidir, só quando essa topologia existir:* gerar a configuração em tempo de execução (um `config.js` escrito pelo entrypoint do contêiner) ou manter a regra de mesma origem.
 
-**Dados de demonstração opcionais.** Quem sobe o sistema para avaliar cai numa lista vazia, e lista vazia não mostra SLA, dashboard nem conversa. Uma flag de seed de demonstração — alguns chamados em status diferentes, um com anexo, um vencido, um aguardando solicitante — resolve, e precisa ser separada do seed de referência para nunca escapar para produção.
+**Entregue: dados de demonstração.** Comando próprio, `--seed-demo`, separado do seed de referência: cinco pessoas e oito chamados em todos os status, com conversa, nota interna, anexo, um vencido e um aguardando o solicitante. Recusa rodar em banco que já tem chamado, o que o impede de escapar para uma instalação em uso.
 
-**Backup e restauração de banco e anexos juntos.** São dois volumes, e o estado consistente exige os dois. Restaurar só o banco dá anexo que a interface lista e o download não encontra (404 com aviso no log); restaurar só os arquivos dá lixo em disco que nenhuma tela mostra. Falta documentar a ordem e um procedimento de restauração testado — backup que ninguém restaurou não é backup.
+**Entregue: backup e restauração juntos.** `deploy/backup.sh` grava banco, anexos e chaves do Data Protection numa pasta só — as chaves entraram porque, sem elas, o secret do e-mail guardado no banco não se lê mais. `deploy/restore.sh` confere tudo antes de apagar qualquer coisa, para a API e restaura na ordem. O procedimento foi testado de ponta a ponta: backup, alteração, restauração e conferência de chamados, anexo e secret.
 
 ### Versão 1.1 — Melhorias operacionais
 
 **Entregue antes do prazo: tela de administração de usuários.** Seção 13.9. As três decisões que estavam pendentes ficaram assim: só gestor administra; desativar ou rebaixar quem tem chamado em aberto exige reatribuir antes; e o gestor não mexe na própria conta.
 
-**Trilha de auditoria de usuário.** Troca de perfil e desativação hoje vão só para o log. Para chamado existe `TicketHistory`; para usuário, nada no banco responde "quem promoveu esta pessoa, e quando".
-
-*A decidir:* tabela própria preenchida por interceptor, no molde do `TicketHistory`, ou aceitar o log como fonte enquanto não houver pedido de auditoria formal.
+**Entregue: trilha de auditoria de usuário.** Decidido pela tabela própria, `UserAuditEntry`, preenchida por interceptor no molde do `TicketHistory` (seção 13.9). Junto vieram cadastro pelo gestor, convite por e-mail, "esqueci minha senha" e as configurações gerais de autocadastro (seções 13.12 e 13.13).
 
 **Entregue antes do prazo: tela de administração de categorias.** Seção 13.10. A decisão pendente ficou como a intenção previa: chamado de categoria desativada continua válido, e a categoria só sai dos seletores. Implementar revelou uma armadilha no seed, que comparava por nome e por isso recriava a categoria renomeada a cada subida; ele agora só semeia em banco sem categoria nenhuma.
 
-**Filtrar a lista de chamados por categoria desativada.** O filtro da lista usa o mesmo `/api/categories` dos seletores, que só traz as ativas. A equipe não consegue listar os chamados que ficaram numa categoria desativada, a não ser pela URL.
+**Entregue: filtrar por categoria desativada.** O filtro da lista pede `/api/categories?includeInactive=true`, que só a equipe pode usar, e mostra as desativadas marcadas. Os seletores de abertura e reclassificação continuam só com as ativas.
 
 **Entregue: testes de frontend.** Vitest com Testing Library, rodando no CI (`npm test`). Cobrem o que dói, não tudo: marcação de comentário e anexo internos, filtros da lista reconstruídos da URL, as ações respeitando `allowedNextStatuses`, o aviso de reabertura e a conversão de período para o horário de São Paulo. A marca de anexo interno ganhou texto para leitor de tela no caminho — antes era só cor e ícone.
 
-**Teste de ponta a ponta.** Playwright contra o perfil `web` do compose, cobrindo login, abertura e resposta. Ficou para depois de propósito: o que os testes de componente não pegam hoje é a integração com a API, e ela já tem 400+ testes do lado do servidor.
-
-*A decidir:* rodar no CI, que exige subir banco e API no job, ou só localmente antes de release.
+**Entregue: teste de ponta a ponta.** Playwright, em `e2e/`, contra o perfil `web` do compose: login, abertura, resposta, nota interna fora da vista do solicitante, chamado alheio inacessível pelo endereço, o dashboard e o menu de cada perfil. Decidido: roda no CI, num job que sobe a pilha inteira.
 
 **Entregue: reabrir chamado.** Seção 5.9. Decidido: reabre o mesmo chamado; o solicitante reabre respondendo, a equipe pela ação de status; chamado fechado reabre por sete dias; o SLA continua de onde parou. A decisão corrigiu também a volta de "Resolvido" para "Em atendimento", que já existia e fazia o chamado voltar vencido pelo tempo parado.
 
-**Indicador de reabertura.** O histórico registra cada reabertura, mas o dashboard não conta nenhuma. Taxa de reabertura por técnico e por categoria é o indicador que mostra solução que não resolveu.
-
-*A decidir:* contar pelo histórico, numa consulta agregada, ou manter um contador no chamado — o que é uma migration.
+**Entregue: indicador de reabertura.** Decidido contar pelo histórico, numa consulta agregada, sem contador no chamado: o dado já existia e não pode divergir de si mesmo. Aparece no dashboard por período, no total e por técnico (seção 13.7).
 
 **Entregue: filtros por responsável e período, e ordenação por última atualização.** Seção 13.6. O período viaja como instante com o deslocamento de São Paulo, e a API o converte para UTC antes da consulta — o Npgsql recusa parâmetro com deslocamento diferente de zero, e sem a conversão o filtro respondia 500.
 
-**Busca na descrição.** A busca atual cobre código e título, com `lower(coluna) LIKE`.
+**Entregue: busca na descrição.** A busca cobre código, título e descrição. Decidido por índice de trigramas (`pg_trgm`) com GIN sobre `lower(coluna)`, e não por `tsvector`: o trigrama acelera o mesmo `LIKE` de substring que a busca já fazia, e o resultado não muda de significado. Com `tsvector`, "impress" deixaria de achar "impressora", e código de erro e nome de máquina passariam pelo dicionário do português. Há teste conferindo pelo plano de execução que o índice é usado.
 
-*A decidir:* busca em descrição com `LIKE` degrada com volume. Se entrar, provavelmente vale `tsvector` com índice GIN — o que é uma migration e uma decisão de arquitetura, não um ajuste de query.
-
-**Melhoria visual do dashboard.** Recorte por período, comparação com o mês anterior, e cumprimento de SLA como percentual, que hoje não existe como indicador.
+**Entregue: dashboard por período.** Recorte de 7, 30 ou 90 dias, comparação com o período anterior, cumprimento de SLA em percentual e desempenho por técnico (seção 13.7).
 
 ### Versão 1.2 — Notificações
 
@@ -1356,7 +1533,7 @@ Com o envio desligado, **nenhum e-mail entra na fila** — ligar o envio não di
 
 *A decidir:* se isso incomodar na prática, agrupar por janela de tempo (segurar o e-mail alguns minutos e juntar o que chegar nesse intervalo). Não fizemos antes de ver o uso real, porque atrasar o aviso também tem custo.
 
-**Despacho com mais de uma réplica.** O despachante roda no processo da API; com duas réplicas, as duas podem pegar o mesmo e-mail na mesma rodada. Resolve-se com `EmailDispatch:DispatchIntervalSeconds = 0` em todas menos uma, ou com trava por linha na seleção.
+**Resolvido: despacho com mais de uma réplica.** Antes de enviar, cada réplica reserva o e-mail com uma atualização condicional — só ganha quem ainda vê o mesmo `NextAttemptAt` — e a reserva vale cinco minutos. Duas réplicas na mesma rodada mandam cada e-mail uma vez; há teste com envios concorrentes fixando isso.
 
 **Atenção, e não é detalhe:** a invariante 2 vale em canal novo. Nota interna e anexo interno **nunca** entram no corpo de um e-mail, e o destinatário de cada mensagem precisa ser derivado da mesma regra de visibilidade que a API usa — não de uma lista montada à mão no serviço de notificação. Todo endpoint novo que exponha comentário pede teste do caso negativo; o mesmo vale para todo canal novo.
 
@@ -1374,13 +1551,15 @@ A verificação roda a cada cinco minutos no processo da API (`SlaAlerts:Interva
 
 ### Versão 2.0 — Integrações
 
-Ingestão de chamado por e-mail, caixa de SPAM, importação CSV e JSON, e integração com Freshdesk e Freshservice. Especificação completa da ingestão de e-mail e da caixa de SPAM: [docs/integracao-email.md](docs/integracao-email.md).
+**Entregue: abertura de chamado por e-mail e caixa de SPAM.** Uma caixa do Microsoft 365, lida pelo Graph a cada minuto: mensagem nova vira chamado, resposta vira comentário — e reabre o chamado, pela regra da seção 5.9 —, e o que parece spam fica retido para revisão (seção 13.15). Especificação, e onde a implementação se afastou dela: [docs/integracao-email.md](docs/integracao-email.md).
 
-O desenho de anexo pendente e vinculado já foi feito pensando nisso: anexo de e-mail entra pelo mesmo caminho, vinculado ao comentário que a mensagem virar.
+**Entregue: importação de CSV e JSON, e do Freshdesk e do Freshservice.** Pelo arquivo de exportação das duas ferramentas, com conferência antes de gravar (seção 13.14). Chamado importado fica fora dos indicadores de SLA (seção 8.3).
 
 ### Infraestrutura, quando sair do ambiente local
 
-**Anexos em Azure Blob Storage.** O armazenamento em disco atual **não sobrevive a mais de uma réplica**: cada réplica tem seu próprio sistema de arquivos, e o anexo enviado numa dá 404 na outra. O sistema de arquivos de contêiner também é efêmero — um deploy leva os anexos embora. Ou seja, isto deixa de ser melhoria e passa a ser pré-requisito no momento em que a API escalar horizontalmente.
+**Entregue: anexos em Azure Blob Storage.** `AttachmentStorage:Provider = AzureBlob`, com Managed Identity, e a subida grava um blob de sonda para acusar permissão faltando. Connection string com chave de conta é recusada; só a do emulador é aceita, para desenvolvimento e teste, que rodam contra o Azurite. Configuração em [docs/instalacao.md](docs/instalacao.md), seção 7. O que motivou, e as decisões, ficam abaixo.
+
+O armazenamento em disco **não sobrevive a mais de uma réplica**: cada réplica tem seu próprio sistema de arquivos, e o anexo enviado numa dá 404 na outra. O sistema de arquivos de contêiner também é efêmero — um deploy leva os anexos embora. Ou seja, isto deixa de ser melhoria e passa a ser pré-requisito no momento em que a API escalar horizontalmente.
 
 O caminho está preparado: é uma implementação nova de `IAttachmentStorage` (decisão 4.15 de [docs/arquitetura.md](docs/arquitetura.md)), sem tocar em domínio, serviço, schema ou filtro de visibilidade. A chave de armazenamento já é um caminho hierárquico, que é o que o Blob espera.
 
@@ -1393,9 +1572,24 @@ O caminho está preparado: é uma implementação nova de `IAttachmentStorage` (
 * **Defender for Storage** com varredura de malware, *soft delete* de 7 a 30 dias, e regra de ciclo de vida para camada fria. O sistema aceita zip e documento do Office de qualquer pessoa da empresa: o anexo é o vetor de entrada mais óbvio que existe.
 * A varredura de pendentes roda no processo da API. Com várias réplicas, todas varrem — é idempotente e o lote é pequeno, mas se incomodar, `CleanUpIntervalHours = 0` desliga e a limpeza migra para um job com dono único.
 
-**Forwarded headers.** O rate limiting particiona por IP de origem nas rotas anónimas, lido de `RemoteIpAddress`. Atrás de Front Door ou Application Gateway, todo pedido chega com o IP do proxy e a partição vira uma só. Antes de pôr um proxy na frente, configurar `UseForwardedHeaders` — e só então confiar no cabeçalho, porque confiar nele sem o middleware deixa o cliente escolher a própria partição.
+**Entregue: forwarded headers.** O rate limiting particiona por IP de origem nas rotas anônimas, e atrás de proxy todo pedido chegaria com o IP do proxy. `UseForwardedHeaders` é o primeiro middleware, e só confia no cabeçalho vindo das redes e proxies listados em `ForwardedHeaders:KnownNetworks` e `KnownProxies` — confiar em qualquer origem deixaria o cliente escolher a própria partição. O compose de produção configura a rede interna dele.
 
-**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir — junto com o seed de dados de referência e o bootstrap do primeiro gestor, descritos em "Primeira execução" acima.
+**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir — junto com o seed de dados de referência e o bootstrap do primeiro gestor, descritos em "Primeira execução" acima. No compose de produção, é o serviço `setup`.
+
+### Em aberto
+
+O que ficou para depois, com o que precisa ser decidido antes:
+
+| Item | A decidir |
+| --- | --- |
+| Agrupar e-mails de chamado muito ativo | se incomodar no uso real, segurar o e-mail alguns minutos e juntar o que chegar. Atrasar o aviso também custa (versão 1.2, acima) |
+| Anexos de e-mail recebido | entram pelo caminho de anexo pendente e vinculado; falta decidir o que fazer com tipo não aceito e com imagem embutida em assinatura |
+| Sincronização contínua com Freshdesk ou Freshservice | só faz sentido se as duas ferramentas forem conviver. Para migrar, a importação por arquivo resolve |
+| Importação do GLPI | a origem já existe no modelo; falta o mapeamento das colunas da exportação |
+| Leitura de caixa por IMAP | só se aparecer caixa fora do Microsoft 365 |
+| Tabela de SLA editável pela interface | qual chamado o prazo novo alcança: só os abertos dali em diante, como nos feriados, é a resposta mais provável |
+| Atribuição automática | por categoria, por rodízio ou por carga — e o que fazer com quem está ausente |
+| Imagem do frontend com endereço de API em tempo de execução | só quando existir topologia com SPA e API em domínios separados ("Primeira execução", acima) |
 
 ---
 

@@ -1,4 +1,5 @@
-import { Search } from 'lucide-react'
+import { useState } from 'react'
+import { Copy, History, KeyRound, Search, UserPlus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { TicketStatusBadge } from '@/components/ticket-badges'
@@ -8,10 +9,17 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { userRoleLabels, userRoles, type UserRole } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
-import { blockingTickets, type ManagedUser } from '@/features/users/api'
-import { useChangeActivation, useChangeRole, useManagedUsers } from '@/features/users/queries'
+import { blockingTickets, type AccessGranted, type ManagedUser, type UserAuditAction } from '@/features/users/api'
+import {
+  useChangeActivation,
+  useChangeRole,
+  useCreateUser,
+  useManagedUsers,
+  useResetUserPassword,
+  useUserHistory,
+} from '@/features/users/queries'
 import { errorMessage } from '@/lib/api'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
@@ -30,6 +38,8 @@ export function UserAdmin() {
   const activeParam = params.get('isActive')
   const isActive = activeParam === null ? undefined : activeParam === 'true'
   const page = Number(params.get('page') ?? '1')
+
+  const [creating, setCreating] = useState(false)
 
   const users = useManagedUsers(
     { search: search || undefined, role: roleFilter, isActive, page },
@@ -60,12 +70,22 @@ export function UserAdmin() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Usuários</h1>
-        <p className="text-muted-foreground text-sm">
-          {users.data ? `${users.data.totalCount} usuário(s)` : 'Carregando…'}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Usuários</h1>
+          <p className="text-muted-foreground text-sm">
+            {users.data ? `${users.data.totalCount} usuário(s)` : 'Carregando…'}
+          </p>
+        </div>
+
+        {!creating && (
+          <Button onClick={() => setCreating(true)}>
+            <UserPlus /> Novo usuário
+          </Button>
+        )}
       </div>
+
+      {creating && <NewUser onClose={() => setCreating(false)} />}
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <form
@@ -166,17 +186,167 @@ export function UserAdmin() {
   )
 }
 
+/** Cadastro pelo gestor: convite por e-mail quando há envio configurado, senha provisória quando não. */
+function NewUser({ onClose }: { onClose: () => void }) {
+  const create = useCreateUser()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<UserRole>('Requester')
+
+  if (create.data) {
+    return (
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <AccessNotice access={create.data} />
+        <Button variant="outline" size="sm" className="mt-4" onClick={onClose}>
+          Concluir
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-sm"
+      onSubmit={(event) => {
+        event.preventDefault()
+        create.mutate({ name, email, role })
+      }}
+    >
+      <label className="grid min-w-52 flex-1 gap-1.5 text-xs font-medium">
+        Nome
+        <Input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <label className="grid min-w-60 flex-1 gap-1.5 text-xs font-medium">
+        E-mail
+        <Input type="email" required maxLength={320} value={email} onChange={(event) => setEmail(event.target.value)} />
+      </label>
+      <label className="grid gap-1.5 text-xs font-medium">
+        Perfil
+        <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+          {userRoles.map((value) => (
+            <option key={value} value={value}>
+              {userRoleLabels[value]}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <Button type="submit" disabled={create.isPending || !name.trim() || !email.trim()}>
+        Cadastrar
+      </Button>
+      <Button type="button" variant="ghost" onClick={onClose}>
+        Cancelar
+      </Button>
+
+      {create.isError && (
+        <p role="alert" className="text-destructive w-full text-sm">
+          {errorMessage(create.error, 'Não foi possível cadastrar.')}
+        </p>
+      )}
+    </form>
+  )
+}
+
+/**
+ * Resultado de um cadastro ou redefinição. A senha provisória aparece aqui e em nenhum
+ * outro lugar: o servidor não a guarda em claro e não a devolve de novo.
+ */
+function AccessNotice({ access }: { access: AccessGranted }) {
+  const [copied, setCopied] = useState(false)
+
+  if (access.invitationSent) {
+    return (
+      <p role="status" className="text-sm">
+        Convite enviado para <strong>{access.user.email}</strong>. O link para definir a senha vale por três dias.
+      </p>
+    )
+  }
+
+  return (
+    <div role="status" className="space-y-2 text-sm">
+      <p>
+        Senha provisória de <strong>{access.user.email}</strong>. Ela aparece só agora: entregue à pessoa por um canal
+        seguro. No primeiro login, a troca é obrigatória.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="bg-muted rounded-md px-3 py-1.5 font-mono text-base tracking-wider">
+          {access.temporaryPassword}
+        </code>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void navigator.clipboard?.writeText(access.temporaryPassword ?? '').then(() => setCopied(true))
+          }}
+        >
+          <Copy /> {copied ? 'Copiada' : 'Copiar'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const auditLabels: Record<UserAuditAction, string> = {
+  Created: 'Conta criada',
+  RoleChanged: 'Perfil alterado',
+  Deactivated: 'Conta desativada',
+  Reactivated: 'Conta reativada',
+  PasswordChanged: 'Trocou a própria senha',
+  PasswordReset: 'Senha redefinida',
+  PasswordSetByLink: 'Senha definida pelo link do e-mail',
+}
+
+function UserHistory({ userId }: { userId: string }) {
+  const history = useUserHistory(userId, true)
+
+  if (history.isPending) {
+    return <p className="text-muted-foreground text-xs">Carregando histórico…</p>
+  }
+
+  if (history.isError || !history.data) {
+    return <p className="text-destructive text-xs">{errorMessage(history.error, 'Não foi possível carregar o histórico.')}</p>
+  }
+
+  if (history.data.length === 0) {
+    return <p className="text-muted-foreground text-xs">Nenhum evento registrado.</p>
+  }
+
+  return (
+    <ol className="border-muted space-y-1 border-l-2 pl-3 text-xs">
+      {history.data.map((entry, index) => (
+        <li key={index}>
+          <span className="font-medium">{auditLabels[entry.action]}</span>
+          {entry.action === 'RoleChanged' && entry.previousValue && entry.newValue && (
+            <> de {roleLabel(entry.previousValue)} para {roleLabel(entry.newValue)}</>
+          )}
+          {entry.action === 'Created' && entry.newValue && <> como {roleLabel(entry.newValue)}</>}
+          <span className="text-muted-foreground">
+            {' '}
+            · {entry.changedByName ?? 'pela própria pessoa ou pelo sistema'} · {formatDateTime(entry.createdAt)}
+          </span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+function roleLabel(value: string): string {
+  return (userRoles as readonly string[]).includes(value) ? userRoleLabels[value as UserRole] : value
+}
+
 function UserRow({ user }: { user: ManagedUser }) {
   const { user: me } = useSession()
   const changeRole = useChangeRole()
   const changeActivation = useChangeActivation()
+  const resetPassword = useResetUserPassword()
+  const [showHistory, setShowHistory] = useState(false)
 
   // O servidor recusa mexer na própria conta: é o que garante que sempre sobra um
   // gestor. Desabilitar aqui só poupa a pessoa do clique que daria erro.
   const isSelf = me?.id === user.id
   const hasOpenTickets = user.openAssignedTickets > 0
-  const pending = changeRole.isPending || changeActivation.isPending
-  const error = changeRole.error ?? changeActivation.error
+  const pending = changeRole.isPending || changeActivation.isPending || resetPassword.isPending
+  const error = changeRole.error ?? changeActivation.error ?? resetPassword.error
   const blocking = blockingTickets(error)
 
   function onRoleChange(role: UserRole) {
@@ -246,7 +416,35 @@ function UserRow({ user }: { user: ManagedUser }) {
         >
           {user.isActive ? 'Desativar' : 'Reativar'}
         </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-end"
+          disabled={isSelf || pending}
+          onClick={() => {
+            if (window.confirm(`Redefinir a senha de ${user.name}? A senha atual deixa de valer e as sessões abertas caem.`)) {
+              resetPassword.mutate(user.id)
+            }
+          }}
+        >
+          <KeyRound /> Redefinir senha
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-end"
+          aria-expanded={showHistory}
+          onClick={() => setShowHistory((value) => !value)}
+        >
+          <History /> Histórico
+        </Button>
       </div>
+
+      {resetPassword.data && <AccessNotice access={resetPassword.data} />}
+
+      {showHistory && <UserHistory userId={user.id} />}
 
       {error && (
         <div role="alert" className="text-destructive space-y-2 text-sm">

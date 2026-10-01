@@ -54,10 +54,22 @@ export function startOfDayInSaoPaulo(day: string): string {
 
 /** O dia seguinte a uma data `yyyy-mm-dd`, no mesmo formato. */
 export function nextDay(day: string): string {
+  return addDays(day, 1)
+}
+
+/** Soma dias a uma data `yyyy-mm-dd`. Meio-dia UTC, para nenhuma virada de fuso atrapalhar. */
+export function addDays(day: string, days: number): string {
   const date = new Date(`${day}T12:00:00Z`)
-  date.setUTCDate(date.getUTCDate() + 1)
+  date.setUTCDate(date.getUTCDate() + days)
 
   return date.toISOString().slice(0, 10)
+}
+
+const isoDayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE })
+
+/** Hoje, em São Paulo, como `yyyy-mm-dd` — que é o formato que o en-CA usa. */
+export function todayInSaoPaulo(now = new Date()): string {
+  return isoDayFormatter.format(now)
 }
 
 /**

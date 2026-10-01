@@ -12,6 +12,7 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
 
         builder.Property(h => h.Date).HasColumnType("date").IsRequired();
         builder.Property(h => h.Name).HasMaxLength(200).IsRequired();
+        builder.Property(h => h.IsActive).HasDefaultValue(true);
 
         builder.HasIndex(h => h.Date).IsUnique();
     }

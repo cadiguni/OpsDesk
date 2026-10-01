@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using OpsDesk.Domain.Entities;
 
 namespace OpsDesk.Application.Tickets;
@@ -49,6 +50,7 @@ public static class TicketFilterExtensions
             // Esta é a versão traduzível para SQL; mexer em uma pede mexer na outra.
             tickets = tickets.Where(t =>
                 t.Status != Domain.Enums.TicketStatus.Cancelled &&
+                Domain.Tickets.TicketSla.MeasuredSources.Contains(t.Source) &&
                 ((t.FirstRespondedAt == null && t.SlaResponseDueAt < now) ||
                  (t.ResolvedAt == null && t.SlaResolutionDueAt < now)));
         }
@@ -71,26 +73,32 @@ public static class TicketFilterExtensions
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var term = filter.Search.Trim().ToLower();
+            // Busca por código, título e descrição.
+            //
+            // `EF.Functions.Like` sobre `lower(coluna)`, e não `Contains` nem o `ILIKE` do
+            // Npgsql. O `ILIKE` amarraria a camada de aplicação ao provider; o `Contains`
+            // vira `strpos`, que nenhum índice acelera. Já `lower(coluna) LIKE '%termo%'`
+            // é exatamente a expressão dos índices de trigramas (pg_trgm) da migration
+            // AddTicketSearchTrigramIndexes — mudar a forma da consulta aqui sem mudar o
+            // índice lá volta a varrer a tabela, e há teste fixando os dois lados.
+            //
+            // O termo tem % e _ escapados: buscar "50%" procura o texto "50%", e não
+            // "tudo que começa com 50".
+            var pattern = $"%{EscapeLike(filter.Search.Trim().ToLower())}%";
 
-            // Busca por código e título, que é o que a pessoa tem em mãos quando vem
-            // procurar um chamado específico.
-            //
-            // `ToLower()` nos dois lados em vez do `ILIKE` do PostgreSQL: o `ILIKE` viria
-            // de `EF.Functions` do provider Npgsql, e referenciá-lo aqui amarraria a
-            // camada de aplicação ao banco. Isto traduz para `lower(coluna) LIKE '%...%'`,
-            // que é equivalente.
-            //
-            // Duas limitações conhecidas, aceitáveis no volume de um service desk interno:
-            // não usa índice, e não ignora acento. Se a busca crescer, o caminho é um
-            // índice funcional sobre `lower(title)` ou busca textual do PostgreSQL.
             tickets = tickets.Where(t =>
-                t.Code.ToLower().Contains(term) ||
-                t.Title.ToLower().Contains(term));
+                EF.Functions.Like(t.Code.ToLower(), pattern, LikeEscape) ||
+                EF.Functions.Like(t.Title.ToLower(), pattern, LikeEscape) ||
+                EF.Functions.Like(t.Description.ToLower(), pattern, LikeEscape));
         }
 
         return tickets;
     }
+
+    private const string LikeEscape = "\\";
+
+    private static string EscapeLike(string term) =>
+        term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 
     public static IQueryable<Ticket> ApplySort(this IQueryable<Ticket> tickets, TicketSort sort) => sort switch
     {

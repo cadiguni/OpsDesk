@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { usePublicOptions } from '@/features/auth/options'
 import { useSession } from '@/features/auth/session-context'
 import { registerSchema, type RegisterFields } from '@/features/auth/schemas'
 import { errorMessage } from '@/lib/api'
@@ -15,6 +16,8 @@ import { errorMessage } from '@/lib/api'
 /** Tela de cadastro (README, seção 13.2). Todo cadastro pelo portal nasce como usuário. */
 export function Register() {
   const { signUp } = useSession()
+  const options = usePublicOptions()
+  const domains = options.data?.allowedEmailDomains ?? []
   const navigate = useNavigate()
   const [failure, setFailure] = useState<string | null>(null)
 
@@ -47,6 +50,17 @@ export function Register() {
         </CardHeader>
 
         <CardContent>
+          {options.data && !options.data.allowSelfRegistration ? (
+            <p className="text-sm">
+              O cadastro pelo portal está desligado. Peça uma conta à equipe de TI.
+            </p>
+          ) : (
+          <>
+          {domains.length > 0 && (
+            <p className="text-muted-foreground mb-4 text-sm">
+              Use seu e-mail corporativo: {domains.map((domain) => `@${domain}`).join(', ')}.
+            </p>
+          )}
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-5" noValidate>
             <Field label="Nome" error={form.formState.errors.name?.message}>
               {(field) => (
@@ -111,6 +125,8 @@ export function Register() {
               {form.formState.isSubmitting ? 'Criando conta…' : 'Criar conta'}
             </Button>
           </form>
+          </>
+          )}
         </CardContent>
       </Card>
 

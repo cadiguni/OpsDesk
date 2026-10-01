@@ -342,6 +342,8 @@ public static class TicketEndpoints
         TypedResults.Ok(await workflow.ListStaffAsync(cancellationToken));
 
     private static async Task<IResult> ListCategories(
-        TicketService tickets, CancellationToken cancellationToken) =>
-        TypedResults.Ok(await tickets.ListCategoriesAsync(cancellationToken));
+        TicketService tickets, ICurrentUser currentUser, CancellationToken cancellationToken, bool includeInactive = false) =>
+        // Solicitante pedindo as desativadas recebe as ativas: ele só usa a lista para abrir
+        // chamado, e categoria desativada não serve para isso.
+        TypedResults.Ok(await tickets.ListCategoriesAsync(includeInactive && currentUser.Viewer.IsStaff, cancellationToken));
 }

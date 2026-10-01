@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -22,7 +23,8 @@ public class OpsDeskApiFactory(
     int credentialAttemptsPerMinute = 10_000,
     int refreshAttemptsPerMinute = 10_000,
     int refreshGraceSeconds = 30,
-    int uploadsPerMinute = 10_000) : WebApplicationFactory<Program>
+    int uploadsPerMinute = 10_000,
+    IReadOnlyDictionary<string, string?>? extraSettings = null) : WebApplicationFactory<Program>
 {
     /// <summary>
     /// Chave de assinatura só deste processo de teste. Não reaproveitamos a de
@@ -43,6 +45,9 @@ public class OpsDeskApiFactory(
     /// </summary>
     public FakeEmailSender Email { get; } = new();
 
+    /// <summary>Caixa de entrada falsa: os testes colocam mensagens nela e mandam ler.</summary>
+    public FakeMailboxReader Mailbox { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -62,6 +67,9 @@ public class OpsDeskApiFactory(
                 // envio da fila é exercitado diretamente, em teste próprio.
                 ["EmailDispatch:DispatchIntervalSeconds"] = "0",
                 ["SlaAlerts:IntervalMinutes"] = "0",
+                ["Holidays:RenewalIntervalHours"] = "0",
+                ["Mailbox:IntervalSeconds"] = "0",
+                ["Mailbox:RetentionIntervalHours"] = "0",
 
                 // Varredura desligada: teste que dependa de tarefa periódica é teste que
                 // falha por horário. A limpeza é exercitada diretamente, em teste próprio.
@@ -81,10 +89,20 @@ public class OpsDeskApiFactory(
                 ["Jwt:RefreshTokenGraceSeconds"] = refreshGraceSeconds.ToString(),
             }));
 
+        if (extraSettings is not null)
+        {
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(extraSettings));
+        }
+
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(Email);
+
+            services.RemoveAll<OpsDesk.Application.Inbound.IMailboxReader>();
+            services.AddSingleton<OpsDesk.Application.Inbound.IMailboxReader>(Mailbox);
+
+            services.AddSingleton<IStartupFilter, TestConnectionIpFilter>();
         });
     }
 
@@ -164,4 +182,30 @@ public class CookieHandler : DelegatingHandler
 
         return response;
     }
+}
+
+/// <summary>
+/// O TestServer não tem conexão de rede, então <c>RemoteIpAddress</c> chega nulo. Este
+/// filtro, que roda antes de todo o pipeline da aplicação, lê o IP de um cabeçalho de
+/// teste — é como os testes simulam "a requisição veio do proxy tal".
+/// </summary>
+public class TestConnectionIpFilter : IStartupFilter
+{
+    public const string Header = "X-Test-Connection-Ip";
+
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.Use(async (context, nextMiddleware) =>
+        {
+            if (context.Request.Headers.TryGetValue(Header, out var value)
+                && System.Net.IPAddress.TryParse(value, out var ip))
+            {
+                context.Connection.RemoteIpAddress = ip;
+            }
+
+            await nextMiddleware(context);
+        });
+
+        next(app);
+    };
 }

@@ -15,7 +15,7 @@ namespace OpsDesk.Infrastructure.Time;
 /// </summary>
 public class CachedHolidayProvider(OpsDeskDbContext db, IMemoryCache cache) : IHolidayProvider
 {
-    private const string CacheKey = "opsdesk:holidays";
+    public const string CacheKey = "opsdesk:holidays";
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
 
@@ -26,6 +26,7 @@ public class CachedHolidayProvider(OpsDeskDbContext db, IMemoryCache cache) : IH
 
             return db.Holidays
                 .AsNoTracking()
+                .Where(h => h.IsActive)
                 .Select(h => h.Date)
                 .ToHashSet();
         })!;

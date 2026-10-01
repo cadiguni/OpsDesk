@@ -29,6 +29,9 @@ appsettings.*.local.json
 # vão para o repositório.
 data-protection-keys/
 
+# Backups gerados por deploy/backup.sh: contêm o banco inteiro.
+deploy/backups/
+
 # Editores
 .idea/
 *.swp

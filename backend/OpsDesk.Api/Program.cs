@@ -4,6 +4,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -11,6 +12,7 @@ using OpsDesk.Api.Authentication;
 using OpsDesk.Api.Authorization;
 using OpsDesk.Api.Endpoints;
 using OpsDesk.Api.Maintenance;
+using OpsDesk.Api.Networking;
 using OpsDesk.Api.RateLimiting;
 using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
@@ -39,7 +41,9 @@ try
     builder.Services.AddOpsDeskInfrastructure(builder.Configuration);
 
     builder.Services.AddHttpContextAccessor();
-    builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+    builder.Services.AddScoped<HttpContextCurrentUser>();
+    builder.Services.AddScoped<ICurrentUser>(provider => provider.GetRequiredService<HttpContextCurrentUser>());
+    builder.Services.AddScoped<IActorScope>(provider => provider.GetRequiredService<HttpContextCurrentUser>());
 
     // Os validators vivem na Application; o registro varre aquele assembly.
     builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
@@ -88,6 +92,12 @@ try
 
     builder.Services.AddRateLimiter(options => options.AddOpsDeskPolicies());
 
+    // Pelas options, e não lido aqui: a lista de proxies confiáveis vem de configuração, e
+    // ler configuração durante a montagem congela o valor (ver CLAUDE.md).
+    builder.Services
+        .AddOptions<ForwardedHeadersOptions>()
+        .Configure<IConfiguration>(ProxyTrust.Configure);
+
     builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
         .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
         .AllowAnyHeader()
@@ -114,6 +124,8 @@ try
     builder.Services.AddHostedService<PendingAttachmentCleanup>();
     builder.Services.AddHostedService<OutboundEmailDispatcher>();
     builder.Services.AddHostedService<SlaAlertScheduler>();
+    builder.Services.AddHostedService<HolidayRenewal>();
+    builder.Services.AddHostedService<MailboxPoller>();
 
     builder.Services.AddOpenApi();
 
@@ -140,6 +152,10 @@ try
     app.ValidateConfiguration();
 
     await app.ApplyDatabaseStartupTasksAsync();
+
+    // Primeiro de tudo: o IP de origem corrigido precisa valer para o log da requisição e
+    // para o rate limiting, que vêm depois.
+    app.UseForwardedHeaders();
 
     app.UseSerilogRequestLogging();
     app.UseExceptionHandler();
@@ -192,6 +208,9 @@ try
     app.MapUserAdministrationEndpoints();
     app.MapCategoryAdministrationEndpoints();
     app.MapNotificationEndpoints();
+    app.MapHolidayEndpoints();
+    app.MapInboundEmailEndpoints();
+    app.MapImportEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

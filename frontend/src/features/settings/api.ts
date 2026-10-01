@@ -52,3 +52,21 @@ export async function updateEmailSettings(input: UpdateEmailSettingsInput): Prom
 export async function sendTestEmail(toAddress: string): Promise<void> {
   await api.post('/api/admin/settings/email/test', { toAddress })
 }
+
+export type GeneralSettings = {
+  organizationName: string
+  allowSelfRegistration: boolean
+  allowedEmailDomains: string[]
+}
+
+export async function getGeneralSettings(): Promise<GeneralSettings> {
+  const { data } = await api.get<GeneralSettings>('/api/admin/settings/general')
+
+  return data
+}
+
+export async function updateGeneralSettings(input: GeneralSettings): Promise<GeneralSettings> {
+  const { data } = await api.put<GeneralSettings>('/api/admin/settings/general', input)
+
+  return data
+}

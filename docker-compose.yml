@@ -51,6 +51,10 @@ services:
       # Chaves que cifram o client secret do e-mail. Em volume pelo mesmo motivo dos
       # anexos, com consequência pior: chave perdida é secret ilegível e e-mail parado.
       DataProtection__KeysPath: "/var/opsdesk/keys"
+      # O nginx do perfil `web` repassa /api; sem isto a API veria o IP dele em toda
+      # requisição, e a cota de login seria uma só para todo mundo. As faixas padrão do
+      # Docker, só em desenvolvimento — o compose de produção (deploy/) fixa a rede.
+      ForwardedHeaders__KnownNetworks__0: "172.16.0.0/12"
     ports:
       - "8080:8080"
     volumes:
@@ -87,7 +91,7 @@ services:
     ports:
       - "3000:80"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

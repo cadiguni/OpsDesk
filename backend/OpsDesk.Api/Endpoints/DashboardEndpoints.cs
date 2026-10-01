@@ -20,8 +20,27 @@ public static class DashboardEndpoints
             .WithTags("Dashboard")
             .WithSummary("Indicadores da operação.");
 
+        routes.MapGet("/api/dashboard/period", Period)
+            .RequireAuthorization(AuthorizationPolicies.Manager)
+            .WithTags("Dashboard")
+            .WithSummary("Volume, cumprimento de SLA e reabertura num período, com o período anterior.");
+
         return routes;
     }
+
+    private static async Task<IResult> Period(
+        DateTimeOffset from,
+        DateTimeOffset before,
+        DashboardPeriodService dashboard,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        await dashboard.GetAsync(from, before, currentUser.Viewer, cancellationToken) switch
+        {
+            DashboardPeriodResult.Ok ok => TypedResults.Ok(ok.Period),
+            DashboardPeriodResult.Invalid invalid => TypedResults.Problem(
+                detail: invalid.Message, statusCode: StatusCodes.Status400BadRequest, title: "Período inválido"),
+            var other => throw new InvalidOperationException($"Resultado não tratado: {other.GetType().Name}.")
+        };
 
     private static async Task<IResult> Summary(
         DashboardService dashboard,

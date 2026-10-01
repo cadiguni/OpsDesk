@@ -55,6 +55,51 @@ export async function changeActivation(userId: string, isActive: boolean): Promi
 }
 
 /**
+ * Como a pessoa recebeu o acesso: convite por e-mail, ou senha provisória — que o servidor
+ * devolve uma única vez, e que a tela mostra uma única vez.
+ */
+export type AccessGranted = {
+  user: ManagedUser
+  invitationSent: boolean
+  temporaryPassword: string | null
+}
+
+export type UserAuditAction =
+  | 'Created'
+  | 'RoleChanged'
+  | 'Deactivated'
+  | 'Reactivated'
+  | 'PasswordChanged'
+  | 'PasswordReset'
+  | 'PasswordSetByLink'
+
+export type UserAuditItem = {
+  action: UserAuditAction
+  previousValue: string | null
+  newValue: string | null
+  changedByName: string | null
+  createdAt: string
+}
+
+export async function createUser(input: { name: string; email: string; role: UserRole }): Promise<AccessGranted> {
+  const { data } = await api.post<AccessGranted>('/api/admin/users', input)
+
+  return data
+}
+
+export async function resetUserPassword(userId: string): Promise<AccessGranted> {
+  const { data } = await api.post<AccessGranted>(`/api/admin/users/${userId}/password-reset`)
+
+  return data
+}
+
+export async function getUserHistory(userId: string): Promise<UserAuditItem[]> {
+  const { data } = await api.get<UserAuditItem[]>(`/api/admin/users/${userId}/history`)
+
+  return data
+}
+
+/**
  * Chamados que impediram a operação, quando a recusa foi por isso.
  *
  * Vêm no corpo do 409 para a tela listar o que reatribuir, em vez de mandar o gestor

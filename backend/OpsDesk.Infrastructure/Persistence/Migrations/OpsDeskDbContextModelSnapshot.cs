@@ -64,6 +64,73 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.ToTable("categories", (string)null);
                 });
 
+            modelBuilder.Entity("OpsDesk.Domain.Entities.EmailAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("address");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DefaultCategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_category_id");
+
+                    b.Property<string>("DefaultPriority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("default_priority");
+
+                    b.Property<bool>("InternalDomainsOnly")
+                        .HasColumnType("boolean")
+                        .HasColumnName("internal_domains_only");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("LastSyncAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("last_sync_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_email_accounts");
+
+                    b.HasIndex("Address")
+                        .IsUnique()
+                        .HasDatabaseName("ix_email_accounts_address");
+
+                    b.HasIndex("DefaultCategoryId")
+                        .HasDatabaseName("ix_email_accounts_default_category_id");
+
+                    b.ToTable("email_accounts", (string)null);
+                });
+
             modelBuilder.Entity("OpsDesk.Domain.Entities.EmailSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -157,6 +224,16 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("date")
                         .HasColumnName("date");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsCustom")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_custom");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -171,6 +248,134 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_holidays_date");
 
                     b.ToTable("holidays", (string)null);
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.InboundEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("BodyText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body_text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EmailAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("email_account_id");
+
+                    b.Property<string>("FromAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("from_address");
+
+                    b.Property<string>("FromName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("from_name");
+
+                    b.Property<string>("HeadersJson")
+                        .HasColumnType("text")
+                        .HasColumnName("headers_json");
+
+                    b.Property<string>("InReplyTo")
+                        .HasMaxLength(998)
+                        .HasColumnType("character varying(998)")
+                        .HasColumnName("in_reply_to");
+
+                    b.Property<string>("MessageId")
+                        .HasMaxLength(998)
+                        .HasColumnType("character varying(998)")
+                        .HasColumnName("message_id");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("ProcessingError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("processing_error");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("References")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("references");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_id");
+
+                    b.Property<string>("SpamReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("spam_reason");
+
+                    b.Property<int>("SpamScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("spam_score");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(998)
+                        .HasColumnType("character varying(998)")
+                        .HasColumnName("subject");
+
+                    b.Property<Guid?>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("ToAddress")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("to_address");
+
+                    b.HasKey("Id")
+                        .HasName("pk_inbound_emails");
+
+                    b.HasIndex("ReviewedById")
+                        .HasDatabaseName("ix_inbound_emails_reviewed_by_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_inbound_emails_ticket_id");
+
+                    b.HasIndex("EmailAccountId", "MessageId")
+                        .HasDatabaseName("ix_inbound_emails_email_account_id_message_id");
+
+                    b.HasIndex("Status", "ReceivedAt")
+                        .HasDatabaseName("ix_inbound_emails_status_received_at");
+
+                    b.ToTable("inbound_emails", (string)null);
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Notification", b =>
@@ -249,6 +454,10 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("html_body");
 
+                    b.Property<bool>("IsSensitive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_sensitive");
+
                     b.Property<string>("LastError")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
@@ -300,6 +509,48 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_outbound_emails_status_next_attempt_at");
 
                     b.ToTable("outbound_emails", (string)null);
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_password_reset_tokens");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_password_reset_tokens_token_hash");
+
+                    b.HasIndex("UserId", "UsedAt")
+                        .HasDatabaseName("ix_password_reset_tokens_user_id_used_at");
+
+                    b.ToTable("password_reset_tokens", (string)null);
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.RefreshToken", b =>
@@ -471,6 +722,93 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasFilter("is_active");
 
                     b.ToTable("sla_policies", (string)null);
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.SpamRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Pattern")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("pattern");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_spam_rules");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_spam_rules_created_by_id");
+
+                    b.ToTable("spam_rules", (string)null);
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.SystemSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AllowSelfRegistration")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_self_registration");
+
+                    b.Property<string>("AllowedEmailDomains")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("allowed_email_domains");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("OrganizationName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("organization_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_system_settings");
+
+                    b.HasIndex("UpdatedById")
+                        .HasDatabaseName("ix_system_settings_updated_by_id");
+
+                    b.ToTable("system_settings", (string)null);
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Ticket", b =>
@@ -821,6 +1159,64 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("OpsDesk.Domain.Entities.UserAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ChangedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("new_value");
+
+                    b.Property<string>("PreviousValue")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("previous_value");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_audit");
+
+                    b.HasIndex("ChangedById")
+                        .HasDatabaseName("ix_user_audit_changed_by_id");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_user_audit_user_id_created_at");
+
+                    b.ToTable("user_audit", (string)null);
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.EmailAccount", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.Category", "DefaultCategory")
+                        .WithMany()
+                        .HasForeignKey("DefaultCategoryId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_email_accounts_categories_default_category_id");
+
+                    b.Navigation("DefaultCategory");
+                });
+
             modelBuilder.Entity("OpsDesk.Domain.Entities.EmailSettings", b =>
                 {
                     b.HasOne("OpsDesk.Domain.Entities.User", null)
@@ -828,6 +1224,32 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UpdatedById")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_email_settings_users_updated_by_id");
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.InboundEmail", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.EmailAccount", "EmailAccount")
+                        .WithMany()
+                        .HasForeignKey("EmailAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_inbound_emails_email_accounts_email_account_id");
+
+                    b.HasOne("OpsDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_inbound_emails_users_reviewed_by_id");
+
+                    b.HasOne("OpsDesk.Domain.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_inbound_emails_tickets_ticket_id");
+
+                    b.Navigation("EmailAccount");
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Notification", b =>
@@ -868,6 +1290,18 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_outbound_emails_tickets_ticket_id");
                 });
 
+            modelBuilder.Entity("OpsDesk.Domain.Entities.PasswordResetToken", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_password_reset_tokens_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("OpsDesk.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("OpsDesk.Domain.Entities.User", "User")
@@ -897,6 +1331,26 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_sla_alerts_tickets_ticket_id");
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.SpamRule", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_spam_rules_users_created_by_id");
+
+                    b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.SystemSettings", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_system_settings_users_updated_by_id");
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Ticket", b =>
@@ -995,6 +1449,24 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.Navigation("ChangedBy");
 
                     b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.UserAuditEntry", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.User", "ChangedBy")
+                        .WithMany()
+                        .HasForeignKey("ChangedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_user_audit_users_changed_by_id");
+
+                    b.HasOne("OpsDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_audit_users_user_id");
+
+                    b.Navigation("ChangedBy");
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Category", b =>

@@ -154,4 +154,7 @@ public class BusinessCalendar(IOptions<BusinessHoursOptions> options, IHolidayPr
     /// </summary>
     private DateTimeOffset ToInstant(DateTime local) =>
         new DateTimeOffset(local, _zone.GetUtcOffset(local)).ToUniversalTime();
+
+    public DateTimeOffset FromLocal(DateTime local) =>
+        ToInstant(DateTime.SpecifyKind(local, DateTimeKind.Unspecified));
 }

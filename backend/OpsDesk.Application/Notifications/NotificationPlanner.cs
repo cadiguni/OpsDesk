@@ -33,7 +33,11 @@ public record TicketChange(
     IReadOnlyList<AddedComment> Comments);
 
 /// <summary>Canal de e-mail ligado. Nulo quando o envio está desligado.</summary>
-public record EmailChannel(string? PortalUrl);
+/// <param name="RepliesAreRead">
+/// Há caixa monitorada lendo as respostas (versão 2.0). Sem ela, o e-mail avisa que
+/// responder não adianta — uma resposta perdida sem aviso é pior que nenhuma.
+/// </param>
+public record EmailChannel(string? PortalUrl, bool RepliesAreRead = false);
 
 public record PlannedNotifications(IReadOnlyList<Notification> InApp, IReadOnlyList<OutboundEmail> Emails);
 
@@ -247,6 +251,15 @@ public static class NotificationPlanner
         var html = new StringBuilder();
 
         html.Append("<div style=\"font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2937\">");
+
+        // A marca no topo é onde a leitura da resposta corta o texto citado
+        // (ReplyTextExtractor). Fica no topo porque é onde o cliente de e-mail põe a
+        // resposta, acima da mensagem original.
+        if (channel.RepliesAreRead)
+        {
+            html.Append($"<p style=\"color:#9ca3af;font-size:12px\">—— {Inbound.ReplyTextExtractor.Marker} ——</p>");
+        }
+
         html.Append($"<p>Olá, {Encode(change.Requester.Name)}.</p>");
         html.Append($"<p>Há novidade no seu chamado <strong>{Encode(change.Code)}</strong> — {Encode(change.Title)}.</p>");
 
@@ -277,10 +290,13 @@ public static class NotificationPlanner
             html.Append($"<p><a href=\"{Encode(link)}\">Abrir o chamado no portal</a></p>");
         }
 
-        // Até a versão 2.0 ninguém lê a caixa de suporte: uma resposta por e-mail se
-        // perderia sem que a pessoa soubesse. O aviso sai quando a ingestão existir.
-        html.Append("<p style=\"color:#6b7280;font-size:12px\">Mensagem automática do OpsDesk. " +
-                    "Respostas a este e-mail não são lidas — para responder, use o portal.</p>");
+        // Sem caixa monitorada, ninguém lê a resposta: ela se perderia sem que a pessoa
+        // soubesse, e o aviso diz isso. Com caixa, a resposta vira comentário no chamado.
+        html.Append(channel.RepliesAreRead
+            ? "<p style=\"color:#6b7280;font-size:12px\">Para responder, responda este e-mail acima da linha " +
+              "indicada, ou use o portal. A resposta entra no chamado.</p>"
+            : "<p style=\"color:#6b7280;font-size:12px\">Mensagem automática do OpsDesk. " +
+              "Respostas a este e-mail não são lidas — para responder, use o portal.</p>");
         html.Append("</div>");
 
         return html.ToString();

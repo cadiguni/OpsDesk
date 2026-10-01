@@ -14,7 +14,7 @@ import {
   type TicketStatus,
 } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
-import { useCategories, useStaff, useTickets } from '@/features/tickets/queries'
+import { useFilterCategories, useStaff, useTickets } from '@/features/tickets/queries'
 import { TicketCard, TicketCardSkeleton } from '@/features/tickets/ticket-card'
 import type { TicketSort } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
@@ -42,7 +42,7 @@ const sortLabels: Record<TicketSort, string> = {
 export function TicketList() {
   const { isStaff, user } = useSession()
   const [params, setParams] = useSearchParams()
-  const categories = useCategories()
+  const categories = useFilterCategories(isStaff)
   const staff = useStaff(isStaff)
 
   const status = params.getAll('status') as TicketStatus[]
@@ -198,7 +198,7 @@ export function TicketList() {
               name="search"
               defaultValue={search}
               key={search}
-              placeholder="Buscar por código ou título"
+              placeholder="Buscar por código, título ou descrição"
               aria-label="Buscar chamados"
               className="pl-9"
               onBlur={(event) => update({ search: event.target.value })}
@@ -242,7 +242,7 @@ export function TicketList() {
               <option value="">Todas</option>
               {categories.data?.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.name}
+                  {category.isActive ? category.name : `${category.name} (desativada)`}
                 </option>
               ))}
             </Select>

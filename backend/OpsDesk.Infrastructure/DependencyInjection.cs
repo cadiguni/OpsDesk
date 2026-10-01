@@ -12,7 +12,11 @@ using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Categories;
 using OpsDesk.Application.Dashboard;
+using OpsDesk.Application.Holidays;
+using OpsDesk.Application.Import;
+using OpsDesk.Application.Inbound;
 using OpsDesk.Application.Notifications;
+using OpsDesk.Application.Settings;
 using OpsDesk.Application.Sla;
 using OpsDesk.Application.Tickets;
 using OpsDesk.Application.Users;
@@ -84,8 +88,21 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // Sem estado por requisição: uma instância serve todas.
-        services.AddSingleton<IAttachmentStorage, FileSystemAttachmentStorage>();
+        services.AddSingleton<IValidateOptions<AttachmentStorageOptions>, AttachmentStorageOptionsValidator>();
+
+        // Sem estado por requisição: uma instância serve todas. O provedor é lido na
+        // primeira resolução, e não aqui, pelo mesmo motivo do JwtOptions: ler a
+        // configuração na montagem congelaria o valor e ignoraria a dos testes.
+        services.AddSingleton<IAttachmentStorage>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<AttachmentStorageOptions>>().Value;
+
+            return options.Provider == AttachmentStorageProvider.AzureBlob
+                ? new AzureBlobAttachmentStorage(
+                    AzureBlobAttachmentStorage.CreateContainerClient(options.AzureBlob),
+                    provider.GetRequiredService<ILogger<AzureBlobAttachmentStorage>>())
+                : ActivatorUtilities.CreateInstance<FileSystemAttachmentStorage>(provider);
+        });
 
         AddCredentialProtection(services);
         AddEmail(services, configuration);
@@ -94,6 +111,8 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 
         services.AddScoped<IHolidayProvider, CachedHolidayProvider>();
+        services.AddSingleton<IHolidayCache, HolidayCache>();
+        services.AddScoped<HolidayAdministrationService>();
 
         // A Application enxerga o contexto pela abstração; quem resolve é sempre o
         // OpsDeskDbContext registrado abaixo, com os mesmos interceptors.
@@ -103,11 +122,14 @@ public static class DependencyInjection
         services.AddScoped<IAccessTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<AuthService>();
+        services.AddScoped<PasswordResetService>();
+        services.AddScoped<SystemSettingsService>();
         services.AddScoped<TicketService>();
         services.AddSingleton<ReopenPolicy>();
         services.AddScoped<TicketCommentService>();
         services.AddScoped<TicketWorkflowService>();
         services.AddScoped<DashboardService>();
+        services.AddScoped<DashboardPeriodService>();
         services.AddScoped<UserDirectoryService>();
         services.AddScoped<UserAdministrationService>();
         services.AddScoped<CategoryAdministrationService>();
@@ -115,15 +137,23 @@ public static class DependencyInjection
         services.AddScoped<NotificationService>();
         services.AddScoped<EmailSettingsService>();
         services.AddScoped<EmailOutboxService>();
+        services.AddScoped<InboundEmailProcessor>();
+        services.AddScoped<MailboxSyncService>();
+        services.AddScoped<InboundEmailService>();
+        services.AddScoped<EmailAccountService>();
+        services.AddScoped<InboundRetentionService>();
+        services.AddScoped<TicketImportService>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
         services.AddScoped<SlaAlertService>();
         services.AddScoped<DatabaseSeeder>();
+        services.AddScoped<DemoDataSeeder>();
 
         // Interceptors são escopados porque o de histórico depende do usuário da requisição.
         services.AddScoped<TimestampInterceptor>();
         services.AddScoped<TicketHistoryInterceptor>();
         services.AddScoped<TicketNotificationInterceptor>();
+        services.AddScoped<UserAuditInterceptor>();
 
         services.AddDbContext<OpsDeskDbContext>((provider, options) => options
             // A connection string é resolvida aqui dentro, quando o contexto é criado, e
@@ -138,7 +168,8 @@ public static class DependencyInjection
             .AddInterceptors(
                 provider.GetRequiredService<TimestampInterceptor>(),
                 provider.GetRequiredService<TicketHistoryInterceptor>(),
-                provider.GetRequiredService<TicketNotificationInterceptor>()));
+                provider.GetRequiredService<TicketNotificationInterceptor>(),
+                provider.GetRequiredService<UserAuditInterceptor>()));
 
         return services;
     }
@@ -179,8 +210,11 @@ public static class DependencyInjection
 
         // Trinta segundos: o despachante envia em lote, e um provedor pendurado não pode
         // prender a rodada inteira.
+        services.AddHttpClient<GraphTokenProvider>(client => client.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<IEmailSender, GraphEmailSender>(client =>
             client.Timeout = TimeSpan.FromSeconds(30));
+        services.AddHttpClient<IMailboxReader, GraphMailboxReader>(client =>
+            client.Timeout = TimeSpan.FromSeconds(60));
     }
 
     private static string ConnectionString(IServiceProvider provider) =>

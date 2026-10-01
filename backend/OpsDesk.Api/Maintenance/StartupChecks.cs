@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using OpsDesk.Application.Abstractions;
 using OpsDesk.Infrastructure.Security;
 using OpsDesk.Infrastructure.Storage;
 
@@ -82,8 +83,15 @@ internal static class StartupChecks
     /// </summary>
     private static void ValidateAttachmentRoot(WebApplication app, ILogger logger)
     {
-        var root = Path.GetFullPath(
-            app.Services.GetRequiredService<IOptions<AttachmentStorageOptions>>().Value.RootPath);
+        var options = app.Services.GetRequiredService<IOptions<AttachmentStorageOptions>>().Value;
+
+        if (options.Provider == AttachmentStorageProvider.AzureBlob)
+        {
+            ValidateBlobContainer(app, logger);
+            return;
+        }
+
+        var root = Path.GetFullPath(options.RootPath);
 
         var probe = Path.Combine(root, $".opsdesk-write-probe-{Guid.NewGuid():N}");
 
@@ -104,6 +112,31 @@ internal static class StartupChecks
         }
 
         logger.LogInformation("Raiz dos anexos pronta em {Root}.", root);
+    }
+
+    /// <summary>
+    /// O mesmo para o Azure Blob: contêiner criado e identidade com permissão de escrita.
+    /// O caso típico é a Managed Identity sem o papel "Storage Blob Data Contributor" na
+    /// conta — tudo sobe, e o primeiro anexo responde 500.
+    /// </summary>
+    private static void ValidateBlobContainer(WebApplication app, ILogger logger)
+    {
+        var storage = (AzureBlobAttachmentStorage)app.Services.GetRequiredService<IAttachmentStorage>();
+
+        try
+        {
+            storage.EnsureReadyAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is Azure.RequestFailedException or Azure.Identity.AuthenticationFailedException
+                                       or Azure.Identity.CredentialUnavailableException)
+        {
+            throw new InvalidOperationException(
+                $"O contêiner de anexos '{storage.Describe()}' não aceita escrita. Confira se a identidade da " +
+                "API tem o papel 'Storage Blob Data Contributor' na conta de armazenamento e se o endereço " +
+                "está certo.", ex);
+        }
+
+        logger.LogInformation("Anexos no Azure Blob, em {Container}.", storage.Describe());
     }
 
     /// <summary>

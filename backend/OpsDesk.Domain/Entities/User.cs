@@ -42,6 +42,14 @@ public class User : IHasUpdatedAt
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 
+    /// <summary>
+    /// Por que a senha está mudando nesta gravação. Não é persistido: é o recado do serviço
+    /// para a trilha de auditoria, que só registra troca de senha quando há motivo
+    /// declarado. Sem isso, o rehash silencioso do login — mesma senha, hash com parâmetros
+    /// novos — apareceria na trilha como alguém redefinindo a senha.
+    /// </summary>
+    public UserAuditAction? PasswordChangeReason { get; set; }
+
     /// <summary>Técnico e gestor formam a equipe: veem comentário interno e o painel técnico.</summary>
     public bool IsStaff => Role is UserRole.Technician or UserRole.Manager;
 }

@@ -48,5 +48,17 @@ public interface IOpsDeskDbContext
 
     DbSet<SlaAlert> SlaAlerts { get; }
 
+    DbSet<SystemSettings> SystemSettings { get; }
+
+    DbSet<PasswordResetToken> PasswordResetTokens { get; }
+
+    DbSet<UserAuditEntry> UserAudit { get; }
+
+    DbSet<EmailAccount> EmailAccounts { get; }
+
+    DbSet<InboundEmail> InboundEmails { get; }
+
+    DbSet<SpamRule> SpamRules { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

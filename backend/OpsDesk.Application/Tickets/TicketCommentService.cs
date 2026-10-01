@@ -74,6 +74,18 @@ public class TicketCommentService(
             ticket.Status = TicketStatus.InProgress;
         }
 
+        // A equipe esperava pelo solicitante, e ele respondeu: o chamado volta para a fila
+        // de atendimento e o SLA de resolução retoma (README, seção 5.4). Vale igual pelo
+        // portal e por e-mail — sem isto, a resposta ficaria esperando alguém notar que o
+        // status ainda diz "aguardando". Só resposta pública: nota interna não é do
+        // solicitante.
+        if (!author.IsStaff && !request.IsInternal && !request.CloseTicket
+            && ticket.Status == TicketStatus.WaitingOnRequester)
+        {
+            workflow.ApplySlaEffects(ticket, ticket.Status, TicketStatus.InProgress, now);
+            ticket.Status = TicketStatus.InProgress;
+        }
+
         if (request.CloseTicket)
         {
             if (!TicketStatusMachine.IsAllowedForRole(ticket.Status, TicketStatus.Closed, author.Role))

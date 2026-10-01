@@ -1,6 +1,6 @@
 # Integração com e-mail e caixa de SPAM — versão 2.0
 
-Especificação da abertura de chamados por e-mail e da caixa de SPAM. Não faz parte da versão 1, mas as decisões abaixo influenciam o modelo de dados desde o início, em particular `Ticket.Source`, `Ticket.ExternalId` e `User.PasswordHash` anulável.
+Especificação da abertura de chamados por e-mail e da caixa de SPAM. **Entregue na versão 2.0.** As seções 1 a 8 são a especificação, com as regras que valem. A seção 9 registra onde a implementação se afastou dela e por quê, e a seção 10 o que ficou para depois.
 
 Escopo funcional geral e regras de negócio: [README.md](../README.md). Decisões de stack: [arquitetura.md](arquitetura.md).
 
@@ -110,10 +110,7 @@ O processamento é sequencial e cada etapa pode encerrar o fluxo.
 
 Um `BackgroundService` consulta cada `EmailAccount` ativa em intervalo configurável, com padrão de um minuto. Cada mensagem lida é gravada como `InboundEmail` com status `Pending` e marcada como lida na caixa apenas depois da gravação bem-sucedida.
 
-A leitura fica atrás de uma abstração `IMailboxReader`, com duas implementações:
-
-* **IMAP**, via MailKit, usada em desenvolvimento contra o Mailpit e em caixas genéricas;
-* **Microsoft Graph**, usada em produção quando a caixa está no Microsoft 365, alinhada ao roadmap de Azure e Entra ID do README.
+A leitura fica atrás de uma abstração `IMailboxReader`. A implementação entregue é a do **Microsoft Graph**, com o mesmo aplicativo do Entra ID que envia (seção 6). IMAP ficou de fora; ver seção 9.
 
 ### 4.2 Descarte de duplicatas
 
@@ -142,6 +139,8 @@ A mensagem é tratada como resposta, e não como chamado novo, quando:
 
 A checagem por cabeçalho vem primeiro, por ser confiável; o assunto é o plano B, para clientes de e-mail que reescrevem a linha.
 
+**O vínculo respeita a visibilidade.** Só vale para quem enxerga o chamado: o solicitante dele ou alguém da equipe. Quem põe `[OPS-000123]` no assunto sem ser nenhum dos dois não comenta no chamado alheio. A mensagem vira chamado novo, dele. Para isso o processamento age **em nome do remetente**, com o mesmo serviço de comentário do portal: histórico, notificação e regra de reabertura são os mesmos, sem caminho paralelo.
+
 Neste caso:
 
 * o corpo da mensagem vira um comentário **público** no chamado, com autoria do solicitante;
@@ -164,6 +163,8 @@ O usuário criado assim consegue ser solicitante e receber respostas por e-mail,
 
 Se o nome do remetente vier vazio, usa-se a parte do endereço anterior ao `@`.
 
+Remetente cuja conta existe mas está **desativada** não abre chamado: a mensagem vai para a caixa de SPAM com o motivo "Remetente com conta desativada". Desativar uma conta não pode ter como contorno mandar e-mail.
+
 ### 4.6 Classificação de spam
 
 A classificação é por regras, avaliadas nesta ordem:
@@ -172,7 +173,7 @@ A classificação é por regras, avaliadas nesta ordem:
 2. `SpamRule` com ação `Block` que case: mensagem marcada como spam;
 3. remetente com domínio externo ao da organização, quando a conta estiver configurada para aceitar apenas domínios internos: marcada como spam;
 4. falha de autenticação do remetente nos cabeçalhos `Authentication-Results`, em SPF, DKIM ou DMARC: marcada como spam;
-5. heurísticas de conteúdo, como assunto vazio, corpo vazio ou excesso de links: somam `SpamScore` e, acima do limite configurado, marcam como spam.
+5. heurísticas de conteúdo, que somam `SpamScore`: assunto vazio (2), corpo vazio (3), mais de cinco links (2) ou mais de dez (4). A partir de 5 pontos, a mensagem é marcada como spam.
 
 `SpamReason` sempre registra qual regra decidiu, para que a revisão manual seja auditável.
 
@@ -200,7 +201,9 @@ O `InboundEmail` passa a `Processed` com `TicketId` preenchido.
 
 ### 4.8 Falhas
 
-Erro durante o processamento grava status `Failed` e a mensagem em `ProcessingError`, sem perder o `InboundEmail`. Há reprocessamento manual pela interface e tentativa automática com espera crescente, até três vezes.
+Erro durante o processamento grava status `Failed` e a mensagem em `ProcessingError`, sem perder o `InboundEmail`. Há reprocessamento manual pela interface e tentativa automática com espera crescente — 1, 5 e 15 minutos —, até três vezes.
+
+Reprocessar é seguro: se a falha aconteceu depois de o chamado existir, o reprocessamento o encontra pelo `ExternalId` em vez de criar outro.
 
 ---
 
@@ -212,11 +215,11 @@ Visível para **técnicos** e **gestores**. O perfil Usuário não tem acesso, n
 
 ### 5.2 Tela
 
-Uma aba **SPAM** na área de atendimento, ao lado da caixa de entrada de e-mails, listando os `InboundEmail` com status `Spam`.
+Item **E-mails** no menu da equipe, com as abas **SPAM**, **Falhas**, **Processados**, **Duplicados** e **Regras**.
 
-Cada linha mostra remetente, assunto, data de recebimento, motivo da classificação e pontuação. A visualização mostra o corpo da mensagem em modo somente leitura, com HTML sanitizado e sem carregar imagens ou recursos externos.
+Cada linha mostra remetente, assunto, data de recebimento, motivo da classificação e pontuação. A visualização mostra o corpo da mensagem em texto puro, somente leitura. Como o corpo é guardado só em texto (seção 9), não há HTML para sanitizar nem recurso externo para bloquear.
 
-Filtros: período, remetente, domínio e motivo da classificação.
+Filtros: período e busca por remetente ou assunto.
 
 ### 5.3 Ações
 
@@ -242,13 +245,25 @@ A integração de recebimento pressupõe a de envio, entregue junto na versão 2
 
 O canal de envio é o da 1.2 (README, seção 18): Microsoft Graph, configurado pelo gestor no portal, com fila de saída. O remetente é a caixa monitorada, para que a resposta do solicitante volte para ela e caia na etapa 4.4.
 
-Até esta integração existir, o e-mail da 1.2 avisa que respostas a ele não são lidas. Entregar a ingestão inclui tirar esse aviso do `NotificationPlanner` e acrescentar os cabeçalhos `In-Reply-To` e `References` descritos abaixo.
+Sem caixa monitorada ativa, o e-mail continua avisando que respostas a ele não são lidas. Com uma caixa ativa, o aviso dá lugar a "responda este e-mail", e o e-mail ganha:
 
-Quando um técnico comenta publicamente em um chamado de origem `Email`, o solicitante recebe a resposta por e-mail, com:
+* o código do chamado no assunto, no formato `[OPS-000123]` — o que já valia desde a 1.2;
+* a linha "Responda acima desta linha", acima da qual o solicitante escreve. Na volta, o texto abaixo dela é descartado, assim como os blocos de citação que os clientes de e-mail acrescentam ("Em ... escreveu:", "On ... wrote:", o cabeçalho "De:/Enviado:" do Outlook e as linhas com `>`).
 
-* o código do chamado no assunto, no formato `[OPS-000123]`;
-* cabeçalhos `In-Reply-To` e `References` apontando para a mensagem original, para que a resposta do solicitante caia na etapa 4.4;
-* uma marcação clara do ponto acima do qual se deve escrever, para facilitar a remoção do texto citado.
+Vale para chamado de qualquer origem, não só de `Email`: quem abriu pelo portal também pode responder pelo e-mail que recebeu.
+
+Os cabeçalhos `In-Reply-To` e `References` previstos aqui não são enviados; ver seção 9.
+
+### 6.1 Aplicativo no Entra ID
+
+Tarefa do administrador do Microsoft 365, uma vez:
+
+1. registrar um aplicativo no Entra ID, de locatário único, e criar um *client secret*. Anote a validade: a tela de configuração avisa antes de vencer;
+2. conceder as permissões **de aplicativo** do Microsoft Graph, com consentimento do administrador:
+   * `Mail.Send`, para enviar;
+   * `Mail.ReadWrite`, só se houver caixa monitorada — ler e marcar como lida;
+3. **restringir o aplicativo à caixa de suporte**, por *Application Access Policy* ou *RBAC for Applications* do Exchange Online. Sem a restrição, a permissão vale para todas as caixas da empresa, e um secret vazado lê e envia e-mail em nome de qualquer pessoa;
+4. no OpsDesk, em **Configurações → E-mail**, preencher tenant, client id, secret e remetente, e usar **enviar e-mail de teste**. A caixa monitorada é cadastrada na mesma tela, com categoria e prioridade padrão.
 
 Comentários internos nunca são enviados por e-mail. Essa é a mesma regra da seção 15 do README, e vale aqui com a mesma força: a caixa de saída é apenas mais um lugar onde ela pode ser violada.
 
@@ -256,7 +271,7 @@ Comentários internos nunca são enviados por e-mail. Essa é a mesma regra da s
 
 ## 7. Fora do escopo desta integração
 
-* anexos de e-mail, que dependem da entrega de anexos prevista na versão 1.1;
+* anexos de e-mail. A entrega de anexos existe desde a 1.0, mas trazer os da mensagem ficou para depois (seção 10);
 * criptografia de mensagem, S/MIME ou PGP;
 * classificação por aprendizado de máquina;
 * múltiplos idiomas na detecção de conteúdo;
@@ -277,3 +292,25 @@ A integração está concluída quando:
 * uma mensagem retida em SPAM pode ser promovida a chamado em um clique;
 * confirmar spam impede que o mesmo remetente gere chamado de novo;
 * nenhum comentário interno é enviado por e-mail.
+
+Todos têm teste de integração, em `InboundEmailTests`.
+
+---
+
+## 9. Onde a implementação se afastou da especificação
+
+| Especificação | Implementação | Motivo |
+| --- | --- | --- |
+| leitura por IMAP (MailKit) e por Graph | só Graph | a empresa usa Microsoft 365, e o mesmo aplicativo do Entra ID já envia. A Microsoft está desligando a autenticação básica no IMAP do Exchange Online, e IMAP com OAuth dá o mesmo trabalho de registro sem ganho. Os testes usam uma caixa falsa atrás de `IMailboxReader`, o que dispensou o Mailpit |
+| `EmailAccount.Protocol` | não existe | com um protocolo só, o campo não decide nada. Entram `InternalDomainsOnly` (a regra 3 da seção 4.6, com os domínios das configurações gerais) e `LastError`, que a tela mostra |
+| credencial da caixa em configuração da aplicação | a mesma credencial do envio, cifrada no banco | é o mesmo aplicativo do Entra ID, configurado pelo gestor na tela de e-mail. A regra de credencial só de escrita e cifrada vale igual (invariante 12 do CLAUDE.md) |
+| `BodyText` e `BodyHtml` | só `BodyText` | o Graph entrega o corpo já convertido em texto quando pedido. Sem HTML guardado, não há sanitização a errar nem imagem externa a bloquear. Os cabeçalhos vão para `HeadersJson`, e `Attempts`, `NextAttemptAt`, `ReviewedById` e `ReviewedAt` sustentam as tentativas e a revisão |
+| `In-Reply-To` e `References` na resposta | código no assunto e linha de corte | o `sendMail` do Graph só aceita cabeçalho personalizado (`x-`), não esses. O vínculo da etapa 4.4 funciona pelos cabeçalhos entre mensagens recebidas do mesmo fio e, para a resposta ao e-mail do OpsDesk, pelo código no assunto |
+
+---
+
+## 10. Para depois
+
+* **anexos da mensagem.** Entrariam pelo caminho de anexo pendente e vinculado, ligados ao comentário ou à abertura que a mensagem virar, com os mesmos limites de tipo e tamanho;
+* **IMAP**, se aparecer caixa fora do Microsoft 365. É outra implementação de `IMailboxReader`;
+* **assinatura de webhook do Graph** no lugar da consulta a cada minuto, se o atraso incomodar.

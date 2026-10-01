@@ -29,12 +29,33 @@ public record ChangeRoleRequest(UserRole Role);
 
 public record ChangeActivationRequest(bool IsActive);
 
+/// <summary>Cadastro pelo gestor. Não passa pela política de autocadastro: é o gestor quem decide.</summary>
+public record CreateUserRequest(string Name, string Email, UserRole Role);
+
+/// <summary>
+/// Como a pessoa recebe o acesso. Com e-mail disponível, um convite com link para definir
+/// a própria senha — e o gestor nunca vê senha nenhuma. Sem e-mail, uma senha provisória,
+/// mostrada uma vez ao gestor e trocada no primeiro login.
+/// </summary>
+public record AccessGranted(ManagedUser User, bool InvitationSent, string? TemporaryPassword);
+
+/// <summary>Evento da trilha de auditoria de usuário, para a tela.</summary>
+public record UserAuditItem(
+    UserAuditAction Action, string? PreviousValue, string? NewValue, string? ChangedByName, DateTimeOffset CreatedAt);
+
 /// <summary>Chamado em aberto que impede desativar ou rebaixar o responsável.</summary>
 public record BlockingTicket(Guid Id, string Code, string Title, TicketStatus Status);
 
 public abstract record ChangeUserResult
 {
     public sealed record Changed(ManagedUser User) : ChangeUserResult;
+
+    public sealed record AccessIssued(AccessGranted Access) : ChangeUserResult;
+
+    public sealed record EmailAlreadyUsed : ChangeUserResult
+    {
+        public string Message => "Já existe uma conta com este e-mail.";
+    }
 
     public sealed record UserNotFound : ChangeUserResult;
 

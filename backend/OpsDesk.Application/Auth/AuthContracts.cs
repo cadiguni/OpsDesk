@@ -75,6 +75,18 @@ public abstract record AuthResult
         public string Message => "A nova senha precisa ser diferente da atual.";
     }
 
+    /// <summary>O gestor desligou o autocadastro: contas nascem pela administração.</summary>
+    public sealed record RegistrationClosed : AuthResult
+    {
+        public string Message => "O cadastro pelo portal está desligado. Peça uma conta à equipe de TI.";
+    }
+
+    /// <summary>O autocadastro só aceita e-mail de alguns domínios.</summary>
+    public sealed record EmailDomainNotAllowed(IReadOnlyList<string> Domains) : AuthResult
+    {
+        public string Message => $"Use seu e-mail corporativo ({string.Join(", ", Domains.Select(d => "@" + d))}).";
+    }
+
     /// <summary>Refresh token ausente, expirado, revogado ou desconhecido.</summary>
     public sealed record InvalidRefreshToken : AuthResult
     {

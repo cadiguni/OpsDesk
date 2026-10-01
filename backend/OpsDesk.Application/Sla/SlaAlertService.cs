@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
+using OpsDesk.Domain.Tickets;
 
 namespace OpsDesk.Application.Sla;
 
@@ -54,6 +55,7 @@ public class SlaAlertService(
         var candidates = await db.Tickets
             .AsNoTracking()
             .Where(t => t.Status != TicketStatus.Cancelled
+                        && TicketSla.MeasuredSources.Contains(t.Source)
                         && ((t.FirstRespondedAt == null
                              && t.SlaResponseDueAt <= horizon && t.SlaResponseDueAt >= lookback)
                             || (t.ResolvedAt == null && t.SlaPausedAt == null

@@ -1,5 +1,6 @@
 using OpsDesk.Domain.Common;
 using OpsDesk.Domain.Enums;
+using OpsDesk.Domain.Tickets;
 
 namespace OpsDesk.Domain.Entities;
 
@@ -77,8 +78,11 @@ public class Ticket : IHasUpdatedAt
     /// <summary>Status finais não contam mais SLA.</summary>
     public bool IsClosedOut => Status is TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled;
 
-    /// <summary>Chamado cancelado fica fora dos indicadores de SLA.</summary>
-    public bool CountsForSla => Status != TicketStatus.Cancelled;
+    /// <summary>
+    /// Chamado cancelado fica fora dos indicadores de SLA, e o importado de outra
+    /// ferramenta também (<see cref="TicketSla"/>).
+    /// </summary>
+    public bool CountsForSla => Status != TicketStatus.Cancelled && TicketSla.IsMeasured(Source);
 
     public bool IsResponseOverdue(DateTimeOffset now) =>
         CountsForSla && FirstRespondedAt is null && now > SlaResponseDueAt;

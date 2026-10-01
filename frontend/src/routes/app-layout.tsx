@@ -1,17 +1,25 @@
 ﻿import type { ReactNode } from 'react'
-import { Headphones, LayoutDashboard, LogOut, Mail, Plus, Tags, Ticket, Users } from 'lucide-react'
+import { CalendarDays, FileUp, Headphones, Inbox, KeyRound, LayoutDashboard, LogOut, Plus, Settings, Tags, Ticket, Users } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { ThemeSelect } from '@/components/theme-select'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { userRoleLabels } from '@/domain/enums'
+import { usePublicOptions } from '@/features/auth/options'
 import { useSession } from '@/features/auth/session-context'
 import { NotificationBell } from '@/features/notifications/notification-bell'
+import { CHANGE_PASSWORD_PATH } from '@/routes/protected-route'
 import { cn } from '@/lib/utils'
 
+/** Páginas da área de administração, para o título do cabeçalho. */
+const adminPrefixes = ['/usuarios', '/categorias', '/feriados', '/importacao', '/configuracoes']
+
 export function AppLayout() {
-  const { user, signOut, role } = useSession()
+  const { user, signOut, role, isStaff } = useSession()
   const location = useLocation()
+  const isManager = role === 'Manager'
+  const organization = usePublicOptions().data?.organizationName ?? 'OpsDesk'
+  const inAdmin = adminPrefixes.some((prefix) => location.pathname.startsWith(prefix))
 
   return (
     <div className="min-h-dvh bg-background md:pl-56">
@@ -19,23 +27,37 @@ export function AppLayout() {
       <aside className="border-b bg-card md:fixed md:inset-y-0 md:left-0 md:flex md:w-56 md:flex-col md:border-r md:border-b-0">
         <Link to="/" className="flex items-center gap-3 px-5 py-5">
           <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground"><Headphones className="size-5" /></span>
-          <div><p className="text-lg font-bold tracking-tight">OpsDesk</p><p className="text-xs text-muted-foreground">Central de atendimento</p></div>
+          <div><p className="truncate text-lg font-bold tracking-tight">{organization}</p><p className="text-xs text-muted-foreground">Central de atendimento</p></div>
         </Link>
-        <nav aria-label="Navegação principal" className="flex gap-1 px-3 pb-3 md:flex-col md:pt-5">
+        <nav aria-label="Navegação principal" className="flex flex-wrap gap-1 px-3 pb-3 md:flex-col md:flex-nowrap md:pt-5">
           <SidebarLink to="/chamados" icon={<Ticket className="size-4" />}>Chamados</SidebarLink>
-          {role === 'Manager' && <SidebarLink to="/dashboard" icon={<LayoutDashboard className="size-4" />}>Dashboard</SidebarLink>}
-          {role === 'Manager' && <SidebarLink to="/usuarios" icon={<Users className="size-4" />}>Usuários</SidebarLink>}
-          {role === 'Manager' && <SidebarLink to="/categorias" icon={<Tags className="size-4" />}>Categorias</SidebarLink>}
-          {role === 'Manager' && <SidebarLink to="/configuracoes/email" icon={<Mail className="size-4" />}>E-mail</SidebarLink>}
+          {isStaff && <SidebarLink to="/emails" icon={<Inbox className="size-4" />}>E-mails</SidebarLink>}
+          {isManager && <SidebarLink to="/dashboard" icon={<LayoutDashboard className="size-4" />}>Dashboard</SidebarLink>}
+
+          {isManager && (
+            <>
+              <p className="text-muted-foreground mt-4 hidden px-3 pb-1 text-[11px] font-semibold tracking-wider uppercase md:block">
+                Administração
+              </p>
+              <SidebarLink to="/usuarios" icon={<Users className="size-4" />}>Usuários</SidebarLink>
+              <SidebarLink to="/categorias" icon={<Tags className="size-4" />}>Categorias</SidebarLink>
+              <SidebarLink to="/feriados" icon={<CalendarDays className="size-4" />}>Feriados</SidebarLink>
+              <SidebarLink to="/importacao" icon={<FileUp className="size-4" />}>Importação</SidebarLink>
+              <SidebarLink to="/configuracoes" icon={<Settings className="size-4" />}>Configurações</SidebarLink>
+            </>
+          )}
         </nav>
         {user && <div className="mt-auto hidden border-t p-4 md:block">
           <p className="truncate text-sm font-semibold">{user.name}</p>
           <p className="mt-1 text-xs text-muted-foreground">{userRoleLabels[user.role]}</p>
+          <Link to={CHANGE_PASSWORD_PATH} className="text-muted-foreground hover:text-foreground mt-3 inline-flex items-center gap-1.5 text-xs">
+            <KeyRound className="size-3.5" /> Trocar senha
+          </Link>
         </div>}
       </aside>
       <header className="border-b bg-card/95">
         <div className="mx-auto flex min-h-16 max-w-screen-2xl flex-wrap items-center justify-between gap-3 px-4 py-3 lg:px-8">
-          <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : ['/usuarios', '/categorias', '/configuracoes/email'].includes(location.pathname) ? 'Administração' : 'Central de chamados'}</span>
+          <span className="text-sm font-medium text-muted-foreground">{location.pathname === '/dashboard' ? 'Visão gerencial' : inAdmin ? 'Administração' : 'Central de chamados'}</span>
           <div className="flex flex-wrap items-center gap-3">
             <ThemeSelect />
             <NotificationBell />

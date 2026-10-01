@@ -15,6 +15,7 @@ export type TicketListItem = {
   firstRespondedAt: string | null
   resolvedAt: string | null
   updatedAt: string
+  source: TicketSource
 }
 
 export type TicketDetail = {
@@ -49,6 +50,8 @@ export type CategoryOption = {
   id: string
   name: string
   description: string | null
+  /** Falso só quando a equipe pede as desativadas, para o filtro da lista. */
+  isActive: boolean
 }
 
 export type PagedResult<T> = {
@@ -163,4 +166,34 @@ export type DashboardSummary = {
   byPriority: CountByLabel[]
   byCategory: CountByLabel[]
   byTechnician: CountByLabel[]
+}
+
+export type PeriodIndicators = {
+  opened: number
+  resolved: number
+  responseMet: number
+  responseMissed: number
+  /** Percentual; nulo quando nenhum prazo foi decidido no período. */
+  responseCompliance: number | null
+  resolutionMet: number
+  resolutionMissed: number
+  resolutionCompliance: number | null
+  reopened: number
+  reopenRate: number | null
+}
+
+export type TechnicianPerformance = {
+  id: string
+  name: string
+  resolved: number
+  resolutionCompliance: number | null
+  reopened: number
+}
+
+export type DashboardPeriod = {
+  from: string
+  before: string
+  current: PeriodIndicators
+  previous: PeriodIndicators
+  byTechnician: TechnicianPerformance[]
 }

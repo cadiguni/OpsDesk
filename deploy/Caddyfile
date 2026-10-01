@@ -1,0 +1,32 @@
+# Borda do OpsDesk: HTTPS e cabeçalhos de segurança, tudo repassado ao nginx do SPA, que
+# por sua vez repassa /api para a API.
+#
+# OPSDESK_SITE_ADDRESS é o nome pelo qual as pessoas acessam, como opsdesk.empresa.com.
+# OPSDESK_TLS escolhe o certificado:
+#
+#   * internal          CA própria do Caddy. Funciona em rede interna sem DNS público,
+#                        mas o navegador avisa até a CA ser instalada nas máquinas.
+#   * seu@email.com      Let's Encrypt. Exige DNS público apontando para cá e as portas
+#                        80 e 443 abertas para a internet.
+#
+# HTTPS não é opcional: o cookie de sessão é Secure, e sem HTTPS o navegador não o
+# devolve — a sessão cairia a cada recarga de página (localhost é a única exceção).
+
+{$OPSDESK_SITE_ADDRESS} {
+	tls {$OPSDESK_TLS}
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Imagens de anexo chegam como blob: gerado no próprio navegador.
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	reverse_proxy web:80
+}

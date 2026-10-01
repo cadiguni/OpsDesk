@@ -38,6 +38,18 @@ public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
 
     public DbSet<SlaAlert> SlaAlerts => Set<SlaAlert>();
 
+    public DbSet<SystemSettings> SystemSettings => Set<SystemSettings>();
+
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
+    public DbSet<UserAuditEntry> UserAudit => Set<UserAuditEntry>();
+
+    public DbSet<EmailAccount> EmailAccounts => Set<EmailAccount>();
+
+    public DbSet<InboundEmail> InboundEmails => Set<InboundEmail>();
+
+    public DbSet<SpamRule> SpamRules => Set<SpamRule>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasSequence<long>(TicketCodeSequence).StartsAt(1).IncrementsBy(1);

@@ -8,6 +8,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
+        // Recado para a trilha de auditoria, não dado.
+        builder.Ignore(u => u.PasswordChangeReason);
+
         builder.HasKey(u => u.Id);
 
         builder.Property(u => u.Name).HasMaxLength(200).IsRequired();

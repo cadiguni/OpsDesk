@@ -90,3 +90,50 @@ jobs:
       # Só constrói, não publica: garante que o Dockerfile não quebrou junto com o código.
       - name: Construir imagem
         run: docker build -f backend/OpsDesk.Api/Dockerfile backend
+
+  # Ponta a ponta: o sistema inteiro como sobe no perfil `web` — SPA compilado, nginx, API
+  # e banco —, dirigido por um navegador. Pega o que nenhuma das suítes acima pega
+  # sozinha: o contrato entre o SPA e a API de verdade.
+  e2e:
+    name: Ponta a ponta
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Subir o sistema
+        run: |
+          docker compose --profile web up -d --build
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:3000/ready > /dev/null && exit 0
+            sleep 3
+          done
+          echo "O sistema não ficou pronto." >&2
+          exit 1
+
+      - name: Instalar
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Testar
+        working-directory: e2e
+        run: npm test
+
+      - name: Logs dos contêineres
+        if: failure()
+        run: docker compose --profile web logs --no-color
+
+      - name: Publicar relatório
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: e2e/playwright-report

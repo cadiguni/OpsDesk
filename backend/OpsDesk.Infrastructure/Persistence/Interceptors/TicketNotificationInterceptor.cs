@@ -234,6 +234,13 @@ public class TicketNotificationInterceptor(ICurrentUser currentUser, IClock cloc
             .Select(s => new { s.IsEnabled, s.PortalUrl })
             .SingleOrDefaultAsync(cancellationToken);
 
-        return settings is { IsEnabled: true } ? new EmailChannel(settings.PortalUrl) : null;
+        if (settings is not { IsEnabled: true })
+        {
+            return null;
+        }
+
+        var repliesAreRead = await context.Set<EmailAccount>().AnyAsync(a => a.IsActive, cancellationToken);
+
+        return new EmailChannel(settings.PortalUrl, repliesAreRead);
     }
 }

@@ -1,0 +1,178 @@
+# OpsDesk em produção: banco, API, SPA e Caddy na borda com HTTPS.
+#
+# Primeira vez (ver docs/instalacao.md):
+#
+#   ./deploy/new-env.sh                          gera deploy/.env com segredos aleatórios
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env build
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile setup run --rm setup
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+#
+# Diferenças em relação ao compose de desenvolvimento, na raiz do repositório:
+#
+#   * nenhum segredo neste arquivo: tudo vem do .env, que não vai para o repositório;
+#   * ambiente Production: a API não aplica migration nem seed sozinha — a instalação é o
+#     serviço `setup`, rodado uma vez e a cada atualização de versão;
+#   * só o Caddy publica porta. Banco e API ficam na rede interna, e a API só confia no
+#     cabeçalho X-Forwarded-For vindo dela.
+
+# Nome próprio, e não "opsdesk": o compose de desenvolvimento, na raiz, ganha esse nome
+# pela pasta, e os dois compartilhariam volumes — inclusive o do banco.
+name: opsdesk-prod
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opsdesk
+      POSTGRES_USER: opsdesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no deploy/.env}
+      TZ: UTC
+    volumes:
+      # O PostgreSQL 18 quer o volume um nível acima do PGDATA.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsdesk -d opsdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: OpsDesk.Api/Dockerfile
+    image: ${OPSDESK_IMAGE_PREFIX:-opsdesk}/api:${OPSDESK_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &api-environment
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__OpsDesk: "Host=postgres;Port=5432;Database=opsdesk;Username=opsdesk;Password=${POSTGRES_PASSWORD}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?defina JWT_SIGNING_KEY no deploy/.env}
+      AttachmentStorage__RootPath: /var/opsdesk/attachments
+      # FileSystem (o volume abaixo) ou AzureBlob. Ver "Anexos no Azure Blob" em
+      # docs/instalacao.md.
+      AttachmentStorage__Provider: ${OPSDESK_ATTACHMENT_STORAGE:-FileSystem}
+      AttachmentStorage__AzureBlob__ServiceUri: ${OPSDESK_BLOB_SERVICE_URI:-}
+      AttachmentStorage__AzureBlob__ContainerName: ${OPSDESK_BLOB_CONTAINER:-attachments}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      DataProtection__KeysPath: /var/opsdesk/keys
+      # SPA e API na mesma origem, pelo Caddy: CORS não entra no caminho.
+      Cors__AllowedOrigins: ""
+      # Caddy → nginx do SPA → API: dois saltos, ambos dentro desta rede.
+      ForwardedHeaders__KnownNetworks__0: ${OPSDESK_SUBNET:-172.28.0.0/16}
+      ForwardedHeaders__ForwardLimit: "2"
+      Serilog__MinimumLevel__Default: ${OPSDESK_LOG_LEVEL:-Information}
+    volumes:
+      - attachments-data:/var/opsdesk/attachments
+      - keys-data:/var/opsdesk/keys
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [internal]
+
+  # Instalação e atualização do banco: migration, dados de referência e o primeiro
+  # gestor. Roda e termina.
+  #
+  #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile setup run --rm setup
+  #
+  # A senha do primeiro gestor só existe aqui, e não no serviço `api`: ela é provisória,
+  # vale para um único login e precisa ser trocada nele.
+  setup:
+    image: ${OPSDESK_IMAGE_PREFIX:-opsdesk}/api:${OPSDESK_VERSION:-local}
+    profiles: [setup]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *api-environment
+      OpsDesk__Bootstrap__Email: ${OPSDESK_ADMIN_EMAIL:-}
+      OpsDesk__Bootstrap__Password: ${OPSDESK_ADMIN_PASSWORD:-}
+    command: ["--setup"]
+    volumes:
+      - attachments-data:/var/opsdesk/attachments
+      - keys-data:/var/opsdesk/keys
+    networks: [internal]
+
+  # Dados de demonstração, para avaliar o sistema. Recusa rodar em banco que já tem
+  # chamados, e cria usuários com senha conhecida — nunca rode numa instalação real.
+  demo:
+    image: ${OPSDESK_IMAGE_PREFIX:-opsdesk}/api:${OPSDESK_VERSION:-local}
+    profiles: [demo]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *api-environment
+    command: ["--seed-demo"]
+    volumes:
+      - attachments-data:/var/opsdesk/attachments
+      - keys-data:/var/opsdesk/keys
+    networks: [internal]
+
+  web:
+    build:
+      context: ../frontend
+    image: ${OPSDESK_IMAGE_PREFIX:-opsdesk}/web:${OPSDESK_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      OPSDESK_SITE_ADDRESS: ${OPSDESK_SITE_ADDRESS:?defina OPSDESK_SITE_ADDRESS no deploy/.env}
+      OPSDESK_TLS: ${OPSDESK_TLS:-internal}
+    ports:
+      - "${OPSDESK_HTTP_PORT:-80}:80"
+      - "${OPSDESK_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificados e a CA interna: perder isto obriga a emitir tudo de novo.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+
+  # Ferramenta de backup e restauração dos volumes de arquivos. Usada pelos scripts
+  # deploy/backup.sh e deploy/restore.sh, não sobe com o resto.
+  files:
+    image: alpine:3.22
+    profiles: [tools]
+    volumes:
+      - attachments-data:/volumes/attachments
+      - keys-data:/volumes/keys
+      - ${OPSDESK_BACKUP_DIR:-./backups}:/backups
+    networks: [internal]
+
+networks:
+  internal:
+    ipam:
+      config:
+        # Fixa, porque é nela que a API confia para ler o IP do cliente. Troque se colidir
+        # com uma rede da sua empresa — e troque junto o OPSDESK_SUBNET.
+        - subnet: ${OPSDESK_SUBNET:-172.28.0.0/16}
+
+volumes:
+  postgres-data:
+  attachments-data:
+  keys-data:
+  caddy-data:
+  caddy-config:

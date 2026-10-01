@@ -1,44 +1,15 @@
-using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpsDesk.Application.Abstractions;
 
 namespace OpsDesk.Infrastructure.Storage;
 
-public class AttachmentStorageOptions
-{
-    public const string SectionName = "AttachmentStorage";
-
-    /// <summary>
-    /// Raiz dos arquivos. No compose é um volume montado; em produção, um caminho fora da
-    /// árvore da aplicação, para que um deploy não leve os anexos embora.
-    /// </summary>
-    [Required]
-    public string RootPath { get; set; } = "attachments";
-
-    /// <summary>
-    /// Quanto tempo um anexo pendente sobrevive sem ser vinculado.
-    ///
-    /// Vinte e quatro horas é folgado para qualquer formulário que uma pessoa deixe aberto
-    /// e retome — e curto o suficiente para que arquivo abandonado não acumule.
-    /// </summary>
-    [Range(1, 24 * 30)]
-    public int PendingRetentionHours { get; set; } = 24;
-
-    /// <summary>
-    /// Intervalo entre varreduras. Zero desliga a varredura, o que é útil em ambiente de
-    /// teste e em execução com muitas réplicas, onde a limpeza deve rodar em um lugar só.
-    /// </summary>
-    [Range(0, 24 * 7)]
-    public int CleanUpIntervalHours { get; set; } = 6;
-}
-
 /// <summary>
 /// Armazenamento em disco.
 ///
 /// Escolhido por não exigir serviço novo no ambiente local e por manter o banco enxuto.
-/// A troca por S3 ou MinIO é uma implementação nova de <see cref="IAttachmentStorage"/>,
-/// sem mexer em serviço nem em domínio.
+/// Serve a uma réplica só: com mais de uma, cada uma teria o seu disco, e o anexo enviado
+/// numa daria 404 na outra. Para isso existe o <see cref="AzureBlobAttachmentStorage"/>.
 /// </summary>
 public class FileSystemAttachmentStorage : IAttachmentStorage
 {

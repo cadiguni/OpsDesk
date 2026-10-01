@@ -3,6 +3,7 @@ using OpsDesk.Api.Validation;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Notifications;
+using OpsDesk.Application.Settings;
 
 namespace OpsDesk.Api.Endpoints;
 
@@ -37,6 +38,18 @@ public static class NotificationEndpoints
             .MapGroup("/api/admin/settings/email")
             .RequireAuthorization(AuthorizationPolicies.Manager)
             .WithTags("Configurações");
+
+        var general = routes
+            .MapGroup("/api/admin/settings/general")
+            .RequireAuthorization(AuthorizationPolicies.Manager)
+            .WithTags("Configurações");
+
+        general.MapGet("/", GetGeneralSettings)
+            .WithSummary("Nome da organização e política de autocadastro.");
+
+        general.MapPut("/", UpdateGeneralSettings)
+            .ValidatingBody<UpdateGeneralSettingsRequest>()
+            .WithSummary("Grava nome da organização e política de autocadastro.");
 
         email.MapGet("/", GetEmailSettings)
             .WithSummary("Configuração do envio de e-mail. O client secret nunca é devolvido.");
@@ -80,6 +93,17 @@ public static class NotificationEndpoints
 
         return TypedResults.NoContent();
     }
+
+    private static async Task<IResult> GetGeneralSettings(
+        SystemSettingsService settings, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await settings.GetAsync(cancellationToken));
+
+    private static async Task<IResult> UpdateGeneralSettings(
+        UpdateGeneralSettingsRequest request,
+        SystemSettingsService settings,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await settings.UpdateAsync(request, currentUser.Viewer.UserId, cancellationToken));
 
     private static async Task<IResult> GetEmailSettings(
         EmailSettingsService settings, CancellationToken cancellationToken) =>

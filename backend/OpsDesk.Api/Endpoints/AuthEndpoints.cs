@@ -51,6 +51,22 @@ public static class AuthEndpoints
             .RequireRateLimiting(RateLimitPolicies.Credentials)
             .WithSummary("Troca a senha do usuário da sessão e reabre a sessão.");
 
+        group.MapGet("/options", Options)
+            .AllowAnonymous()
+            .WithSummary("O que a tela de login oferece: autocadastro, domínios aceitos, redefinição por e-mail.");
+
+        group.MapPost("/password/forgot", ForgotPassword)
+            .ValidatingBody<ForgotPasswordRequest>()
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
+            .AllowAnonymous()
+            .WithSummary("Pede o link de redefinição de senha. Responde igual exista ou não a conta.");
+
+        group.MapPost("/password/reset", ResetPassword)
+            .ValidatingBody<ResetPasswordRequest>()
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
+            .AllowAnonymous()
+            .WithSummary("Define a senha pelo link recebido por e-mail.");
+
         group.MapGet("/me", Me)
             .RequireAuthorization()
             .WithSummary("Usuário da sessão atual.");
@@ -123,6 +139,28 @@ public static class AuthEndpoints
         return Respond(result, response);
     }
 
+    private static async Task<IResult> Options(
+        Application.Settings.SystemSettingsService settings, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await settings.GetPublicAsync(cancellationToken));
+
+    private static async Task<IResult> ForgotPassword(
+        ForgotPasswordRequest request, PasswordResetService reset, CancellationToken cancellationToken)
+    {
+        await reset.RequestAsync(request, cancellationToken);
+
+        // 202 sempre: a resposta não pode dizer se o e-mail tem conta.
+        return TypedResults.Accepted((string?)null);
+    }
+
+    private static async Task<IResult> ResetPassword(
+        ResetPasswordRequest request, PasswordResetService reset, CancellationToken cancellationToken) =>
+        await reset.ResetAsync(request, cancellationToken) == ResetPasswordResult.Reset
+            ? TypedResults.NoContent()
+            : TypedResults.Problem(
+                detail: "Este link não vale mais: ele já foi usado, expirou ou foi substituído por um pedido mais novo. Peça outro.",
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Link inválido");
+
     private static async Task<IResult> Me(
         AuthService auth,
         ICurrentUser currentUser,
@@ -168,6 +206,18 @@ public static class AuthEndpoints
                     detail: unchanged.Message,
                     statusCode: StatusCodes.Status400BadRequest,
                     title: "Senha inalterada");
+
+            case AuthResult.RegistrationClosed closed:
+                return TypedResults.Problem(
+                    detail: closed.Message,
+                    statusCode: StatusCodes.Status403Forbidden,
+                    title: "Cadastro desligado");
+
+            case AuthResult.EmailDomainNotAllowed domain:
+                return TypedResults.Problem(
+                    detail: domain.Message,
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Domínio de e-mail não aceito");
 
             case AuthResult.InvalidRefreshToken expired:
                 // A sessão acabou: limpa o cookie para o cliente não insistir em um token

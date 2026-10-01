@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { TicketPriorityBadge, TicketStatusBadge } from '@/components/ticket-badges'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ticketSourceLabels } from '@/domain/enums'
+import { slaMeasuredSources, ticketSourceLabels } from '@/domain/enums'
 import { describeHistoryEntry } from '@/features/tickets/history-label'
 import { useComments, useHistory, useTicket } from '@/features/tickets/queries'
 import { deadlineToneClasses, describeDeadline } from '@/features/tickets/sla-view'
@@ -180,7 +180,8 @@ function Tab({
 
 /** Painel de SLA: os dois prazos, o estado da pausa e o tempo já gasto em espera. */
 function TicketSla({ ticket }: { ticket: TicketDetailModel }) {
-  const tracked = ticket.status !== 'Cancelled'
+  const imported = !slaMeasuredSources.includes(ticket.source)
+  const tracked = ticket.status !== 'Cancelled' && !imported
 
   const response = describeDeadline(ticket.slaResponseDueAt, ticket.firstRespondedAt, 'respondido')
   const resolution = describeDeadline(ticket.slaResolutionDueAt, ticket.resolvedAt, 'resolvido')
@@ -213,7 +214,9 @@ function TicketSla({ ticket }: { ticket: TicketDetailModel }) {
           </>
         ) : (
           <p className="text-muted-foreground text-xs">
-            Chamado cancelado fica fora dos indicadores de SLA.
+            {imported
+              ? `Chamado importado (${ticketSourceLabels[ticket.source]}) fica fora dos indicadores de SLA: ele foi atendido antes de o prazo do OpsDesk existir.`
+              : 'Chamado cancelado fica fora dos indicadores de SLA.'}
           </p>
         )}
       </CardContent>

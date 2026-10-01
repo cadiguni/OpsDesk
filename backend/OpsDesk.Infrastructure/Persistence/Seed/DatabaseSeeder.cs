@@ -113,10 +113,34 @@ public class DatabaseSeeder(
         }
     }
 
-    private async Task SeedHolidaysAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Garante os feriados nacionais do ano corrente e dos dois seguintes, e grava.
+    ///
+    /// Chamado todo dia pela renovação em segundo plano. Fora de desenvolvimento o seed
+    /// roda uma vez, na instalação, e sem isto a janela parava no terceiro ano: dali em
+    /// diante, feriado contaria como expediente — em silêncio, e o sintoma seria prazo
+    /// estranho, não erro.
+    /// </summary>
+    /// <returns>Quantos feriados entraram.</returns>
+    public async Task<int> RenewHolidaysAsync(CancellationToken cancellationToken = default)
     {
-        // O ano corrente e os dois seguintes. Prazo de chamado não olha mais longe que isso,
-        // e o seed roda a cada subida, então a janela anda sozinha.
+        var added = await SeedHolidaysAsync(cancellationToken);
+
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return added;
+    }
+
+    /// <summary>
+    /// Feriados nacionais que faltam. A comparação é pela data, e conta o feriado
+    /// desligado pelo gestor: ele existe, só não vale — recriá-lo desfaria a decisão.
+    /// </summary>
+    private async Task<int> SeedHolidaysAsync(CancellationToken cancellationToken)
+    {
+        // O ano corrente e os dois seguintes. Prazo de chamado não olha mais longe que isso.
         var currentYear = DateTime.UtcNow.Year;
         var candidates = Enumerable.Range(currentYear, 3)
             .SelectMany(BrazilianHolidays.ForYear)
@@ -137,6 +161,8 @@ public class DatabaseSeeder(
             db.Holidays.AddRange(missing);
             logger.LogInformation("Seed: {Count} feriados adicionados.", missing.Count);
         }
+
+        return missing.Count;
     }
 
     /// <summary>

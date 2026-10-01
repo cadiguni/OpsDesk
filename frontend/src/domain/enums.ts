@@ -72,6 +72,13 @@ export const ticketSourceLabels: Record<TicketSource, string> = {
   ExternalApi: 'API externa',
 }
 
+/**
+ * Origens medidas pelo SLA. Chamado importado de outra ferramenta foi atendido quando o
+ * prazo do OpsDesk não existia, e fica fora dos indicadores — espelho de `TicketSla` no
+ * backend.
+ */
+export const slaMeasuredSources: readonly TicketSource[] = ['Portal', 'Email']
+
 /** Status que encerram o chamado: saem das filas de atendimento. */
 export const closedOutStatuses: readonly TicketStatus[] = ['Resolved', 'Closed', 'Cancelled']
 

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { CircleUser, Clock, Folder, UserRound } from 'lucide-react'
 
 import { TicketPriorityBadge, TicketStatusBadge } from '@/components/ticket-badges'
-import type { TicketPriority } from '@/domain/enums'
+import { slaMeasuredSources, type TicketPriority } from '@/domain/enums'
 import { deadlineToneClasses, describeDeadline } from '@/features/tickets/sla-view'
 import type { TicketListItem } from '@/features/tickets/types'
 import { formatDateTime } from '@/lib/format'
@@ -34,8 +34,12 @@ export function TicketCard({ ticket, showRequester }: { ticket: TicketListItem; 
   const resolution = describeDeadline(ticket.slaResolutionDueAt, ticket.resolvedAt, 'resolvido')
 
   // Chamado encerrado sai dos indicadores de SLA (README, seção 8): mostrar "vencido"
-  // num chamado cancelado seria cobrança de um prazo que ninguém deve mais perseguir.
-  const tracksSla = ticket.status !== 'Cancelled' && ticket.status !== 'Closed'
+  // num chamado cancelado seria cobrança de um prazo que ninguém deve mais perseguir. O
+  // importado também: o prazo do OpsDesk não existia quando ele foi atendido.
+  const tracksSla =
+    ticket.status !== 'Cancelled' &&
+    ticket.status !== 'Closed' &&
+    slaMeasuredSources.includes(ticket.source)
 
   return (
     <Link

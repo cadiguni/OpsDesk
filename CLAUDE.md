@@ -12,39 +12,47 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 ## Estado atual
 
-**O MVP da versão 1 está completo e rodando.** Os nove critérios de sucesso da seção 19 do README estão atendidos.
+**O roadmap até a versão 2.0 está entregue**, com compose de produção. Os nove critérios de sucesso da seção 19 do README estão atendidos desde a versão 1. O que segue em aberto está no fim da seção 18 do README, em "Em aberto".
 
-**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor, seed de dados de referência, autenticação com refresh rotativo e troca de senha, instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`), chamados (abertura, listagem paginada com filtros, detalhe), atendimento (comentários público e interno, máquina de estados com reabertura, atribuição, histórico), dashboard por consultas agregadas e administração de usuários e de categorias pelo gestor.
+**Backend:** domínio, persistência com migration, SLA em horas úteis com pausa e retomada, auditoria automática por interceptor (chamado e conta), seed de dados de referência e de demonstração, autenticação com refresh rotativo, troca de senha, convite e "esqueci minha senha", instalação por linha de comando (`--migrate`, `--seed`, `--bootstrap-admin`, `--setup`, `--seed-demo`), chamados (abertura, listagem paginada com filtros e busca por trigramas, detalhe), atendimento (comentários público e interno, máquina de estados com reabertura, atribuição, histórico), dashboard por consultas agregadas (foto da fila e período), administração de usuários, categorias e feriados, configurações gerais, e-mail pelo Microsoft Graph nos dois sentidos com caixa de SPAM, importação de chamados, e anexos em disco ou no Azure Blob.
 
-**Frontend:** login, cadastro, troca de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status (inclusive reabrir) e atribuição, dashboard com gráficos, e administração de usuários e de categorias.
+**Frontend:** login, cadastro, troca e definição de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status (inclusive reabrir) e atribuição, dashboard com gráficos e período, notificações, e-mails recebidos e SPAM, e a área de administração (usuários, categorias, feriados, importação, configurações).
+
+**Produção:** `deploy/` — compose com Caddy e HTTPS, `.env` gerado com segredos aleatórios, backup e restauração. Guia em `docs/instalacao.md`.
 
 **Endpoints:**
 
 ```
 GET    /health  /ready  /openapi/v1.json  /swagger
-POST   /api/auth/{register,login,refresh,logout,password}   GET /api/auth/me
+POST   /api/auth/{register,login,refresh,logout,password}   GET /api/auth/me   GET /api/auth/options (anônimo)
+POST   /api/auth/password/forgot   POST /api/auth/password/reset   (anônimos; link por e-mail)
 POST   /api/tickets                                    GET /api/tickets  (filtros, paginação)
 GET    /api/tickets/{id}
 GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
 GET    /api/tickets/{id}/history
 POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
 POST   /api/tickets/{id}/classification   (prioridade e categoria; prioridade recalcula o SLA)
-GET    /api/categories               GET  /api/staff        GET /api/dashboard
+GET    /api/categories (?includeInactive, equipe)   GET /api/staff   GET /api/dashboard   GET /api/dashboard/period
 GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
-GET    /api/admin/users           (gestor; ativos e inativos, filtros, paginação)
+GET    /api/admin/users           (gestor; ativos e inativos, filtros, paginação)   POST /api/admin/users
 POST   /api/admin/users/{id}/role   POST /api/admin/users/{id}/activation
+POST   /api/admin/users/{id}/password-reset   GET /api/admin/users/{id}/history
 GET    /api/admin/categories      POST /api/admin/categories   (gestor)
 PUT    /api/admin/categories/{id}  POST /api/admin/categories/{id}/activation
 GET    /api/notifications   GET /api/notifications/unread-count   (as do próprio usuário)
 POST   /api/notifications/{id}/read   POST /api/notifications/read-all
 GET    /api/admin/settings/email   PUT /api/admin/settings/email   POST /api/admin/settings/email/test   (gestor)
+GET    /api/admin/settings/email/accounts   POST …/accounts   PUT …/accounts/{id}   (gestor; caixas monitoradas)
+GET    /api/admin/settings/general   PUT /api/admin/settings/general   (gestor)
+GET    /api/admin/holidays?year=   POST /api/admin/holidays   POST /api/admin/holidays/{id}/activation   DELETE /api/admin/holidays/{id}
+POST   /api/admin/import/tickets?format=&dryRun=   (gestor; multipart, dryRun padrão true)
+GET    /api/inbound   GET /api/inbound/{id}   POST /api/inbound/{id}/review   POST /api/inbound/{id}/reprocess   (equipe)
+DELETE /api/inbound/{id} (gestor)   GET /api/inbound/rules   POST /api/inbound/rules/{id}/activation
 POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-**Versão 1.2 entregue:** e-mail ao solicitante pelo Microsoft Graph, configurado pelo gestor no portal, com fila de saída; notificação no portal ao solicitante e ao responsável; alertas de SLA no portal (25% do prazo restante e vencimento).
-
-**Fora do escopo, conforme o roadmap:** ingestão de e-mail e caixa de SPAM (versão 2.0). Anexos e as administrações de usuários e de categorias foram antecipados da 1.1 e já existem. O **primeiro** gestor sai do comando de bootstrap; os demais são promovidos por ele em `/usuarios`.
+O **primeiro** gestor sai do comando de bootstrap; os demais são cadastrados ou promovidos por ele em `/usuarios`.
 
 ## Documentação
 
@@ -54,7 +62,9 @@ Cada assunto tem uma única fonte de verdade. Antes de responder sobre regra de 
 | --- | --- |
 | `README.md` | escopo, perfis, status, prioridades, SLA, entidades, telas, roadmap |
 | `docs/arquitetura.md` | stack, estrutura do repositório, decisões de arquitetura |
-| `docs/integracao-email.md` | ingestão de e-mail e caixa de SPAM (versão 2.0) |
+| `docs/integracao-email.md` | ingestão de e-mail e caixa de SPAM (versão 2.0), e onde a implementação se afastou da especificação |
+| `docs/instalacao.md` | instalação em produção, atualização, backup, Azure Blob, réplicas |
+| `docs/atendimento-e-aparencia.md` | enviar e fechar, interface de atendimento, temas |
 
 Se uma mudança de código contrariar um desses documentos, atualize o documento na mesma alteração. Documentação divergente do código é pior do que documentação ausente.
 
@@ -91,11 +101,21 @@ Fora de Development a instalação é um comando explícito, no mesmo executáve
 docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e OpsDesk__Bootstrap__Password='uma-senha-provisoria'   api --setup            # = --migrate + --seed + --bootstrap-admin
 ```
 
-`--seed` nunca cria usuários de exemplo. O gestor do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum gestor.
+`--seed` nunca cria usuários de exemplo. O gestor do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum gestor. `--seed-demo` cria cinco pessoas e oito chamados, e recusa banco que já tem chamado.
+
+Produção usa outro compose, com nome de projeto próprio (`opsdesk-prod`) para não compartilhar volume com este:
+
+```bash
+./deploy/new-env.sh localhost voce@empresa.com     # gera deploy/.env; no Windows, deploy/new-env.ps1
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env build
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile setup run --rm setup
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+bash deploy/backup.sh                               # e deploy/restore.sh <pasta>
+```
 
 Quem esquecer o comando é acusado pelo `/ready`, que reprova migration pendente e ausência de dados de referência, com o que fazer no corpo da resposta. O `/health` continua verde nesse caso de propósito: ele decide reiniciar o contêiner, e reiniciar não aplica migration.
 
-Ainda **não** implementado: feriados não se renovam sozinhos fora de Development. Ver README, seção 18, em "Primeira execução: instalar em branco".
+Feriados nacionais se renovam por tarefa diária (`Holidays:RenewalIntervalHours`), em qualquer ambiente.
 
 ### Backend
 
@@ -107,7 +127,7 @@ dotnet test backend/OpsDesk.slnx --filter FullyQualifiedName~Unit # só unidade,
 dotnet run --project backend/OpsDesk.Api                          # usa o Postgres do compose
 ```
 
-Os testes de integração sobem PostgreSQL por Testcontainers e **exigem Docker rodando**.
+Os testes de integração sobem PostgreSQL por Testcontainers e **exigem Docker rodando**. Os de anexo no Azure Blob sobem também o Azurite.
 
 ### Migrations
 
@@ -138,6 +158,16 @@ npm test           # Vitest + Testing Library, em jsdom
 npm run build
 ```
 
+### Ponta a ponta
+
+Playwright contra o perfil `web` (porta 3000), com o seed de desenvolvimento:
+
+```bash
+docker compose --profile web up -d --build
+cd e2e && npm ci && npx playwright install chromium
+npm test                                # OPSDESK_URL troca o endereço
+```
+
 ### Usuários de desenvolvimento
 
 Criados pelo seed só em Development, senha `OpsDesk@123`:
@@ -164,6 +194,8 @@ Estas regras não são preferências de estilo. Quebrá-las é bug, e em alguns 
 10. **Senha provisória só serve para trocar a si mesma.** Enquanto `User.MustChangePassword` for verdadeiro, nenhuma rota fora de `/api/auth` responde — a trava é o middleware `UsePasswordChangeRequired`, e não um atributo por rota, para que endpoint novo nasça coberto. Não a substitua por verificação rota a rota nem a contorne em serviço: a credencial do bootstrap chega por variável de ambiente, e é essa trava que a faz valer uma vez em vez de para sempre.
 11. **Aviso de chamado nasce do dado, não do serviço.** Notificação e e-mail são gerados pelo `TicketNotificationInterceptor`, na mesma transação da mudança, e a regra de quem recebe o quê mora no `NotificationPlanner`. Não chame envio de e-mail de dentro de serviço: endpoint novo que grave comentário, status ou responsável já notifica sozinho. E-mail só para o solicitante e **nunca** com nota interna — há teste fixando os dois (`Nota_interna_nunca_vira_email`, `Nota_interna_nao_entra_no_email_de_outro_evento_da_mesma_gravacao`).
 12. **Credencial guardada no banco é só de escrita e cifrada.** O client secret do e-mail passa pelo `ISecretProtector` (Data Protection) e nenhuma resposta da API o devolve. Configuração nova com credencial segue o mesmo desenho.
+13. **Só Portal e E-mail entram no SLA.** Chamado importado (CSV, API externa, Freshdesk, Freshservice) fica fora de vencidos, dashboard e alertas. Toda consulta de indicador de SLA filtra por `TicketSla.MeasuredSources`, junto com o corte de cancelado; consulta nova também. Na interface, o espelho é `slaMeasuredSources`.
+14. **Link de senha é credencial.** Só o hash do token vai para o banco, e o corpo do e-mail que leva o link é apagado da fila depois do envio (`OutboundEmail.IsSensitive`). E-mail novo com link de acesso segue o mesmo caminho.
 
 ## Convenções
 
@@ -183,6 +215,7 @@ Antes de considerar uma alteração concluída, verifique se ela tem cobertura q
 * cálculo de SLA, com pausa, retomada, virada de expediente, fim de semana e feriado;
 * ausência de comentário interno nas respostas destinadas ao solicitante;
 * a trava de senha provisória, inclusive o caso negativo: a rota nova recusa enquanto `MustChangePassword` estiver de pé?
+* entrada vinda de fora (e-mail recebido, arquivo importado): processar a mesma coisa duas vezes não pode criar dois chamados.
 
 No frontend, os testes de componente ficam ao lado do arquivo testado (`*.test.tsx`) e montam a tela com `renderWithProviders`, de `src/test/render.tsx`, que injeta a sessão pelo contexto e simula a API com `vi.mock('@/features/tickets/api')`. Mudança que toque marcação de interno, filtros na URL ou ações de status precisa de teste ali.
 
@@ -217,3 +250,15 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **Reabrir retoma o SLA, não o recomeça.** O tempo útil entre a resolução e a reabertura entra como pausa, e `ResolvedAt`/`ClosedAt` só são limpos depois disso — a retomada precisa da data de resolução. A janela de sete dias para chamado fechado mora em `ReopenPolicy`, não no grafo. Ver README, seção 5.9.
 * Chamado cancelado fica fora dos indicadores de SLA.
 * Prioridade nunca é inferida do texto do chamado, nem do assunto de um e-mail. A triagem é da equipe.
+* **A busca precisa continuar como `EF.Functions.Like(coluna.ToLower(), padrão, "\\")`.** É exatamente a expressão dos índices de trigramas da migration `AddTicketSearchTrigramIndexes`. Trocar por `Contains` vira `strpos`, que nenhum índice atende, e a busca volta a varrer a tabela sem erro nenhum. Há teste conferindo o plano de execução (`TicketSearchTests`).
+* **Processamento em segundo plano age como alguém pelo `IActorScope`.** O e-mail recebido grava comentário em nome do remetente, para histórico, notificação e visibilidade valerem como no portal. A troca vale para a instância do escopo, e cada mensagem roda num escopo próprio. Fora de um escopo dedicado, a troca contaminaria a requisição HTTP que compartilha o `ICurrentUser`.
+* **Criar chamado não notifica, e a importação depende disso.** O `TicketNotificationInterceptor` ignora chamado `Added`. Mudar isso faria uma importação de cinco mil linhas mandar cinco mil e-mails a solicitantes de chamados de anos atrás.
+* **O `sendMail` do Graph não aceita `In-Reply-To` nem `References`**, só cabeçalho `x-`. A resposta por e-mail volta para o chamado pelo código `[OPS-000123]` no assunto. Não remova o código do assunto dos avisos.
+* **Fila de saída com várias réplicas: a reserva é um `ExecuteUpdate` condicional** em `NextAttemptAt`. Selecionar e depois marcar, em dois passos, manda o mesmo e-mail duas vezes — o teste concorrente mandava 9 em vez de 5.
+* **O Azurite recusa a versão de API do SDK mais novo** com 400. Os testes sobem o emulador com `--skipApiVersionCheck`. Connection string em `AttachmentStorage:AzureBlob` só é aceita para o emulador (`AccountName=devstoreaccount1` ou `UseDevelopmentStorage=true`): conta de verdade usa `ServiceUri` e identidade.
+* **A CSP do Caddy bloqueia script inline.** O tema é aplicado antes do React por `public/theme-init.js`, e não por `<script>` no `index.html`. Script inline novo some em produção e funciona no `npm run dev`, que não passa pelo Caddy.
+* **No Alpine, `localhost` resolve primeiro para `::1`.** O nginx do SPA escuta também em `[::]:80`, e os healthchecks usam `127.0.0.1`. Sem isso o contêiner fica `unhealthy` com o nginx respondendo normalmente pelo IPv4.
+* **Script de deploy no Git Bash:** argumento que começa com `/` vira caminho do Windows antes de chegar ao `docker`. Os scripts exportam `MSYS_NO_PATHCONV=1` e usam `pwd -W` para o caminho do volume. E `set -o pipefail` com `head` sai com 141 (SIGPIPE): o `new-env.sh` desliga o pipefail só na função que sorteia os segredos.
+* **Captura de tela do dashboard com `fullPage` reinicia a animação do Recharts** e sai com as barras vazias. O teste de ponta a ponta usa viewport alto em vez de `fullPage`.
+* **Input de arquivo com `required` reprova no jsdom** mesmo depois do `userEvent.upload`: a validação nativa não enxerga o arquivo simulado, e o `submit` nunca dispara. A tela de importação controla o botão pelo estado em vez de `required`.
+* **O EF loga ERR ao checar migration pendente em banco vazio**, porque a tabela de histórico ainda não existe. Os comandos de instalação chamam `CreateIfNotExistsAsync` do `IHistoryRepository` antes — log de erro numa instalação bem-sucedida faz quem instala procurar problema onde não há.

@@ -28,4 +28,10 @@ public interface IBusinessCalendar
 
     /// <summary>Se a data, no fuso do expediente, é dia útil.</summary>
     bool IsBusinessDay(DateOnly date);
+
+    /// <summary>
+    /// Data e hora "de parede" do fuso do expediente — como vem numa planilha exportada,
+    /// sem deslocamento — convertida para o instante em UTC.
+    /// </summary>
+    DateTimeOffset FromLocal(DateTime local);
 }

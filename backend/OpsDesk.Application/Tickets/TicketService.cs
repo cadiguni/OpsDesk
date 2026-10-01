@@ -20,6 +20,53 @@ namespace OpsDesk.Application.Tickets;
 public class TicketService(
     IOpsDeskDbContext db, SlaClock sla, IClock clock, AttachmentService attachments, ReopenPolicy reopening)
 {
+    /// <summary>
+    /// Chamado aberto por e-mail (docs/integracao-email.md, seção 4.7). Origem <c>Email</c>,
+    /// com o Message-ID como identificador externo — é por ele que o reprocessamento de uma
+    /// mensagem descobre que o chamado já existe, em vez de abrir outro.
+    /// </summary>
+    /// <returns>O chamado, ou nulo quando falta política de SLA para a prioridade.</returns>
+    public async Task<Ticket?> CreateFromEmailAsync(
+        Guid requesterId,
+        string title,
+        string description,
+        Guid categoryId,
+        TicketPriority priority,
+        string? externalId,
+        CancellationToken cancellationToken = default)
+    {
+        var policy = await db.SlaPolicies
+            .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, cancellationToken);
+
+        if (policy is null)
+        {
+            return null;
+        }
+
+        var now = clock.UtcNow;
+        var deadlines = sla.Calculate(now, policy);
+
+        var ticket = new Ticket
+        {
+            Title = title,
+            Description = description,
+            CategoryId = categoryId,
+            Priority = priority,
+            RequesterId = requesterId,
+            Status = TicketStatus.Open,
+            Source = TicketSource.Email,
+            ExternalId = externalId,
+            SlaResponseDueAt = deadlines.ResponseDueAt,
+            SlaResolutionDueAt = deadlines.ResolutionDueAt,
+            CreatedAt = now
+        };
+
+        db.Tickets.Add(ticket);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return ticket;
+    }
+
     /// <param name="author">Quem está autenticado — nem sempre é o solicitante do chamado.</param>
     public async Task<CreateTicketResult> CreateAsync(
         CreateTicketRequest request, TicketViewer author, CancellationToken cancellationToken = default)
@@ -136,7 +183,8 @@ public class TicketService(
                 t.SlaResolutionDueAt,
                 t.FirstRespondedAt,
                 t.ResolvedAt,
-                t.UpdatedAt));
+                t.UpdatedAt,
+                t.Source));
 
         return query.ToPagedResultAsync(filter.Page, cancellationToken);
     }
@@ -206,12 +254,18 @@ public class TicketService(
                 h.CreatedAt))
             .ToListAsync(cancellationToken);
 
-    public Task<List<CategoryOption>> ListCategoriesAsync(CancellationToken cancellationToken = default) =>
+    /// <summary>
+    /// Categorias para os seletores. <paramref name="includeInactive"/> serve ao filtro da
+    /// lista de chamados, e só vale para a equipe: chamado de categoria desativada continua
+    /// existindo e precisa ser encontrável, mas abrir ou reclassificar nela não.
+    /// </summary>
+    public Task<List<CategoryOption>> ListCategoriesAsync(
+        bool includeInactive = false, CancellationToken cancellationToken = default) =>
         db.Categories
             .AsNoTracking()
-            .Where(c => c.IsActive)
+            .Where(c => includeInactive || c.IsActive)
             .OrderBy(c => c.Name)
-            .Select(c => new CategoryOption(c.Id, c.Name, c.Description))
+            .Select(c => new CategoryOption(c.Id, c.Name, c.Description, c.IsActive))
             .ToListAsync(cancellationToken);
 
     /// <summary>

@@ -2,6 +2,7 @@ import { api } from '@/lib/api'
 import type {
   Attachment,
   CategoryOption,
+  DashboardPeriod,
   DashboardSummary,
   PagedResult,
   StaffOption,
@@ -50,8 +51,10 @@ export async function getTicket(id: string): Promise<TicketDetail> {
   return data
 }
 
-export async function listCategories(): Promise<CategoryOption[]> {
-  const { data } = await api.get<CategoryOption[]>('/api/categories')
+export async function listCategories(includeInactive = false): Promise<CategoryOption[]> {
+  const { data } = await api.get<CategoryOption[]>('/api/categories', {
+    params: includeInactive ? { includeInactive: true } : undefined,
+  })
 
   return data
 }
@@ -134,6 +137,13 @@ export async function listStaff(): Promise<StaffOption[]> {
 
 export async function getDashboard(): Promise<DashboardSummary> {
   const { data } = await api.get<DashboardSummary>('/api/dashboard')
+
+  return data
+}
+
+/** Indicadores de um período — `from` inclusivo, `before` exclusivo, instantes ISO. */
+export async function getDashboardPeriod(from: string, before: string): Promise<DashboardPeriod> {
+  const { data } = await api.get<DashboardPeriod>('/api/dashboard/period', { params: { from, before } })
 
   return data
 }

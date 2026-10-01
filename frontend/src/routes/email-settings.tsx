@@ -8,9 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useSession } from '@/features/auth/session-context'
+import { MailboxAccounts } from '@/features/inbound/mailbox-accounts'
 import type { EmailSettings } from '@/features/settings/api'
 import { useEmailSettings, useSendTestEmail, useUpdateEmailSettings } from '@/features/settings/queries'
 import { emailSettingsSchema, type EmailSettingsFields } from '@/features/settings/schemas'
+import { SettingsTabs } from '@/features/settings/settings-tabs'
 import { errorMessage } from '@/lib/api'
 import { formatDate, formatDateTime } from '@/lib/format'
 
@@ -46,11 +48,13 @@ export function EmailSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Configurações de e-mail</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground text-sm">
           Envio pelo Microsoft 365. O solicitante recebe e-mail a cada resposta pública e mudança de status.
         </p>
       </div>
+
+      <SettingsTabs />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         {/* A chave remonta o formulário quando a configuração salva volta do servidor. */}
@@ -60,6 +64,8 @@ export function EmailSettingsPage() {
           <TestEmail settings={settings.data} />
         </div>
       </div>
+
+      <MailboxAccounts emailEnabled={settings.data.isEnabled} />
     </div>
   )
 }

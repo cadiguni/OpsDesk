@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using OpsDesk.Infrastructure.Persistence;
 using OpsDesk.Infrastructure.Persistence.Seed;
 
@@ -34,7 +36,13 @@ internal static class DatabaseCommands
     /// <summary>Os três acima, na ordem em que dependem um do outro.</summary>
     private const string Setup = "--setup";
 
-    private static readonly string[] Known = [Migrate, Seed, BootstrapAdmin, Setup];
+    /// <summary>
+    /// Dados de demonstração, para avaliar o sistema. Nunca faz parte do --setup: cria
+    /// usuários com senha conhecida.
+    /// </summary>
+    private const string SeedDemo = "--seed-demo";
+
+    private static readonly string[] Known = [Migrate, Seed, BootstrapAdmin, Setup, SeedDemo];
 
     /// <summary>Há comando de manutenção na linha de comando?</summary>
     public static bool Requested(string[] args) =>
@@ -66,6 +74,13 @@ internal static class DatabaseCommands
             if (all || requested.Contains(Migrate))
             {
                 var db = scope.ServiceProvider.GetRequiredService<OpsDeskDbContext>();
+
+                // Em banco vazio, o EF consulta a tabela de histórico antes de criá-la, trata
+                // a falha e mesmo assim a registra como erro — duas linhas "ERR Failed
+                // executing DbCommand" na primeira instalação, que é justamente quando quem
+                // instala está lendo o log para saber se deu certo. Criar a tabela antes
+                // (vazia, se ainda não existir) tira esse falso alarme.
+                await db.GetService<IHistoryRepository>().CreateIfNotExistsAsync();
 
                 var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
 
@@ -108,6 +123,20 @@ internal static class DatabaseCommands
                         "Defina OpsDesk__Bootstrap__Email e OpsDesk__Bootstrap__Password.",
                         BootstrapAdmin, BootstrapAdminOptions.SectionName,
                         BootstrapAdminOptions.SectionName);
+
+                    return 1;
+                }
+            }
+
+            if (requested.Contains(SeedDemo))
+            {
+                var demo = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+
+                if (await demo.SeedAsync() == DemoSeedResult.RefusedDatabaseInUse)
+                {
+                    logger.LogError(
+                        "{Command} recusado: o banco já tem chamados. Dados de demonstração não se " +
+                        "misturam com dados reais — use um banco novo para avaliar.", SeedDemo);
 
                     return 1;
                 }

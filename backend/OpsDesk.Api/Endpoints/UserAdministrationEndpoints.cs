@@ -26,6 +26,16 @@ public static class UserAdministrationEndpoints
         group.MapGet("/", List)
             .WithSummary("Usuários, ativos e inativos, com filtros e paginação.");
 
+        group.MapPost("/", Create)
+            .ValidatingBody<CreateUserRequest>()
+            .WithSummary("Cadastra uma pessoa: convite por e-mail, ou senha provisória mostrada uma vez.");
+
+        group.MapPost("/{id:guid}/password-reset", ResetPassword)
+            .WithSummary("Redefine a senha de outra pessoa. As sessões abertas dela caem.");
+
+        group.MapGet("/{id:guid}/history", History)
+            .WithSummary("Trilha de auditoria da pessoa: criação, perfil, ativação e senha.");
+
         group.MapPost("/{id:guid}/role", ChangeRole)
             .ValidatingBody<ChangeRoleRequest>()
             .WithSummary("Troca o perfil. Rebaixar derruba as sessões da pessoa.");
@@ -53,6 +63,29 @@ public static class UserAdministrationEndpoints
         return TypedResults.Ok(await users.ListAsync(filter, cancellationToken));
     }
 
+    private static async Task<IResult> Create(
+        CreateUserRequest request,
+        UserAdministrationService users,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        var result = await users.CreateAsync(request, currentUser.Viewer, cancellationToken);
+
+        return result is ChangeUserResult.AccessIssued issued
+            ? TypedResults.Created($"/api/admin/users/{issued.Access.User.Id}", issued.Access)
+            : ToResult(result);
+    }
+
+    private static async Task<IResult> ResetPassword(
+        Guid id, UserAdministrationService users, ICurrentUser currentUser, CancellationToken cancellationToken) =>
+        ToResult(await users.ResetPasswordAsync(id, currentUser.Viewer, cancellationToken));
+
+    private static async Task<IResult> History(
+        Guid id, UserAdministrationService users, ICurrentUser currentUser, CancellationToken cancellationToken) =>
+        await users.HistoryAsync(id, currentUser.Viewer, cancellationToken) is { } history
+            ? TypedResults.Ok(history)
+            : TypedResults.NotFound();
+
     private static async Task<IResult> ChangeRole(
         Guid id,
         ChangeRoleRequest request,
@@ -72,6 +105,13 @@ public static class UserAdministrationEndpoints
     private static IResult ToResult(ChangeUserResult result) => result switch
     {
         ChangeUserResult.Changed changed => TypedResults.Ok(changed.User),
+
+        ChangeUserResult.AccessIssued issued => TypedResults.Ok(issued.Access),
+
+        ChangeUserResult.EmailAlreadyUsed used => TypedResults.Problem(
+            detail: used.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            title: "E-mail já cadastrado"),
 
         ChangeUserResult.UserNotFound => TypedResults.NotFound(),
 

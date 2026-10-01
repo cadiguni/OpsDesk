@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Domain.Enums;
+using OpsDesk.Domain.Tickets;
 
 namespace OpsDesk.Application.Dashboard;
 
@@ -55,12 +56,14 @@ public class DashboardService(IOpsDeskDbContext db, IClock clock)
         // das duas contagens de vencidos abaixo.
         var overdueResponse = await visible.CountAsync(
             t => t.Status != TicketStatus.Cancelled
+                 && TicketSla.MeasuredSources.Contains(t.Source)
                  && t.FirstRespondedAt == null
                  && t.SlaResponseDueAt < now,
             cancellationToken);
 
         var overdueResolution = await visible.CountAsync(
             t => t.Status != TicketStatus.Cancelled
+                 && TicketSla.MeasuredSources.Contains(t.Source)
                  && t.ResolvedAt == null
                  && t.SlaResolutionDueAt < now,
             cancellationToken);

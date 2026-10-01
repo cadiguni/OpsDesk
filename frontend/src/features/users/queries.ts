@@ -32,6 +32,27 @@ function useInvalidateUsers() {
   }
 }
 
+export function useCreateUser() {
+  const invalidate = useInvalidateUsers()
+
+  return useMutation({ mutationFn: usersApi.createUser, onSuccess: invalidate })
+}
+
+export function useResetUserPassword() {
+  const invalidate = useInvalidateUsers()
+
+  return useMutation({ mutationFn: usersApi.resetUserPassword, onSettled: invalidate })
+}
+
+/** Trilha de auditoria, só quando a linha é aberta. */
+export function useUserHistory(userId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin-users', 'history', userId],
+    queryFn: () => usersApi.getUserHistory(userId),
+    enabled,
+  })
+}
+
 export function useChangeRole() {
   const invalidate = useInvalidateUsers()
 

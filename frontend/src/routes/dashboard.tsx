@@ -8,6 +8,7 @@ import {
   type TicketStatus,
 } from '@/domain/enums'
 import { ChartFrame, HorizontalBars, VerticalBars } from '@/features/dashboard/chart-primitives'
+import { PeriodSection } from '@/features/dashboard/period-section'
 import { useDashboard } from '@/features/tickets/queries'
 import type { CountByLabel } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
@@ -65,9 +66,13 @@ export function Dashboard() {
         />
       </div>
 
+      <PeriodSection />
+
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Barras horizontais: são sete status com nomes longos, e em colunas os rótulos
+            se sobrepunham na metade da largura. */}
         <ChartFrame title="Chamados por status" data={translate(data.byStatus, statusLabel)}>
-          <VerticalBars data={translate(data.byStatus, statusLabel)} />
+          <HorizontalBars data={translate(data.byStatus, statusLabel)} />
         </ChartFrame>
 
         <ChartFrame title="Chamados por prioridade" data={translate(data.byPriority, priorityLabel)}>

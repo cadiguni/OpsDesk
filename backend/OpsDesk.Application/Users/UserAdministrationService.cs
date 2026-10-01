@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Identity;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Auth;
 using OpsDesk.Application.Authorization;
 using OpsDesk.Application.Common;
 using OpsDesk.Domain.Entities;
@@ -24,8 +26,127 @@ namespace OpsDesk.Application.Users;
 public class UserAdministrationService(
     IOpsDeskDbContext db,
     IRefreshTokenStore refreshTokens,
+    PasswordResetService passwordReset,
+    IPasswordHasher<User> passwordHasher,
     ILogger<UserAdministrationService> logger)
 {
+    /// <summary>
+    /// Cadastra uma pessoa (README, seção 13.9). Com e-mail disponível, ela recebe um
+    /// convite para definir a senha; sem, o gestor recebe uma senha provisória.
+    /// </summary>
+    public async Task<ChangeUserResult> CreateAsync(
+        CreateUserRequest request, TicketViewer actor, CancellationToken cancellationToken = default)
+    {
+        if (!await IsActiveManagerAsync(actor, cancellationToken))
+        {
+            return new ChangeUserResult.NotAllowed();
+        }
+
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        if (await db.Users.AnyAsync(u => u.Email == email, cancellationToken))
+        {
+            return new ChangeUserResult.EmailAlreadyUsed();
+        }
+
+        var user = new User { Name = request.Name.Trim(), Email = email, Role = request.Role };
+        db.Users.Add(user);
+
+        string? temporaryPassword = null;
+        var invited = await passwordReset.InviteAsync(user, cancellationToken);
+
+        if (!invited)
+        {
+            temporaryPassword = TemporaryPassword.Generate();
+            user.PasswordHash = passwordHasher.HashPassword(user, temporaryPassword);
+            user.MustChangePassword = true;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return new ChangeUserResult.EmailAlreadyUsed();
+        }
+
+        logger.LogInformation(
+            "Usuário {UserId} cadastrado por {ActorId} como {Role} ({Access}).",
+            user.Id, actor.UserId, user.Role, invited ? "convite por e-mail" : "senha provisória");
+
+        return new ChangeUserResult.AccessIssued(
+            new AccessGranted(await ProjectOneAsync(user.Id, cancellationToken), invited, temporaryPassword));
+    }
+
+    /// <summary>
+    /// Redefine a senha de outra pessoa: mesmo critério do cadastro — link por e-mail quando
+    /// houver, senha provisória quando não. As sessões abertas dela caem nos dois casos.
+    /// </summary>
+    public async Task<ChangeUserResult> ResetPasswordAsync(
+        Guid userId, TicketViewer actor, CancellationToken cancellationToken = default)
+    {
+        var (user, refusal) = await LoadAsync(userId, actor, cancellationToken);
+
+        if (user is null)
+        {
+            return refusal!;
+        }
+
+        string? temporaryPassword = null;
+        var invited = user.IsActive && await passwordReset.InviteAsync(user, cancellationToken);
+
+        if (invited)
+        {
+            // A senha atual morre agora, e não quando a pessoa usar o link: redefinir por
+            // suspeita de conta invadida não pode deixar a senha do intruso valendo até lá.
+            user.PasswordHash = null;
+        }
+        else
+        {
+            temporaryPassword = TemporaryPassword.Generate();
+            user.PasswordHash = passwordHasher.HashPassword(user, temporaryPassword);
+            user.MustChangePassword = true;
+        }
+
+        user.PasswordChangeReason = UserAuditAction.PasswordReset;
+
+        await db.SaveChangesAsync(cancellationToken);
+        await refreshTokens.RevokeAllForUserAsync(user.Id, cancellationToken);
+
+        logger.LogInformation("Senha de {UserId} redefinida por {ActorId}.", user.Id, actor.UserId);
+
+        return new ChangeUserResult.AccessIssued(
+            new AccessGranted(await ProjectOneAsync(user.Id, cancellationToken), invited, temporaryPassword));
+    }
+
+    /// <summary>Trilha de auditoria da pessoa, mais recente primeiro.</summary>
+    public async Task<List<UserAuditItem>?> HistoryAsync(
+        Guid userId, TicketViewer actor, CancellationToken cancellationToken = default)
+    {
+        if (!await IsActiveManagerAsync(actor, cancellationToken)
+            || !await db.Users.AnyAsync(u => u.Id == userId, cancellationToken))
+        {
+            return null;
+        }
+
+        return await db.UserAudit
+            .AsNoTracking()
+            .Where(a => a.UserId == userId)
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(100)
+            .Select(a => new UserAuditItem(
+                a.Action, a.PreviousValue, a.NewValue, a.ChangedBy == null ? null : a.ChangedBy.Name, a.CreatedAt))
+            .ToListAsync(cancellationToken);
+    }
+
+    private Task<ManagedUser> ProjectOneAsync(Guid userId, CancellationToken cancellationToken) =>
+        Project(db.Users.AsNoTracking().Where(u => u.Id == userId)).SingleAsync(cancellationToken);
+
+    private async Task<bool> IsActiveManagerAsync(TicketViewer actor, CancellationToken cancellationToken) =>
+        actor.IsManager
+        && await db.Users.AnyAsync(u => u.Id == actor.UserId && u.IsActive && u.Role == UserRole.Manager, cancellationToken);
+
     public Task<PagedResult<ManagedUser>> ListAsync(
         ManagedUserFilter filter, CancellationToken cancellationToken = default)
     {

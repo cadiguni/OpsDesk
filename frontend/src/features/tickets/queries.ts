@@ -39,10 +39,22 @@ export function useTicket(id: string) {
   })
 }
 
+/**
+ * Categorias do filtro da lista. Para a equipe, inclui as desativadas: chamado numa
+ * categoria desativada continua existindo e precisa ser encontrável.
+ */
+export function useFilterCategories(includeInactive: boolean) {
+  return useQuery({
+    queryKey: [...keys.categories, 'filter', includeInactive],
+    queryFn: () => ticketsApi.listCategories(includeInactive),
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
 export function useCategories() {
   return useQuery({
     queryKey: keys.categories,
-    queryFn: ticketsApi.listCategories,
+    queryFn: () => ticketsApi.listCategories(),
 
     // Categorias mudam raramente e são dado de referência.
     staleTime: 10 * 60 * 1000,
@@ -108,6 +120,14 @@ export function useUsers(enabled: boolean, search = '') {
     queryFn: () => ticketsApi.listUsers(search || undefined),
     enabled,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useDashboardPeriod(from: string, before: string) {
+  return useQuery({
+    queryKey: ['dashboard', 'period', from, before],
+    queryFn: () => ticketsApi.getDashboardPeriod(from, before),
+    placeholderData: (previous) => previous,
   })
 }
 

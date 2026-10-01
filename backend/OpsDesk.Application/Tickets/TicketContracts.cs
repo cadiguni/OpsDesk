@@ -38,7 +38,8 @@ public record TicketListItem(
     DateTimeOffset SlaResolutionDueAt,
     DateTimeOffset? FirstRespondedAt,
     DateTimeOffset? ResolvedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    TicketSource Source);
 
 /// <summary>Chamado completo, para a tela de detalhe (README, seção 13.5).</summary>
 public record TicketDetail(
@@ -118,4 +119,4 @@ public enum TicketSort
 }
 
 /// <summary>Categoria ativa, para os seletores da interface.</summary>
-public record CategoryOption(Guid Id, string Name, string? Description);
+public record CategoryOption(Guid Id, string Name, string? Description, bool IsActive = true);

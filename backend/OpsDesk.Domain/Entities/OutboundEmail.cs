@@ -27,6 +27,12 @@ public class OutboundEmail : IHasCreatedAt
 
     public string HtmlBody { get; set; } = null!;
 
+    /// <summary>
+    /// O corpo carrega algo que não pode ficar guardado — o link de definir senha. Depois
+    /// do envio, ou da desistência, o corpo é apagado da tabela.
+    /// </summary>
+    public bool IsSensitive { get; set; }
+
     public OutboundEmailStatus Status { get; set; } = OutboundEmailStatus.Pending;
 
     public int Attempts { get; set; }

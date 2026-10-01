@@ -91,8 +91,12 @@ public class GraphEmailSenderTests
         Assert.Contains("Access to OData is disabled.", error.Message);
     }
 
-    private static GraphEmailSender Sender(RecordingHandler handler) =>
-        new(new HttpClient(handler), new MemoryCache(new MemoryCacheOptions()));
+    private static GraphEmailSender Sender(RecordingHandler handler)
+    {
+        var http = new HttpClient(handler);
+
+        return new GraphEmailSender(http, new GraphTokenProvider(http, new MemoryCache(new MemoryCacheOptions())));
+    }
 
     private static HttpResponseMessage TokenOk() =>
         Json(HttpStatusCode.OK, """{"access_token":"token-de-teste","expires_in":3599,"token_type":"Bearer"}""");

@@ -12,14 +12,16 @@ O OpsDesk é um monorepo com dois artefatos executáveis e um banco relacional:
 opsdesk/
 ├── backend/             API ASP.NET Core (OpsDesk.slnx)
 ├── frontend/            SPA React + Vite
+├── e2e/                 testes de ponta a ponta (Playwright)
+├── deploy/              compose de produção, Caddyfile, .env.example, backup e restauração
 ├── docs/                documentação técnica
 ├── .github/workflows/   CI
-├── docker-compose.yml   Postgres + API (+ Mailpit a partir da 2.0)
+├── docker-compose.yml   Postgres + API (+ SPA no perfil web), para desenvolver
 ├── dotnet-tools.json    dotnet-ef fixado por versão
 └── README.md            especificação funcional
 ```
 
-Não há microsserviços, fila ou cache distribuído na versão 1. O volume de um service desk interno não justifica, e cada peça adicional é uma peça a mais para operar.
+Não há microsserviços, broker de mensagens ou cache distribuído. O volume de um service desk interno não justifica, e cada peça adicional é uma peça a mais para operar. O trabalho em segundo plano — fila de e-mail, leitura da caixa, alertas de SLA, renovação de feriados, limpeza de anexos — roda em `BackgroundService` no próprio processo da API, com o estado no PostgreSQL. Cada tarefa tem um intervalo em configuração, e zero a desliga, para testes e para réplicas que não devem repeti-la (docs/instalacao.md, seção 8).
 
 ---
 
@@ -217,7 +219,7 @@ O schema evolui exclusivamente por migrations do EF Core, versionadas no reposit
 
 ### 4.15 Anexo fora do banco, atrás de uma interface
 
-O conteúdo dos anexos vai para o `IAttachmentStorage`; o banco guarda metadado e a chave. A versão 1 implementa em disco (`FileSystemAttachmentStorage`), com volume no compose e caminho em `AttachmentStorage:RootPath`.
+O conteúdo dos anexos vai para o `IAttachmentStorage`; o banco guarda metadado e a chave. Há duas implementações, escolhidas por `AttachmentStorage:Provider`: disco (`FileSystemAttachmentStorage`, o padrão), com volume no compose e caminho em `AttachmentStorage:RootPath`, e Azure Blob (`AzureBlobAttachmentStorage`), para mais de uma réplica. O Blob autentica por identidade (`DefaultAzureCredential`); connection string só é aceita para o emulador, e o validador de opções recusa a de conta de verdade na subida. Os bytes passam pela API nas duas, para o filtro de visibilidade rodar antes de o arquivo abrir.
 
 **Por quê:** guardar binário em coluna `bytea` infla o banco e o backup, e transforma cada leitura de metadado num risco de trazer megabytes junto. Disco resolve o ambiente local sem subir serviço novo, e a interface deixa a troca por S3 ou MinIO ser uma implementação nova — sem tocar em serviço, domínio ou schema.
 
@@ -265,6 +267,24 @@ E-mail e notificação no portal são gerados pelo `TicketNotificationIntercepto
 
 **Por quê interceptor:** o argumento do histórico (4.2). Aviso chamado de dentro de cada serviço funciona até o primeiro endpoint novo que esquecer. **Por quê função pura:** é onde mora a invariante 2 no canal novo — nota interna nunca vira e-mail —, e regra de autorização se prende com teste unitário exaustivo, não com teste de ponta a ponta caso a caso. **Por quê fila na mesma transação:** mudança gravada tem aviso gravado, mudança desfeita não tem; e o envio, que depende do Microsoft 365, fica fora do tempo de resposta da API.
 
+### 4.21 Auditoria de conta segue o molde do histórico de chamado
+
+`UserAuditEntry` é preenchida pelo `UserAuditInterceptor`, que compara perfil e situação no `ChangeTracker`. Senha é exceção: o hash muda por motivos que o interceptor não distingue (troca, redefinição, link), então o serviço declara o motivo em `User.PasswordChangeReason`, propriedade não persistida, e o interceptor só registra quando há motivo declarado. O registro guarda o fato, nunca a senha.
+
+### 4.22 Entrada de fora age como uma pessoa, pelos mesmos serviços
+
+O e-mail recebido não grava chamado nem comentário por um caminho próprio. O processamento abre um escopo de DI por mensagem, troca o ator pelo `IActorScope` para o remetente e chama `TicketService` e `TicketCommentService`, os mesmos do portal. Histórico, notificação, reabertura e — o que importa — o filtro de visibilidade valem sem duplicação: quem põe o código de um chamado alheio no assunto recebe o mesmo "não existe" que receberia pela API.
+
+A importação de chamados é a exceção deliberada: grava `Ticket` direto, com datas e status da origem, porque nenhuma regra de transição se aplica a chamado que já aconteceu. Ela continua passando pelos interceptores — o histórico registra a abertura em nome de quem importou — e não notifica porque chamado criado não é evento de aviso (4.20).
+
+### 4.23 Quais chamados o SLA mede mora num lugar só
+
+`TicketSla.MeasuredSources` (Portal e E-mail) é aplicado em toda consulta de indicador: contador de vencidos, filtro de vencidos, dashboard por período e alertas. `Ticket.CountsForSla` é a versão em memória. A alternativa — não calcular prazo para chamado importado — exigiria prazo anulável e uma exceção em cada consulta que ordena ou compara por ele.
+
+### 4.24 Busca por trigramas, não por texto completo
+
+Busca em código, título e descrição com `lower(coluna) LIKE '%termo%'`, acelerada por índices GIN de `pg_trgm` sobre a mesma expressão. `tsvector` foi descartado: aplica radical e dicionário do português, e a busca de suporte é por pedaço de texto — código de erro, nome de máquina, "impress" achando "impressora". O trigrama acelera exatamente a semântica que já existia.
+
 ## 5. Requisitos não funcionais na prática
 
 | Requisito | Como é atendido |
@@ -282,7 +302,9 @@ E-mail e notificação no portal são gerados pelo `TicketNotificationIntercepto
 
 `docker compose up` sobe PostgreSQL e API. O frontend tem dois modos: `vite dev` apontando para a API, que é o de desenvolvimento, e o perfil `web` do compose, que compila o SPA e o serve por nginx.
 
-No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e aproxima o desenho de produção, onde Front Door ou Application Gateway ficam na frente dos dois. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
+No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e é o mesmo desenho de produção, onde o Caddy do `deploy/` fica na frente do nginx. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
+
+Produção tem compose próprio, em `deploy/`, descrito em [instalacao.md](instalacao.md): Caddy com HTTPS e CSP na borda, só ele publicando porta, a API confiando no `X-Forwarded-For` apenas da rede interna (`ForwardedHeaders:KnownNetworks`).
 
 O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhuma: depois da instalação o catálogo é do gestor), as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
 
@@ -290,10 +312,12 @@ O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhu
 
 ## 7. CI
 
-GitHub Actions (`.github/workflows/ci.yml`), em todo push e pull request, em três jobs paralelos:
+GitHub Actions (`.github/workflows/ci.yml`), em todo push e pull request, em quatro jobs:
 
 **Backend:** restore, build em Release, testes de unidade e de integração, e `ef migrations has-pending-model-changes` — que falha se alguém mudou uma entidade e esqueceu de gerar a migration. Os testes de integração usam o Docker do próprio runner, via Testcontainers; não há serviço de banco declarado no workflow, porque o ciclo de vida do container é do teste.
 
 **Frontend:** `npm ci`, typecheck, lint, testes (Vitest) e build. A versão do Node vem do `frontend/.nvmrc`, para não existirem duas fontes de verdade sobre isso no repositório.
 
 **Imagem da API:** `docker build` do Dockerfile, sem publicar. Serve para o Dockerfile não apodrecer em silêncio junto com o código.
+
+**Ponta a ponta:** sobe o compose com o perfil `web` e roda o Playwright de `e2e/` contra ele. O relatório fica como artefato do job quando algo falha.

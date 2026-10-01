@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Settings;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Domain.Enums;
 
@@ -33,6 +34,21 @@ public class AuthService(
         RegisterRequest request, CancellationToken cancellationToken = default)
     {
         var email = Normalize(request.Email);
+
+        // A política vem antes de olhar se o e-mail existe: com o cadastro fechado, nem
+        // "esse e-mail já tem conta" deve ser respondido a quem não poderia se cadastrar.
+        var policy = await db.SystemSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+
+        if (policy is { AllowSelfRegistration: false })
+        {
+            return new AuthResult.RegistrationClosed();
+        }
+
+        if (!SystemSettingsService.AcceptsEmail(policy, email))
+        {
+            return new AuthResult.EmailDomainNotAllowed(
+                (await new SystemSettingsService(db).GetAsync(cancellationToken)).AllowedEmailDomains);
+        }
 
         if (await Users().AnyAsync(u => u.Email == email, cancellationToken))
         {
@@ -199,6 +215,7 @@ public class AuthService(
         }
 
         user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+        user.PasswordChangeReason = UserAuditAction.PasswordChanged;
 
         // A senha agora é escolha da pessoa, e não mais um valor que passou por
         // configuração. A trava sai.
