@@ -1,14 +1,28 @@
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Auth;
 using OpsDesk.Domain.Entities;
 
 namespace OpsDesk.Application.Settings;
 
 /// <summary>Configuração geral, como o gestor a vê e edita.</summary>
-public record GeneralSettings(string OrganizationName, bool AllowSelfRegistration, IReadOnlyList<string> AllowedEmailDomains);
+/// <param name="MicrosoftSignInReady">
+/// O aplicativo do Entra ID da configuração de e-mail está completo e com secret legível. Ligado
+/// sem isso, o botão não aparece no login — a tela de configuração avisa.
+/// </param>
+public record GeneralSettings(
+    string OrganizationName,
+    bool AllowSelfRegistration,
+    IReadOnlyList<string> AllowedEmailDomains,
+    bool MicrosoftSignInEnabled,
+    bool MicrosoftSignInReady);
 
-public record UpdateGeneralSettingsRequest(string? OrganizationName, bool AllowSelfRegistration, IReadOnlyList<string>? AllowedEmailDomains);
+public record UpdateGeneralSettingsRequest(
+    string? OrganizationName,
+    bool AllowSelfRegistration,
+    IReadOnlyList<string>? AllowedEmailDomains,
+    bool MicrosoftSignInEnabled = false);
 
 /// <summary>
 /// O que a tela de login precisa saber antes de existir sessão. Público de propósito, e
@@ -22,7 +36,8 @@ public record PublicSettings(
     string OrganizationName,
     bool AllowSelfRegistration,
     IReadOnlyList<string> AllowedEmailDomains,
-    bool PasswordResetAvailable);
+    bool PasswordResetAvailable,
+    bool MicrosoftSignInAvailable);
 
 public class UpdateGeneralSettingsRequestValidator : AbstractValidator<UpdateGeneralSettingsRequest>
 {
@@ -40,12 +55,14 @@ public class UpdateGeneralSettingsRequestValidator : AbstractValidator<UpdateGen
 /// Configuração geral do sistema (README, seção 13.12): nome da organização e política de
 /// autocadastro.
 /// </summary>
-public class SystemSettingsService(IOpsDeskDbContext db)
+public class SystemSettingsService(IOpsDeskDbContext db, MicrosoftSignInSettings microsoft)
 {
     public const string AuditArea = "General";
 
     public async Task<GeneralSettings> GetAsync(CancellationToken cancellationToken = default) =>
-        ToView(await db.SystemSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? new SystemSettings());
+        await ViewAsync(
+            await db.SystemSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? new SystemSettings(),
+            cancellationToken);
 
     public async Task<PublicSettings> GetPublicAsync(CancellationToken cancellationToken = default)
     {
@@ -56,7 +73,11 @@ public class SystemSettingsService(IOpsDeskDbContext db)
             .AnyAsync(s => s.IsEnabled && s.PortalUrl != null, cancellationToken);
 
         return new PublicSettings(
-            general.OrganizationName, general.AllowSelfRegistration, general.AllowedEmailDomains, resetAvailable);
+            general.OrganizationName,
+            general.AllowSelfRegistration,
+            general.AllowedEmailDomains,
+            resetAvailable,
+            general is { MicrosoftSignInEnabled: true, MicrosoftSignInReady: true });
     }
 
     public async Task<GeneralSettings> UpdateAsync(
@@ -93,6 +114,12 @@ public class SystemSettingsService(IOpsDeskDbContext db)
             changed.Add("AllowedEmailDomains");
         }
 
+        if (settings.MicrosoftSignInEnabled != request.MicrosoftSignInEnabled)
+        {
+            settings.MicrosoftSignInEnabled = request.MicrosoftSignInEnabled;
+            changed.Add("MicrosoftSignInEnabled");
+        }
+
         if (changed.Count > 0)
         {
             settings.UpdatedById = actorId;
@@ -107,7 +134,7 @@ public class SystemSettingsService(IOpsDeskDbContext db)
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        return ToView(settings);
+        return await ViewAsync(settings, cancellationToken);
     }
 
     /// <summary>
@@ -148,8 +175,13 @@ public class SystemSettingsService(IOpsDeskDbContext db)
     private static List<string> Split(string? domains) =>
         (domains ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-    private static GeneralSettings ToView(SystemSettings s) => new(
+    /// <summary>Domínios aceitos no autocadastro, já separados.</summary>
+    public static IReadOnlyList<string> DomainsOf(SystemSettings? settings) => Split(settings?.AllowedEmailDomains);
+
+    private async Task<GeneralSettings> ViewAsync(SystemSettings s, CancellationToken cancellationToken) => new(
         s.OrganizationName ?? SystemSettings.DefaultOrganizationName,
         s.AllowSelfRegistration,
-        Split(s.AllowedEmailDomains));
+        Split(s.AllowedEmailDomains),
+        s.MicrosoftSignInEnabled,
+        await microsoft.IsAppReadyAsync(cancellationToken));
 }

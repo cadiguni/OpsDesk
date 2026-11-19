@@ -22,6 +22,11 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // identificação do remetente. Único, sem depender de comparação na aplicação.
         builder.HasIndex(u => u.Email).IsUnique();
 
+        // Uma identidade do Entra ID, uma conta. O índice é que garante isso quando dois
+        // primeiros logins da mesma pessoa chegam ao mesmo tempo.
+        builder.Property(u => u.EntraObjectId).HasMaxLength(64);
+        builder.HasIndex(u => u.EntraObjectId).IsUnique().HasFilter("entra_object_id IS NOT NULL");
+
         builder.Ignore(u => u.IsStaff);
     }
 }

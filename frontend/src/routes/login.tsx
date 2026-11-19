@@ -2,12 +2,13 @@ import { ThemeSelect } from '@/components/theme-select'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { microsoftSignInError, microsoftSignInUrl } from '@/features/auth/microsoft'
 import { usePublicOptions } from '@/features/auth/options'
 import { useSession } from '@/features/auth/session-context'
 import { loginSchema, type LoginFields } from '@/features/auth/schemas'
@@ -20,7 +21,9 @@ export function Login() {
   const organization = options.data?.organizationName ?? 'OpsDesk'
   const navigate = useNavigate()
   const location = useLocation()
-  const [failure, setFailure] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  // O retorno do login Microsoft que não deu certo volta para cá com o motivo na URL.
+  const [failure, setFailure] = useState<string | null>(() => microsoftSignInError(searchParams.get('microsoft')))
 
   const form = useForm<LoginFields>({
     resolver: zodResolver(loginSchema),
@@ -51,7 +54,26 @@ export function Login() {
           <CardDescription>Acesse com seu e-mail corporativo.</CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="grid gap-5">
+          {options.data?.microsoftSignInAvailable && (
+            <>
+              {/* Navegação, não chamada da API: o navegador passa pela Microsoft e volta. */}
+              <a
+                href={microsoftSignInUrl(window.location.origin + destination)}
+                className={buttonVariants({ variant: 'outline' })}
+              >
+                <MicrosoftLogo />
+                Entrar com a conta Microsoft
+              </a>
+
+              <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                <span className="bg-border h-px flex-1" />
+                ou com e-mail e senha
+                <span className="bg-border h-px flex-1" />
+              </div>
+            </>
+          )}
+
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-5" noValidate>
             <Field label="E-mail" error={form.formState.errors.email?.message}>
               {(field) => (
@@ -106,5 +128,17 @@ export function Login() {
         </p>
       )}
     </div>
+  )
+}
+
+/** Os quatro quadrados, como a Microsoft pede que o botão de login os mostre. */
+function MicrosoftLogo() {
+  return (
+    <svg viewBox="0 0 21 21" aria-hidden="true">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
   )
 }

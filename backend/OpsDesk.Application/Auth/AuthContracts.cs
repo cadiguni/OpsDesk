@@ -87,6 +87,13 @@ public abstract record AuthResult
         public string Message => $"Use seu e-mail corporativo ({string.Join(", ", Domains.Select(d => "@" + d))}).";
     }
 
+    /// <summary>
+    /// O Entra ID confirmou a pessoa, mas o OpsDesk não a deixa entrar: conta desativada, ou
+    /// o e-mail já pertence a uma conta vinculada a outra identidade do Entra ID.
+    /// </summary>
+    /// <param name="Reason">Código curto, que a tela de login traduz.</param>
+    public sealed record MicrosoftAccountRejected(string Reason) : AuthResult;
+
     /// <summary>Refresh token ausente, expirado, revogado ou desconhecido.</summary>
     public sealed record InvalidRefreshToken : AuthResult
     {

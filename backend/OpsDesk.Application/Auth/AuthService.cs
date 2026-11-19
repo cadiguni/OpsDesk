@@ -46,8 +46,7 @@ public class AuthService(
 
         if (!SystemSettingsService.AcceptsEmail(policy, email))
         {
-            return new AuthResult.EmailDomainNotAllowed(
-                (await new SystemSettingsService(db).GetAsync(cancellationToken)).AllowedEmailDomains);
+            return new AuthResult.EmailDomainNotAllowed(SystemSettingsService.DomainsOf(policy));
         }
 
         if (await Users().AnyAsync(u => u.Email == email, cancellationToken))
@@ -144,6 +143,77 @@ public class AuthService(
         }
 
         return new AuthResult.InvalidCredentials();
+    }
+
+    /// <summary>
+    /// Abre a sessão de quem o Entra ID autenticou, criando a conta no primeiro acesso.
+    ///
+    /// A pessoa é reconhecida pelo <c>oid</c> e, na falta dele, pelo e-mail — é assim que a
+    /// conta que já existia, com senha ou criada por um e-mail recebido, passa a entrar pela
+    /// Microsoft sem duplicar e sem perder perfil nem chamados. O vínculo pelo e-mail só é
+    /// seguro porque o login aceita um único tenant, onde quem define o e-mail é o
+    /// administrador da empresa (ver <see cref="MicrosoftSignInSettings.IsSingleTenant"/>).
+    ///
+    /// Conta criada aqui nasce solicitante e sem senha, como a do autocadastro; o perfil de
+    /// equipe continua sendo dado pelo gestor.
+    /// </summary>
+    public async Task<AuthResult> SignInWithMicrosoftAsync(
+        EntraIdentity identity, CancellationToken cancellationToken = default)
+    {
+        var email = Normalize(identity.Email);
+
+        var user = await Users().SingleOrDefaultAsync(u => u.EntraObjectId == identity.ObjectId, cancellationToken)
+                   ?? await Users().SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
+
+        if (user is null)
+        {
+            user = new User
+            {
+                Name = string.IsNullOrWhiteSpace(identity.Name) ? email[..email.IndexOf('@')] : identity.Name.Trim(),
+                Email = email,
+                Role = UserRole.Requester,
+                EntraObjectId = identity.ObjectId
+            };
+
+            db.Users.Add(user);
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Dois primeiros logins simultâneos — duas abas, dois cliques. Quem perdeu a
+                // corrida encontra a conta que o outro criou e segue por ela.
+                db.Users.Remove(user);
+
+                user = await Users().SingleOrDefaultAsync(u => u.EntraObjectId == identity.ObjectId, cancellationToken);
+
+                if (user is null)
+                {
+                    return new AuthResult.MicrosoftAccountRejected("conflito");
+                }
+            }
+        }
+        else if (user.EntraObjectId is null)
+        {
+            user.EntraObjectId = identity.ObjectId;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        else if (user.EntraObjectId != identity.ObjectId)
+        {
+            // O e-mail é desta conta, mas ela já entra por outra identidade do Entra ID —
+            // conta recriada no tenant, ou e-mail reaproveitado para outra pessoa. Assumir
+            // a conta pelo e-mail entregaria os chamados de uma pessoa a outra.
+            return new AuthResult.MicrosoftAccountRejected("conflito");
+        }
+
+        if (!user.IsActive)
+        {
+            return new AuthResult.MicrosoftAccountRejected("desativada");
+        }
+
+        return await IssueSessionAsync(user, cancellationToken);
     }
 
     public async Task<AuthResult> RefreshAsync(

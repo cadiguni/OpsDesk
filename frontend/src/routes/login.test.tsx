@@ -19,6 +19,7 @@ function withOptions(overrides: Partial<PublicOptions>) {
     allowSelfRegistration: true,
     allowedEmailDomains: [],
     passwordResetAvailable: true,
+    microsoftSignInAvailable: false,
     ...overrides,
   }
 }
@@ -42,5 +43,36 @@ describe('tela de login', () => {
     await screen.findByText('Entrar no Central de TI ACME')
     expect(screen.queryByRole('link', { name: 'Esqueci minha senha' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Cadastre-se' })).not.toBeInTheDocument()
+  })
+
+  it('oferece a conta Microsoft só quando o gestor ligou e o aplicativo está configurado', async () => {
+    withOptions({ microsoftSignInAvailable: true })
+
+    renderWithProviders(<Login />, { route: '/entrar' })
+
+    const button = await screen.findByRole('link', { name: 'Entrar com a conta Microsoft' })
+    const href = new URL(button.getAttribute('href')!)
+
+    // Vai à API, que leva à Microsoft; o destino volta como endereço completo, porque a API
+    // pode estar em outra origem e precisa saber para onde devolver o navegador.
+    expect(href.pathname).toBe('/api/auth/microsoft/start')
+    expect(href.searchParams.get('returnTo')).toBe(`${window.location.origin}/`)
+  })
+
+  it('sem o login Microsoft disponível, não mostra o botão', async () => {
+    withOptions({ microsoftSignInAvailable: false })
+
+    renderWithProviders(<Login />, { route: '/entrar' })
+
+    await screen.findByText('Entrar no Central de TI ACME')
+    expect(screen.queryByRole('link', { name: 'Entrar com a conta Microsoft' })).not.toBeInTheDocument()
+  })
+
+  it('explica o retorno do login Microsoft que não deu certo', async () => {
+    withOptions({ microsoftSignInAvailable: true })
+
+    renderWithProviders(<Login />, { route: '/entrar?microsoft=desativada' })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sua conta está desativada.')
   })
 })

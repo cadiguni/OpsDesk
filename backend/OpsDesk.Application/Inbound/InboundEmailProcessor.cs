@@ -73,7 +73,8 @@ public partial class InboundEmailProcessor(
 
         if (email.EmailAccount.InternalDomainsOnly)
         {
-            internalDomains = (await new SystemSettingsService(db).GetAsync(cancellationToken)).AllowedEmailDomains;
+            internalDomains = SystemSettingsService.DomainsOf(
+                await db.SystemSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken));
         }
 
         var spam = SpamClassifier.Classify(email.FromAddress, email.Subject, email.BodyText, headers, rules, internalDomains);

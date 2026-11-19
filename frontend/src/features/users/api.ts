@@ -72,6 +72,7 @@ export type UserAuditAction =
   | 'PasswordChanged'
   | 'PasswordReset'
   | 'PasswordSetByLink'
+  | 'MicrosoftAccountLinked'
 
 export type UserAuditItem = {
   action: UserAuditAction

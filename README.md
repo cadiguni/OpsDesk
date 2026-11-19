@@ -746,10 +746,13 @@ Campos:
 Ações:
 
 * entrar;
+* **entrar com a conta Microsoft**, quando o gestor ligou e o aplicativo do Entra ID está configurado (seção 13.12). A pessoa não cria senha: no primeiro acesso a conta nasce como solicitante, e quem já tinha conta com o mesmo e-mail — com senha, criada por e-mail recebido ou pela importação — passa a entrar por ela, com o mesmo perfil e os mesmos chamados. Conta desativada não entra;
 * acessar tela de cadastro, quando o autocadastro estiver ligado (seção 13.12);
 * "Esqueci minha senha", quando o envio de e-mail estiver configurado (seção 13.13).
 
 A tela pergunta à API o que oferecer (`GET /api/auth/options`, anônimo), em vez de mostrar link que levaria a uma recusa.
+
+O login Microsoft que não dá certo volta para esta tela com o motivo — cancelado, demorou demais, conta desativada, e-mail já ligado a outra conta Microsoft. O detalhe técnico fica no log da API. O fluxo e as decisões estão em [docs/arquitetura.md](docs/arquitetura.md), decisão 4.25.
 
 ---
 
@@ -971,7 +974,8 @@ Só gestor, em duas abas.
 
 * **nome da organização**, que aparece no login, no menu e nos e-mails de convite e de senha;
 * **autocadastro**, ligado ou desligado. Desligado, só o gestor cria contas;
-* **domínios de e-mail aceitos no autocadastro**, como `empresa.com.br`. A comparação é exata: `empresa.com.br` não aceita `outra-empresa.com.br` nem `sub.empresa.com.br`. Lista vazia aceita qualquer domínio. A mesma lista serve à caixa monitorada configurada para aceitar só domínios internos.
+* **domínios de e-mail aceitos no autocadastro**, como `empresa.com.br`. A comparação é exata: `empresa.com.br` não aceita `outra-empresa.com.br` nem `sub.empresa.com.br`. Lista vazia aceita qualquer domínio. A mesma lista serve à caixa monitorada configurada para aceitar só domínios internos;
+* **entrar com a conta Microsoft**, ligado ou desligado. Usa o aplicativo do Entra ID da aba E-mail — tenant, client id e secret —, que precisa ter o tenant pelo ID ou pelo domínio, nunca `common` ou `organizations`. A tela mostra o URI de redirecionamento a registrar no aplicativo e avisa enquanto faltar algo. É independente do autocadastro: com o autocadastro desligado, as pessoas do tenant continuam entrando pela Microsoft, e só a conta com senha deixa de ser criada pelo portal.
 
 **E-mail:** envio pelo Microsoft Graph e caixas monitoradas — ver seção 18, versão 1.2, e [docs/integracao-email.md](docs/integracao-email.md).
 
@@ -1042,12 +1046,15 @@ Campos:
 * Role;
 * IsActive;
 * MustChangePassword;
+* EntraObjectId;
 * CreatedAt;
 * UpdatedAt.
 
+`EntraObjectId` é o identificador da pessoa no Entra ID (claim `oid`), gravado no primeiro login com a conta Microsoft. Nos logins seguintes é ele, e não o e-mail, que reconhece a pessoa. Único quando preenchido. O vínculo entra na trilha de auditoria da conta.
+
 `MustChangePassword` marca senha provisória. Nasce do bootstrap do primeiro gestor, cuja senha chega por variável de ambiente, e da senha provisória que o gestor recebe ao cadastrar ou redefinir alguém sem e-mail configurado (seção 13.9). Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém uma credencial que passou pela mão de outra pessoa valendo uma vez, e não para sempre.
 
-`PasswordHash` é anulável. Conta sem senha não autentica até a pessoa definir uma por link (seção 13.13). Nasce assim o solicitante que chegou pela caixa de e-mail ou pela importação, a pessoa convidada pelo gestor e a conta cuja senha o gestor redefiniu por e-mail.
+`PasswordHash` é anulável. Conta sem senha não autentica **com senha** até a pessoa definir uma por link (seção 13.13) — pela conta Microsoft, entra normalmente. Nasce assim o solicitante que chegou pela caixa de e-mail ou pela importação, a pessoa convidada pelo gestor e a conta cuja senha o gestor redefiniu por e-mail.
 
 ---
 
@@ -1554,6 +1561,8 @@ A verificação roda a cada cinco minutos no processo da API (`SlaAlerts:Interva
 **Entregue: abertura de chamado por e-mail e caixa de SPAM.** Uma caixa do Microsoft 365, lida pelo Graph a cada minuto: mensagem nova vira chamado, resposta vira comentário — e reabre o chamado, pela regra da seção 5.9 —, e o que parece spam fica retido para revisão (seção 13.15). Especificação, e onde a implementação se afastou dela: [docs/integracao-email.md](docs/integracao-email.md).
 
 **Entregue: importação de CSV e JSON, e do Freshdesk e do Freshservice.** Pelo arquivo de exportação das duas ferramentas, com conferência antes de gravar (seção 13.14). Chamado importado fica fora dos indicadores de SLA (seção 8.3).
+
+**Entregue: entrar com a conta Microsoft.** Botão no login, ligado pelo gestor nas configurações gerais, com o mesmo aplicativo do Entra ID do e-mail. Quem é da empresa entra sem criar senha (seção 13.1). Decisões em [docs/arquitetura.md](docs/arquitetura.md), 4.25; o registro no Entra ID em [docs/integracao-email.md](docs/integracao-email.md), seção 6.2.
 
 ### Infraestrutura, quando sair do ambiente local
 

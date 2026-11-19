@@ -285,6 +285,19 @@ A importação de chamados é a exceção deliberada: grava `Ticket` direto, com
 
 Busca em código, título e descrição com `lower(coluna) LIKE '%termo%'`, acelerada por índices GIN de `pg_trgm` sobre a mesma expressão. `tsvector` foi descartado: aplica radical e dicionário do português, e a busca de suporte é por pedaço de texto — código de erro, nome de máquina, "impress" achando "impressora". O trigrama acelera exatamente a semântica que já existia.
 
+### 4.25 Login Microsoft é conduzido pela API, e termina no mesmo cookie de refresh
+
+OpenID Connect, fluxo de código de autorização com PKCE, conduzido por duas rotas da API: `GET /api/auth/microsoft/start` leva o navegador ao Entra ID, e `GET /api/auth/microsoft/callback` troca o código, abre a sessão e devolve o navegador ao SPA. O SPA não usa MSAL nem guarda token do Entra ID: ao voltar, ele renova a sessão como em qualquer recarga de página (4.6).
+
+* **Pela API, e não pelo navegador.** O client secret já mora no servidor, cifrado (invariante 12), e a sessão nasce no mesmo cookie `httpOnly` do login com senha. Com MSAL no SPA, o token do Entra ID passaria pela memória do navegador e a API teria de validar um token vindo de lá — com assinatura, chaves publicadas e tudo o que isso pede.
+* **O mesmo aplicativo do Entra ID do e-mail.** Um secret só para trocar quando vencer, e a tela de e-mail já avisa do vencimento. O login acrescenta ao aplicativo um URI de redirecionamento Web e as permissões delegadas `openid`, `profile` e `email`.
+* **Só tenant único.** `common`, `organizations` e `consumers` não ligam o login: aceitariam conta de qualquer empresa, e cada uma viraria solicitante. Com o tenant fixo, quem define e-mail e UPN é o administrador da empresa — e é isso que torna seguro vincular a conta existente pelo e-mail no primeiro acesso.
+* **O id token não tem a assinatura conferida.** Ele vem direto do endpoint de token, por TLS, numa requisição autenticada pelo client secret; o OpenID Connect prevê a dispensa nesse caso (Core 1.0, 3.1.3.7, item 6). Emissor, audiência, tenant, nonce e validade são conferidos, em `EntraIdTokenReader`. Se o token um dia passar pelo navegador, a dispensa deixa de valer.
+* **Reconhecimento pelo `oid`, vínculo pelo e-mail.** O primeiro login acha a conta pelo e-mail e grava o `oid`; os seguintes acham pelo `oid`, porque e-mail muda. E-mail cuja conta já está ligada a **outro** `oid` é recusado: assumir a conta pelo e-mail entregaria os chamados de uma pessoa a outra.
+* **O estado do fluxo fica num cookie cifrado, `SameSite=Lax`.** State, nonce, verificador PKCE e destino, protegidos pelo Data Protection com validade de dez minutos e caminho `/api/auth/microsoft`. Lax, e não Strict: o retorno é navegação vinda de `login.microsoftonline.com`, e cookie Strict não a acompanha. Por isso também `response_mode=query` — um `form_post` chegaria como POST entre sites, sem cookie nenhum. Sem o cookie ou com outro state, o retorno é recusado: é o que impede alguém de logar a vítima na própria conta com um link de retorno pronto.
+* **Destino só de origem conhecida.** O SPA manda o endereço de volta; a API só aceita a própria origem, a do portal (configuração de e-mail) e as do CORS. O resto vira o portal. Sem isso o login seria um redirecionamento aberto.
+* **Independente do autocadastro.** O autocadastro é a conta com senha; desligá-lo não desliga a Microsoft. A lista de domínios do autocadastro também não se aplica: quem decide quem entra é o tenant.
+
 ## 5. Requisitos não funcionais na prática
 
 | Requisito | Como é atendido |

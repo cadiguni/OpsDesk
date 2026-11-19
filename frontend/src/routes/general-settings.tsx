@@ -5,12 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useSession } from '@/features/auth/session-context'
+import { microsoftCallbackUrl } from '@/features/auth/microsoft'
 import type { GeneralSettings } from '@/features/settings/api'
 import { useGeneralSettings, useUpdateGeneralSettings } from '@/features/settings/queries'
 import { SettingsTabs } from '@/features/settings/settings-tabs'
 import { errorMessage } from '@/lib/api'
 
-/** Configurações gerais (README, seção 13.12): nome da organização e autocadastro. Só gestor. */
+/** Configurações gerais (README, seção 13.12): nome da organização, autocadastro e login Microsoft. Só gestor. */
 export function GeneralSettingsPage() {
   const { role } = useSession()
   const settings = useGeneralSettings(role === 'Manager')
@@ -47,6 +48,7 @@ function GeneralForm({ settings }: { settings: GeneralSettings }) {
   const [name, setName] = useState(settings.organizationName)
   const [allowSelfRegistration, setAllowSelfRegistration] = useState(settings.allowSelfRegistration)
   const [domains, setDomains] = useState(settings.allowedEmailDomains.join(', '))
+  const [microsoftSignIn, setMicrosoftSignIn] = useState(settings.microsoftSignInEnabled)
 
   return (
     <form
@@ -60,6 +62,7 @@ function GeneralForm({ settings }: { settings: GeneralSettings }) {
             .split(/[,\s]+/)
             .map((domain) => domain.trim())
             .filter(Boolean),
+          microsoftSignInEnabled: microsoftSignIn,
         })
       }}
     >
@@ -110,6 +113,39 @@ function GeneralForm({ settings }: { settings: GeneralSettings }) {
               />
             )}
           </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Conta Microsoft</CardTitle>
+          <CardDescription>
+            Botão &quot;Entrar com a conta Microsoft&quot; no login. Qualquer pessoa do tenant entra sem criar senha; no
+            primeiro acesso a conta nasce como solicitante, e quem já tinha conta com o mesmo e-mail continua com ela.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 text-sm">
+          <label className="flex items-center gap-2 font-medium">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={microsoftSignIn}
+              onChange={(event) => setMicrosoftSignIn(event.target.checked)}
+            />
+            Permitir entrar com a conta Microsoft
+          </label>
+
+          {!settings.microsoftSignInReady && (
+            <p role="note" className="text-amber-700 dark:text-amber-400">
+              Usa o aplicativo do Entra ID da aba E-mail: preencha lá o tenant (o ID, não <code>common</code>), o client
+              id e o client secret. Enquanto faltar, o botão não aparece no login.
+            </p>
+          )}
+
+          <div className="text-muted-foreground grid gap-1">
+            <span>No aplicativo do Entra ID, em Autenticação, adicione a plataforma Web com este URI de redirecionamento:</span>
+            <code className="bg-muted rounded px-2 py-1 break-all">{microsoftCallbackUrl()}</code>
+          </div>
         </CardContent>
       </Card>
 

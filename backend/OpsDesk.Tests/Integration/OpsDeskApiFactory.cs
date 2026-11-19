@@ -48,6 +48,9 @@ public class OpsDeskApiFactory(
     /// <summary>Caixa de entrada falsa: os testes colocam mensagens nela e mandam ler.</summary>
     public FakeMailboxReader Mailbox { get; } = new();
 
+    /// <summary>Entra ID falso, para o login com a conta Microsoft.</summary>
+    public FakeEntraSignIn Entra { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -101,6 +104,9 @@ public class OpsDeskApiFactory(
 
             services.RemoveAll<OpsDesk.Application.Inbound.IMailboxReader>();
             services.AddSingleton<OpsDesk.Application.Inbound.IMailboxReader>(Mailbox);
+
+            services.RemoveAll<OpsDesk.Application.Auth.IEntraSignIn>();
+            services.AddSingleton<OpsDesk.Application.Auth.IEntraSignIn>(Entra);
 
             services.AddSingleton<IStartupFilter, TestConnectionIpFilter>();
         });

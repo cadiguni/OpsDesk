@@ -83,7 +83,7 @@ O bootstrap só age quando **não existe nenhum gestor**. Rodar o `setup` de nov
 
 O que configurar, pela interface, antes de anunciar o sistema:
 
-1. **Configurações → Geral:** nome da organização, se as pessoas podem se cadastrar sozinhas e de quais domínios de e-mail;
+1. **Configurações → Geral:** nome da organização, se as pessoas podem se cadastrar sozinhas e de quais domínios de e-mail, e se entram com a conta Microsoft — o registro no Entra ID está em [integracao-email.md](integracao-email.md), seção 6.2;
 2. **Configurações → E-mail:** envio pelo Microsoft Graph e, se a empresa quiser abrir chamado por e-mail, a caixa monitorada. O passo a passo do aplicativo no Entra ID está em [integracao-email.md](integracao-email.md), seção 6;
 3. **Feriados:** os nacionais já estão lá. Faltam os municipais, os estaduais e o recesso de fim de ano;
 4. **Usuários:** cadastre os técnicos. Com o e-mail configurado, cada um recebe um convite para definir a própria senha;

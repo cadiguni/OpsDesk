@@ -94,6 +94,12 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
                 null, null, actor, now);
         }
 
+        var entra = entry.Property(u => u.EntraObjectId);
+        if (entra.IsModified && entra.CurrentValue is { } objectId && entra.OriginalValue != objectId)
+        {
+            yield return New(user.Id, UserAuditAction.MicrosoftAccountLinked, entra.OriginalValue, objectId, actor, now);
+        }
+
         // Só com motivo declarado: o rehash do login troca o hash sem trocar a senha.
         var password = entry.Property(u => u.PasswordHash);
         if (password.IsModified && user.PasswordChangeReason is { } reason)

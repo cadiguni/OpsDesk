@@ -57,7 +57,13 @@ export type GeneralSettings = {
   organizationName: string
   allowSelfRegistration: boolean
   allowedEmailDomains: string[]
+  microsoftSignInEnabled: boolean
+
+  /** O aplicativo do Entra ID da configuração de e-mail está completo. Só leitura. */
+  microsoftSignInReady: boolean
 }
+
+export type UpdateGeneralSettingsInput = Omit<GeneralSettings, 'microsoftSignInReady'>
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
   const { data } = await api.get<GeneralSettings>('/api/admin/settings/general')
@@ -65,7 +71,7 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   return data
 }
 
-export async function updateGeneralSettings(input: GeneralSettings): Promise<GeneralSettings> {
+export async function updateGeneralSettings(input: UpdateGeneralSettingsInput): Promise<GeneralSettings> {
   const { data } = await api.put<GeneralSettings>('/api/admin/settings/general', input)
 
   return data

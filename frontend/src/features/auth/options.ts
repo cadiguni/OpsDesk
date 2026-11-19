@@ -11,6 +11,9 @@ export type PublicOptions = {
   allowSelfRegistration: boolean
   allowedEmailDomains: string[]
   passwordResetAvailable: boolean
+
+  /** O gestor ligou o login Microsoft e o aplicativo do Entra ID está configurado. */
+  microsoftSignInAvailable: boolean
 }
 
 export async function getPublicOptions(): Promise<PublicOptions> {

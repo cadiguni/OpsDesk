@@ -202,6 +202,7 @@ try
         ResponseWriter = ReadinessResponse.WriteAsync
     }).AllowAnonymous();
     app.MapAuthEndpoints();
+    app.MapMicrosoftSignInEndpoints();
     app.MapTicketEndpoints();
     app.MapAttachmentEndpoints();
     app.MapDashboardEndpoints();

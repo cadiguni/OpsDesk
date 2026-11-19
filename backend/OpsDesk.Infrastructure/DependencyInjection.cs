@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<IAccessTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();
         services.AddScoped<AuthService>();
+        services.AddScoped<MicrosoftSignInSettings>();
         services.AddScoped<PasswordResetService>();
         services.AddScoped<SystemSettingsService>();
         services.AddScoped<TicketService>();
@@ -215,6 +216,9 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(30));
         services.AddHttpClient<IMailboxReader, GraphMailboxReader>(client =>
             client.Timeout = TimeSpan.FromSeconds(60));
+
+        // Quem espera é uma pessoa diante da tela de login.
+        services.AddHttpClient<IEntraSignIn, EntraSignIn>(client => client.Timeout = TimeSpan.FromSeconds(20));
     }
 
     private static string ConnectionString(IServiceProvider provider) =>

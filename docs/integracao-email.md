@@ -265,6 +265,17 @@ Tarefa do administrador do Microsoft 365, uma vez:
 3. **restringir o aplicativo à caixa de suporte**, por *Application Access Policy* ou *RBAC for Applications* do Exchange Online. Sem a restrição, a permissão vale para todas as caixas da empresa, e um secret vazado lê e envia e-mail em nome de qualquer pessoa;
 4. no OpsDesk, em **Configurações → E-mail**, preencher tenant, client id, secret e remetente, e usar **enviar e-mail de teste**. A caixa monitorada é cadastrada na mesma tela, com categoria e prioridade padrão.
 
+### 6.2 O mesmo aplicativo para o login com a conta Microsoft
+
+Opcional. Para o botão "Entrar com a conta Microsoft" (README, seção 13.1), no mesmo aplicativo:
+
+1. em **Autenticação**, adicionar a plataforma **Web** com o URI de redirecionamento que a tela **Configurações → Geral** mostra — `https://<endereço do portal>/api/auth/microsoft/callback`. Em desenvolvimento, `http://localhost:8080/api/auth/microsoft/callback`;
+2. em **Permissões de API**, as permissões **delegadas** `openid`, `profile` e `email` do Microsoft Graph, com consentimento do administrador para a organização — sem ele, cada pessoa veria uma tela de consentimento no primeiro acesso;
+3. o tenant na tela de e-mail precisa ser o ID ou o domínio da empresa. Com `common` ou `organizations` o login não liga;
+4. em **Configurações → Geral**, ligar **Permitir entrar com a conta Microsoft**.
+
+O envio de e-mail não precisa estar ligado: o login usa só tenant, client id e secret. O secret é o mesmo — quando vencer, param os dois.
+
 Comentários internos nunca são enviados por e-mail. Essa é a mesma regra da seção 15 do README, e vale aqui com a mesma força: a caixa de saída é apenas mais um lugar onde ela pode ser violada.
 
 ---

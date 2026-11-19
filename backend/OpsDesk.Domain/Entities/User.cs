@@ -32,6 +32,13 @@ public class User : IHasUpdatedAt
     /// </summary>
     public bool MustChangePassword { get; set; }
 
+    /// <summary>
+    /// Identificador da pessoa no Entra ID (claim <c>oid</c>), gravado no primeiro login com a
+    /// conta Microsoft. É ele, e não o e-mail, que reconhece a pessoa nos logins seguintes:
+    /// e-mail muda com casamento, troca de domínio ou correção de grafia, e o <c>oid</c> não.
+    /// </summary>
+    public string? EntraObjectId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

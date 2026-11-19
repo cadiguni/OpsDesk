@@ -19,5 +19,8 @@ public enum UserAuditAction
     PasswordReset,
 
     /// <summary>A pessoa definiu a senha pelo link do e-mail.</summary>
-    PasswordSetByLink
+    PasswordSetByLink,
+
+    /// <summary>A conta passou a entrar com a conta Microsoft; o valor novo é o <c>oid</c> do Entra ID.</summary>
+    MicrosoftAccountLinked
 }

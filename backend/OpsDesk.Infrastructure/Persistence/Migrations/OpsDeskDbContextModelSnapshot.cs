@@ -789,6 +789,10 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("created_at");
 
+                    b.Property<bool>("MicrosoftSignInEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("microsoft_sign_in_enabled");
+
                     b.Property<string>("OrganizationName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -1120,6 +1124,11 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(320)")
                         .HasColumnName("email");
 
+                    b.Property<string>("EntraObjectId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("entra_object_id");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
@@ -1155,6 +1164,11 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasDatabaseName("ix_users_email");
+
+                    b.HasIndex("EntraObjectId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_entra_object_id")
+                        .HasFilter("entra_object_id IS NOT NULL");
 
                     b.ToTable("users", (string)null);
                 });

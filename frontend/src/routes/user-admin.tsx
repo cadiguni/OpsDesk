@@ -294,6 +294,7 @@ const auditLabels: Record<UserAuditAction, string> = {
   PasswordChanged: 'Trocou a própria senha',
   PasswordReset: 'Senha redefinida',
   PasswordSetByLink: 'Senha definida pelo link do e-mail',
+  MicrosoftAccountLinked: 'Passou a entrar com a conta Microsoft',
 }
 
 function UserHistory({ userId }: { userId: string }) {

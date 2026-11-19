@@ -29,6 +29,13 @@ public class SystemSettings : IHasUpdatedAt
     /// </summary>
     public string? AllowedEmailDomains { get; set; }
 
+    /// <summary>
+    /// Botão "Entrar com Microsoft" no login. Usa o aplicativo do Entra ID já configurado para o
+    /// e-mail (tenant, client id e secret), e cria a conta de solicitante no primeiro acesso de
+    /// qualquer pessoa do tenant — independentemente do autocadastro, que é o cadastro com senha.
+    /// </summary>
+    public bool MicrosoftSignInEnabled { get; set; }
+
     public Guid? UpdatedById { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
