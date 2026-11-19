@@ -1,0 +1,99 @@
+# Configuração do nginx do SPA. É um template: a imagem oficial do nginx passa este
+# arquivo pelo envsubst na subida e grava o resultado em /etc/nginx/conf.d/default.conf.
+# Só variáveis com prefixo OPSDESK_ são trocadas (NGINX_ENVSUBST_FILTER, no Dockerfile);
+# as do próprio nginx, como $host, passam intactas.
+#
+#   OPSDESK_API_UPSTREAM              para onde vai /api. No compose, `api:8080`; no App
+#                                      Service com sidecar, `127.0.0.1:8080`.
+#   OPSDESK_EDGE_SETS_FORWARDED_FOR   `true` quando a borda já entrega o X-Forwarded-For
+#                                      pronto e nada alcança este nginx sem passar por ela,
+#                                      como no App Service. Ver o map abaixo.
+#
+# Os valores padrão estão no Dockerfile.
+
+# Esquema original da requisição. Atrás do Caddy (deploy/docker-compose.yml) ou do App
+# Service, o nginx recebe HTTP mesmo quando a pessoa usa HTTPS, e repassar $scheme diria à
+# API que a conexão não é segura. Sem proxy na frente, vale o próprio $scheme.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
+# Cadeia do X-Forwarded-For entregue à API.
+#
+# No compose, o nginx acrescenta quem o chamou (o Caddy), e a API confia na rede interna
+# para ler os dois saltos (ForwardedHeaders:KnownNetworks). No App Service quem chama o
+# nginx é o front-end da plataforma, com endereço interno que não é publicado — não há
+# rede para a API confiar. Lá o cabeçalho segue como a borda o montou, com o IP de quem
+# acessa por último, e a API lê só esse salto, vindo do nginx em 127.0.0.1.
+map "${OPSDESK_EDGE_SETS_FORWARDED_FOR}" $opsdesk_forwarded_for {
+    "true"  $http_x_forwarded_for;
+    default $proxy_add_x_forwarded_for;
+}
+
+server {
+    # IPv4 e IPv6: no Alpine, `localhost` resolve primeiro para ::1, e um nginx só em IPv4
+    # recusava o próprio healthcheck do contêiner.
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    server_tokens off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    # Cabeçalhos de segurança, aqui e em cada location que declara add_header próprio:
+    # no nginx, um add_header dentro da location descarta todos os herdados do server.
+    include /etc/nginx/snippets/security-headers.conf;
+
+    # A API atrás da mesma origem do SPA.
+    #
+    # É o que elimina CORS e cookie entre origens: o navegador vê um endereço só, e o
+    # refresh token viaja como cookie de primeira parte. O cookie é SameSite=Strict, então
+    # separar SPA e API em origens diferentes derruba a sessão a cada recarga.
+    location /api/ {
+        proxy_pass http://${OPSDESK_API_UPSTREAM};
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $opsdesk_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+
+        # O envio de anexo aceita até 10 MB por arquivo; o padrão do nginx é 1 MB e
+        # cortaria o upload antes de a API poder responder qual é o limite.
+        client_max_body_size 32m;
+
+        # Download de anexo grande não precisa passar pelo buffer em disco do nginx.
+        proxy_buffering off;
+    }
+
+    # Swagger, liveness e readiness, para não precisar trocar de porta ao depurar.
+    location ~ ^/(swagger|openapi|health|ready) {
+        proxy_pass http://${OPSDESK_API_UPSTREAM};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $opsdesk_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+    }
+
+    # Os arquivos com hash no nome podem ser cacheados para sempre; o index.html, nunca —
+    # é ele que aponta para o bundle novo depois de um deploy.
+    location /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Rota do SPA: qualquer caminho desconhecido devolve o index, e o React Router resolve.
+    # Sem isto, recarregar a página em /chamados/<id> dá 404 do nginx.
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

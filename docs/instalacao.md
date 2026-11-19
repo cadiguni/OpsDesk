@@ -15,8 +15,8 @@ navegador ──HTTPS──► caddy ──► web (nginx + SPA) ──/api─�
 
 | Serviço | Papel | Volume |
 | --- | --- | --- |
-| `caddy` | borda: HTTPS, redirecionamento de HTTP e cabeçalhos de segurança (CSP, HSTS) | `caddy-data`, com os certificados e a CA interna |
-| `web` | SPA compilado, servido por nginx, que repassa `/api` para a API | — |
+| `caddy` | borda: HTTPS e redirecionamento de HTTP | `caddy-data`, com os certificados e a CA interna |
+| `web` | SPA compilado, servido por nginx, que repassa `/api` para a API e aplica os cabeçalhos de segurança (CSP, HSTS) | — |
 | `api` | a API, em `Production`, como usuário sem privilégio | `attachments-data` (anexos) e `keys-data` (chaves de cifragem) |
 | `postgres` | banco | `postgres-data` |
 

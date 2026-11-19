@@ -317,7 +317,9 @@ OpenID Connect, fluxo de código de autorização com PKCE, conduzido por duas r
 
 No perfil `web` o nginx também repassa `/api` para a API, o que põe SPA e API na mesma origem. Isso tira CORS e cookie entre origens do caminho no ambiente local e é o mesmo desenho de produção, onde o Caddy do `deploy/` fica na frente do nginx. A imagem é construída com `VITE_API_URL=/` justamente para o cliente chamar caminho relativo.
 
-Produção tem compose próprio, em `deploy/`, descrito em [instalacao.md](instalacao.md): Caddy com HTTPS e CSP na borda, só ele publicando porta, a API confiando no `X-Forwarded-For` apenas da rede interna (`ForwardedHeaders:KnownNetworks`).
+Produção tem compose próprio, em `deploy/`, descrito em [instalacao.md](instalacao.md): Caddy com HTTPS na borda, só ele publicando porta, a API confiando no `X-Forwarded-For` apenas da rede interna (`ForwardedHeaders:KnownNetworks`). No Azure, o App Service faz o papel do Caddy, e o nginx e a API rodam como contêineres da mesma Web App ([azure.md](azure.md)).
+
+Os cabeçalhos de segurança (CSP, HSTS e os demais) ficam no nginx do SPA, em `frontend/nginx/security-headers.conf`, e não na borda: o nginx é o único componente presente em toda forma de subir. A configuração do nginx é um template, e o endereço da API (`OPSDESK_API_UPSTREAM`) e o tratamento do `X-Forwarded-For` (`OPSDESK_EDGE_SETS_FORWARDED_FOR`) vêm de variável de ambiente.
 
 O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhuma: depois da instalação o catálogo é do gestor), as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
 

@@ -18,7 +18,7 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 **Frontend:** login (com senha ou conta Microsoft), cadastro, troca e definição de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status (inclusive reabrir) e atribuição, dashboard com gráficos e período, notificações, e-mails recebidos e SPAM, e a área de administração (usuários, categorias, feriados, importação, configurações).
 
-**Produção:** `deploy/` — compose com Caddy e HTTPS, `.env` gerado com segredos aleatórios, backup e restauração. Guia em `docs/instalacao.md`.
+**Produção:** `deploy/` — compose com Caddy e HTTPS, `.env` gerado com segredos aleatórios, backup e restauração. Guia em `docs/instalacao.md`. No Azure, uma Web App com nginx e API como contêineres (sidecar), descrita em `docs/azure.md`; o `azure-pipelines.yml` da raiz só estende o template de um repositório de deploy privado.
 
 **Endpoints:**
 
@@ -65,6 +65,7 @@ Cada assunto tem uma única fonte de verdade. Antes de responder sobre regra de 
 | `docs/arquitetura.md` | stack, estrutura do repositório, decisões de arquitetura |
 | `docs/integracao-email.md` | ingestão de e-mail e caixa de SPAM (versão 2.0), e onde a implementação se afastou da especificação |
 | `docs/instalacao.md` | instalação em produção, atualização, backup, Azure Blob, réplicas |
+| `docs/azure.md` | implantação no Azure App Service (sidecar), PostgreSQL Flexible e pipeline |
 | `docs/atendimento-e-aparencia.md` | enviar e fechar, interface de atendimento, temas |
 
 Se uma mudança de código contrariar um desses documentos, atualize o documento na mesma alteração. Documentação divergente do código é pior do que documentação ausente.
@@ -258,7 +259,8 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * **O `sendMail` do Graph não aceita `In-Reply-To` nem `References`**, só cabeçalho `x-`. A resposta por e-mail volta para o chamado pelo código `[OPS-000123]` no assunto. Não remova o código do assunto dos avisos.
 * **Fila de saída com várias réplicas: a reserva é um `ExecuteUpdate` condicional** em `NextAttemptAt`. Selecionar e depois marcar, em dois passos, manda o mesmo e-mail duas vezes — o teste concorrente mandava 9 em vez de 5.
 * **O Azurite recusa a versão de API do SDK mais novo** com 400. Os testes sobem o emulador com `--skipApiVersionCheck`. Connection string em `AttachmentStorage:AzureBlob` só é aceita para o emulador (`AccountName=devstoreaccount1` ou `UseDevelopmentStorage=true`): conta de verdade usa `ServiceUri` e identidade.
-* **A CSP do Caddy bloqueia script inline.** O tema é aplicado antes do React por `public/theme-init.js`, e não por `<script>` no `index.html`. Script inline novo some em produção e funciona no `npm run dev`, que não passa pelo Caddy.
+* **A CSP do nginx bloqueia script inline.** O tema é aplicado antes do React por `public/theme-init.js`, e não por `<script>` no `index.html`. Script inline novo some no contêiner do SPA (perfil `web`, compose de produção e Azure) e funciona no `npm run dev`, que não passa pelo nginx. Os cabeçalhos de segurança moram em `frontend/nginx/security-headers.conf`, e não no Caddy: repeti-los na borda duplicaria os cabeçalhos, e `X-Frame-Options` duplicado é tratado como inválido por alguns navegadores. E todo `location` com `add_header` próprio precisa do `include` desse arquivo, porque no nginx o `add_header` da `location` descarta os herdados do `server`.
+* **A configuração do nginx do SPA é template** (`frontend/nginx/default.conf.template`), passada pelo envsubst da imagem oficial só para variáveis `OPSDESK_`. Variável de ambiente nova no template precisa desse prefixo e de valor padrão no Dockerfile; sem padrão, o envsubst a deixa literal e o nginx recusa subir.
 * **No Alpine, `localhost` resolve primeiro para `::1`.** O nginx do SPA escuta também em `[::]:80`, e os healthchecks usam `127.0.0.1`. Sem isso o contêiner fica `unhealthy` com o nginx respondendo normalmente pelo IPv4.
 * **Script de deploy no Git Bash:** argumento que começa com `/` vira caminho do Windows antes de chegar ao `docker`. Os scripts exportam `MSYS_NO_PATHCONV=1` e usam `pwd -W` para o caminho do volume. E `set -o pipefail` com `head` sai com 141 (SIGPIPE): o `new-env.sh` desliga o pipefail só na função que sorteia os segredos.
 * **Captura de tela do dashboard com `fullPage` reinicia a animação do Recharts** e sai com as barras vazias. O teste de ponta a ponta usa viewport alto em vez de `fullPage`.

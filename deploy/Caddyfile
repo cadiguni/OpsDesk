@@ -1,5 +1,11 @@
-# Borda do OpsDesk: HTTPS e cabeçalhos de segurança, tudo repassado ao nginx do SPA, que
-# por sua vez repassa /api para a API.
+# Borda do OpsDesk: HTTPS, tudo repassado ao nginx do SPA, que por sua vez repassa /api
+# para a API.
+#
+# Os cabeçalhos de segurança (CSP, HSTS e os demais) não moram aqui: estão no nginx, em
+# frontend/nginx/security-headers.conf, para valerem igual em toda forma de subir — este
+# compose, o App Service do Azure e o perfil `web` local. Repeti-los aqui duplicaria os
+# cabeçalhos na resposta, e X-Frame-Options duplicado é tratado como inválido por alguns
+# navegadores.
 #
 # OPSDESK_SITE_ADDRESS é o nome pelo qual as pessoas acessam, como opsdesk.empresa.com.
 # OPSDESK_TLS escolhe o certificado:
@@ -17,16 +23,7 @@
 
 	encode zstd gzip
 
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		# Imagens de anexo chegam como blob: gerado no próprio navegador.
-		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-		-Server
-	}
+	header -Server
 
 	reverse_proxy web:80
 }

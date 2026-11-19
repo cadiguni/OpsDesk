@@ -1,0 +1,45 @@
+# Deploy no Azure, pelo Azure Pipelines.
+#
+# Este arquivo só dispara e aponta para o template. Infraestrutura, nomes de recurso,
+# credenciais e agentes ficam num repositório de deploy separado, privado: este aqui é
+# público e não carrega nada do ambiente de quem hospeda. Ver docs/azure.md.
+#
+# O gatilho mora deste lado porque o Azure Pipelines não dispara pipeline a partir de
+# repositório do GitHub declarado como resource — só a partir do repositório do próprio
+# pipeline.
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - docs
+      - e2e
+      - .github
+      - README.md
+      - CLAUDE.md
+
+# Pull request não dispara: código de fork nunca roda com as credenciais do deploy. O
+# CI de pull request é o do GitHub Actions.
+pr: none
+
+parameters:
+  - name: databaseCommand
+    displayName: 'Comando do banco antes do deploy (--setup só na primeira instalação)'
+    type: string
+    default: '--migrate'
+    values:
+      - '--migrate'
+      - '--setup'
+
+resources:
+  repositories:
+    - repository: deploy
+      type: git
+      name: TI/OpsDesk-Deploy
+      ref: refs/heads/main
+
+extends:
+  template: pipelines/build-deploy.yml@deploy
+  parameters:
+    databaseCommand: ${{ parameters.databaseCommand }}

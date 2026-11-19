@@ -32,6 +32,16 @@ RUN npm run build
 FROM nginx:1.29-alpine AS final
 
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Template, e não configuração pronta: o endereço da API muda conforme onde a imagem
+# roda — `api:8080` no compose, `127.0.0.1:8080` no App Service com sidecar. A imagem
+# oficial passa os arquivos de /etc/nginx/templates pelo envsubst na subida. O filtro
+# limita a troca às variáveis OPSDESK_, para que nenhuma variável de ambiente da
+# plataforma colida com as do nginx.
+COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+ENV NGINX_ENVSUBST_FILTER=OPSDESK_ \
+    OPSDESK_API_UPSTREAM=api:8080 \
+    OPSDESK_EDGE_SETS_FORWARDED_FOR=false
 
 EXPOSE 80
