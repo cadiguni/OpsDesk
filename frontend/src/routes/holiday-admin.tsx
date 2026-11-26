@@ -34,7 +34,7 @@ export function HolidayAdmin() {
   const holidays = useHolidays(year, role === 'Manager')
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores administram feriados.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores gerenciam feriados.</p>
   }
 
   function goTo(next: number) {

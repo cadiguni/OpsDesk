@@ -10,6 +10,9 @@ export type ManagedUser = {
   name: string
   email: string
   role: UserRole
+  /** Cargo, só informativo. Não muda o que a pessoa pode fazer: isso é o `role`. */
+  jobTitleId: string | null
+  jobTitleName: string | null
   isActive: boolean
   mustChangePassword: boolean
   createdAt: string
@@ -46,6 +49,13 @@ export async function changeRole(userId: string, role: UserRole): Promise<Manage
   return data
 }
 
+/** Troca o cargo; `null` tira. Vale também para a própria conta. */
+export async function changeJobTitle(userId: string, jobTitleId: string | null): Promise<ManagedUser> {
+  const { data } = await api.post<ManagedUser>(`/api/admin/users/${userId}/job-title`, { jobTitleId })
+
+  return data
+}
+
 export async function changeActivation(userId: string, isActive: boolean): Promise<ManagedUser> {
   const { data } = await api.post<ManagedUser>(`/api/admin/users/${userId}/activation`, {
     isActive,
@@ -73,6 +83,7 @@ export type UserAuditAction =
   | 'PasswordReset'
   | 'PasswordSetByLink'
   | 'MicrosoftAccountLinked'
+  | 'JobTitleChanged'
 
 export type UserAuditItem = {
   action: UserAuditAction
@@ -82,7 +93,12 @@ export type UserAuditItem = {
   createdAt: string
 }
 
-export async function createUser(input: { name: string; email: string; role: UserRole }): Promise<AccessGranted> {
+export async function createUser(input: {
+  name: string
+  email: string
+  role: UserRole
+  jobTitleId?: string | null
+}): Promise<AccessGranted> {
   const { data } = await api.post<AccessGranted>('/api/admin/users', input)
 
   return data
@@ -103,7 +119,7 @@ export async function getUserHistory(userId: string): Promise<UserAuditItem[]> {
 /**
  * Chamados que impediram a operação, quando a recusa foi por isso.
  *
- * Vêm no corpo do 409 para a tela listar o que reatribuir, em vez de mandar o gestor
+ * Vêm no corpo do 409 para a tela listar o que reatribuir, em vez de mandar o administrador
  * procurar na fila.
  */
 export function blockingTickets(error: unknown): BlockingTicket[] {

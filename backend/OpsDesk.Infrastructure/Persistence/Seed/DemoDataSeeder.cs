@@ -48,7 +48,7 @@ public class DemoDataSeeder(
 
         var now = clock.UtcNow;
 
-        await UserAsync("gestor@opsdesk.local", "Gestora de Suporte", UserRole.Manager, cancellationToken);
+        await UserAsync("gestor@opsdesk.local", "Administradora de Suporte", UserRole.Manager, cancellationToken);
         var technician = await UserAsync("tecnico@opsdesk.local", "Técnico de Suporte", UserRole.Technician, cancellationToken);
         var otherTechnician = await UserAsync("tecnica@opsdesk.local", "Técnica de Redes", UserRole.Technician, cancellationToken);
         var requester = await UserAsync("usuario@opsdesk.local", "Usuário de Exemplo", UserRole.Requester, cancellationToken);

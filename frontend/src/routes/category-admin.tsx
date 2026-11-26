@@ -43,7 +43,7 @@ export function CategoryAdmin() {
   )
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores administram categorias.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores gerenciam categorias.</p>
   }
 
   function update(changes: Record<string, string | null>) {

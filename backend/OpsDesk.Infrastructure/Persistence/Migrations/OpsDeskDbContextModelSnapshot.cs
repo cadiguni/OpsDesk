@@ -378,6 +378,41 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.ToTable("inbound_emails", (string)null);
                 });
 
+            modelBuilder.Entity("OpsDesk.Domain.Entities.JobTitle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_job_titles");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_job_titles_name");
+
+                    b.ToTable("job_titles", (string)null);
+                });
+
             modelBuilder.Entity("OpsDesk.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1133,6 +1168,10 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<Guid?>("JobTitleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_title_id");
+
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean")
                         .HasColumnName("must_change_password");
@@ -1169,6 +1208,9 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_users_entra_object_id")
                         .HasFilter("entra_object_id IS NOT NULL");
+
+                    b.HasIndex("JobTitleId")
+                        .HasDatabaseName("ix_users_job_title_id");
 
                     b.ToTable("users", (string)null);
                 });
@@ -1465,6 +1507,17 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("OpsDesk.Domain.Entities.User", b =>
+                {
+                    b.HasOne("OpsDesk.Domain.Entities.JobTitle", "JobTitle")
+                        .WithMany("Users")
+                        .HasForeignKey("JobTitleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_users_job_titles_job_title_id");
+
+                    b.Navigation("JobTitle");
+                });
+
             modelBuilder.Entity("OpsDesk.Domain.Entities.UserAuditEntry", b =>
                 {
                     b.HasOne("OpsDesk.Domain.Entities.User", "ChangedBy")
@@ -1486,6 +1539,11 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("OpsDesk.Domain.Entities.Category", b =>
                 {
                     b.Navigation("Tickets");
+                });
+
+            modelBuilder.Entity("OpsDesk.Domain.Entities.JobTitle", b =>
+                {
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("OpsDesk.Domain.Entities.Ticket", b =>

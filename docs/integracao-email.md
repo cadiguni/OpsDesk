@@ -10,7 +10,7 @@ Escopo funcional geral e regras de negócio: [README.md](../README.md). Decisõe
 
 Uma caixa de e-mail monitorada, por exemplo `suporte@empresa.com`, passa a ser um canal de abertura de chamados. Toda mensagem recebida vira um chamado, tendo como solicitante a pessoa que enviou a mensagem, identificada pelo nome e pelo endereço do remetente.
 
-Mensagens classificadas como indesejadas não viram chamado: ficam retidas em uma caixa de SPAM, visível para técnicos e gestores, onde podem ser revisadas e promovidas a chamado.
+Mensagens classificadas como indesejadas não viram chamado: ficam retidas em uma caixa de SPAM, visível para técnicos e administradores, onde podem ser revisadas e promovidas a chamado.
 
 ---
 
@@ -211,7 +211,7 @@ Reprocessar é seguro: se a falha aconteceu depois de o chamado existir, o repro
 
 ### 5.1 Acesso
 
-Visível para **técnicos** e **gestores**. O perfil Usuário não tem acesso, nem sabe que a tela existe.
+Visível para **técnicos** e **administradores**. O perfil Usuário não tem acesso, nem sabe que a tela existe.
 
 ### 5.2 Tela
 
@@ -229,7 +229,7 @@ Filtros: período e busca por remetente ou assunto.
 | **Não é spam e liberar remetente** | o mesmo, e cria uma `SpamRule` do tipo `Allow` para o remetente |
 | **Confirmar spam** | mantém a retenção e cria uma `SpamRule` do tipo `Block` para o remetente |
 | **Bloquear domínio** | cria uma `SpamRule` do tipo `Block` para o domínio inteiro |
-| **Excluir** | remove o `InboundEmail`; disponível apenas para gestores |
+| **Excluir** | remove o `InboundEmail`; disponível apenas para administradores |
 
 Toda ação registra o autor e o instante. A criação de regra é sempre explícita: nada é aprendido em silêncio a partir de um clique.
 
@@ -243,7 +243,7 @@ Mensagens em `Spam` são excluídas automaticamente após noventa dias. Mensagen
 
 A integração de recebimento pressupõe a de envio, entregue junto na versão 2.0 e antecipada em parte na 1.2 do roadmap.
 
-O canal de envio é o da 1.2 (README, seção 18): Microsoft Graph, configurado pelo gestor no portal, com fila de saída. O remetente é a caixa monitorada, para que a resposta do solicitante volte para ela e caia na etapa 4.4.
+O canal de envio é o da 1.2 (README, seção 18): Microsoft Graph, configurado pelo administrador no portal, com fila de saída. O remetente é a caixa monitorada, para que a resposta do solicitante volte para ela e caia na etapa 4.4.
 
 Sem caixa monitorada ativa, o e-mail continua avisando que respostas a ele não são lidas. Com uma caixa ativa, o aviso dá lugar a "responda este e-mail", e o e-mail ganha:
 
@@ -314,7 +314,7 @@ Todos têm teste de integração, em `InboundEmailTests`.
 | --- | --- | --- |
 | leitura por IMAP (MailKit) e por Graph | só Graph | a empresa usa Microsoft 365, e o mesmo aplicativo do Entra ID já envia. A Microsoft está desligando a autenticação básica no IMAP do Exchange Online, e IMAP com OAuth dá o mesmo trabalho de registro sem ganho. Os testes usam uma caixa falsa atrás de `IMailboxReader`, o que dispensou o Mailpit |
 | `EmailAccount.Protocol` | não existe | com um protocolo só, o campo não decide nada. Entram `InternalDomainsOnly` (a regra 3 da seção 4.6, com os domínios das configurações gerais) e `LastError`, que a tela mostra |
-| credencial da caixa em configuração da aplicação | a mesma credencial do envio, cifrada no banco | é o mesmo aplicativo do Entra ID, configurado pelo gestor na tela de e-mail. A regra de credencial só de escrita e cifrada vale igual (invariante 12 do CLAUDE.md) |
+| credencial da caixa em configuração da aplicação | a mesma credencial do envio, cifrada no banco | é o mesmo aplicativo do Entra ID, configurado pelo administrador na tela de e-mail. A regra de credencial só de escrita e cifrada vale igual (invariante 12 do CLAUDE.md) |
 | `BodyText` e `BodyHtml` | só `BodyText` | o Graph entrega o corpo já convertido em texto quando pedido. Sem HTML guardado, não há sanitização a errar nem imagem externa a bloquear. Os cabeçalhos vão para `HeadersJson`, e `Attempts`, `NextAttemptAt`, `ReviewedById` e `ReviewedAt` sustentam as tentativas e a revisão |
 | `In-Reply-To` e `References` na resposta | código no assunto e linha de corte | o `sendMail` do Graph só aceita cabeçalho personalizado (`x-`), não esses. O vínculo da etapa 4.4 funciona pelos cabeçalhos entre mensagens recebidas do mesmo fio e, para a resposta ao e-mail do OpsDesk, pelo código no assunto |
 

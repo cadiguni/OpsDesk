@@ -97,7 +97,7 @@ describe('importação de chamados', () => {
   it('técnico não importa', () => {
     renderWithProviders(<TicketImport />, { role: 'Technician', route: '/importacao' })
 
-    expect(screen.getByText(/apenas gestores/i)).toBeInTheDocument()
+    expect(screen.getByText(/apenas administradores/i)).toBeInTheDocument()
     expect(screen.queryByLabelText('Arquivo')).not.toBeInTheDocument()
   })
 })

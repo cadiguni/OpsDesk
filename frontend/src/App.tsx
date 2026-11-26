@@ -5,6 +5,7 @@ import { SessionProvider } from '@/features/auth/session'
 import { queryClient } from '@/lib/query-client'
 import { AppLayout } from '@/routes/app-layout'
 import { CategoryAdmin } from '@/routes/category-admin'
+import { JobTitleAdmin } from '@/routes/job-title-admin'
 import { ChangePassword } from '@/routes/change-password'
 import { Dashboard } from '@/routes/dashboard'
 import { EmailSettingsPage } from '@/routes/email-settings'
@@ -51,6 +52,7 @@ export function App() {
                 <Route path="/chamados/:id" element={<TicketDetail />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/usuarios" element={<UserAdmin />} />
+                <Route path="/cargos" element={<JobTitleAdmin />} />
                 <Route path="/categorias" element={<CategoryAdmin />} />
                 <Route path="/feriados" element={<HolidayAdmin />} />
                 <Route path="/importacao" element={<TicketImport />} />

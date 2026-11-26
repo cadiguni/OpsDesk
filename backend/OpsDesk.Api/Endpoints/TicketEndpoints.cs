@@ -70,7 +70,7 @@ public static class TicketEndpoints
         routes.MapGet("/api/staff", ListStaff)
             .RequireAuthorization(AuthorizationPolicies.Staff)
             .WithTags("Usuarios")
-            .WithSummary("Tecnicos e gestores ativos, para o seletor de responsavel.");
+            .WithSummary("Técnicos e administradores ativos, para o seletor de responsável.");
 
         return routes;
     }

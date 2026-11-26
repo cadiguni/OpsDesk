@@ -16,6 +16,17 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
             .EmailAddress().WithMessage("Informe um e-mail válido.");
 
         RuleFor(r => r.Role).IsInEnum().WithMessage("Perfil inválido.");
+
+        // Se o cargo existe e está ativo depende do banco; quem decide é o serviço.
+        RuleFor(r => r.JobTitleId).NotEqual(Guid.Empty).WithMessage("Cargo inválido.");
+    }
+}
+
+public class ChangeJobTitleRequestValidator : AbstractValidator<ChangeJobTitleRequest>
+{
+    public ChangeJobTitleRequestValidator()
+    {
+        RuleFor(r => r.JobTitleId).NotEqual(Guid.Empty).WithMessage("Cargo inválido.");
     }
 }
 

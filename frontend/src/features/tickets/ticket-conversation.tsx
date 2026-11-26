@@ -189,7 +189,7 @@ export function TicketConversation({ ticket }: { ticket: TicketDetail }) {
 
           <p className="text-muted-foreground px-4 pt-3 text-xs">
             {isInternal
-              ? 'Visível apenas para técnicos e gestores.'
+              ? 'Visível apenas para técnicos e administradores.'
               : 'Esta resposta ficará visível para o solicitante.'}
           </p>
 

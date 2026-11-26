@@ -8,7 +8,7 @@ const keys = {
   list: (query: usersApi.ManagedUserQuery) => ['admin-users', 'list', query] as const,
 }
 
-/** `enabled` evita o 403 garantido quando quem abre a tela não é gestor. */
+/** `enabled` evita o 403 garantido quando quem abre a tela não é administrador. */
 export function useManagedUsers(query: usersApi.ManagedUserQuery, enabled: boolean) {
   return useQuery({
     queryKey: keys.list(query),
@@ -60,6 +60,21 @@ export function useChangeRole() {
     mutationFn: ({ userId, role }: { userId: string; role: UserRole }) =>
       usersApi.changeRole(userId, role),
     onSettled: invalidate,
+  })
+}
+
+export function useChangeJobTitle() {
+  const invalidate = useInvalidateUsers()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ userId, jobTitleId }: { userId: string; jobTitleId: string | null }) =>
+      usersApi.changeJobTitle(userId, jobTitleId),
+    onSettled: () => {
+      invalidate()
+      // A contagem de pessoas por cargo muda junto.
+      void queryClient.invalidateQueries({ queryKey: ['admin-job-titles'] })
+    },
   })
 }
 

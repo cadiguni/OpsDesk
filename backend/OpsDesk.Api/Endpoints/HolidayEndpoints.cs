@@ -26,7 +26,7 @@ public static class HolidayEndpoints
             .WithSummary("Liga ou desliga um feriado.");
 
         group.MapDelete("/{id:guid}", Delete)
-            .WithSummary("Apaga um feriado cadastrado pelo gestor. Nacional se desliga, não se apaga.");
+            .WithSummary("Apaga um feriado cadastrado pelo administrador. Nacional se desliga, não se apaga.");
 
         return routes;
     }

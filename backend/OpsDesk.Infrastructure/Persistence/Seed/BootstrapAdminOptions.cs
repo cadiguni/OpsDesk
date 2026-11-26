@@ -41,7 +41,7 @@ public class BootstrapAdminOptions
 
     /// <summary>Nome exibido. O padrão serve, e a pessoa corrige depois pelo perfil.</summary>
     [MaxLength(200)]
-    public string Name { get; set; } = "Gestor";
+    public string Name { get; set; } = "Administrador";
 
     /// <summary>Configuração preenchida o bastante para tentar criar o gestor.</summary>
     public bool IsConfigured =>

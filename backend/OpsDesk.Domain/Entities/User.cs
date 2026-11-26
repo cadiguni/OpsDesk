@@ -3,7 +3,7 @@ using OpsDesk.Domain.Enums;
 
 namespace OpsDesk.Domain.Entities;
 
-/// <summary>Usuário do sistema: solicitante, técnico ou gestor.</summary>
+/// <summary>Usuário do sistema: solicitante, técnico ou administrador.</summary>
 public class User : IHasUpdatedAt
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -18,7 +18,13 @@ public class User : IHasUpdatedAt
     /// </summary>
     public string? PasswordHash { get; set; }
 
+    /// <summary>O que a pessoa pode fazer no portal. Independe do <see cref="JobTitle"/>.</summary>
     public UserRole Role { get; set; } = UserRole.Requester;
+
+    /// <summary>Cargo, só informativo. Nulo para quem não tem, como o solicitante vindo por e-mail.</summary>
+    public Guid? JobTitleId { get; set; }
+
+    public JobTitle? JobTitle { get; set; }
 
     public bool IsActive { get; set; } = true;
 
@@ -57,6 +63,6 @@ public class User : IHasUpdatedAt
     /// </summary>
     public UserAuditAction? PasswordChangeReason { get; set; }
 
-    /// <summary>Técnico e gestor formam a equipe: veem comentário interno e o painel técnico.</summary>
+    /// <summary>Técnico e administrador formam a equipe: veem comentário interno e o painel técnico.</summary>
     public bool IsStaff => Role is UserRole.Technician or UserRole.Manager;
 }

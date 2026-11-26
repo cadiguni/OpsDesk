@@ -9,7 +9,7 @@ namespace OpsDesk.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
 /// Grava a trilha de auditoria de usuário (<see cref="UserAuditEntry"/>) a partir do que
-/// mudou no <see cref="User"/>: criação, perfil, ativação e senha.
+/// mudou no <see cref="User"/>: criação, perfil, cargo, ativação e senha.
 ///
 /// Pelo mesmo motivo do <see cref="TicketHistoryInterceptor"/>: auditoria que depende de
 /// cada serviço lembrar de gravar falha no primeiro caminho novo. E, como lá, a trilha é
@@ -61,7 +61,7 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
                     break;
 
                 case EntityState.Modified:
-                    entries.AddRange(Describe(entry, actor, now));
+                    entries.AddRange(Describe(context, entry, actor, now));
                     break;
             }
 
@@ -75,7 +75,8 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
         }
     }
 
-    private static IEnumerable<UserAuditEntry> Describe(EntityEntry<User> entry, Guid? actor, DateTimeOffset now)
+    private static IEnumerable<UserAuditEntry> Describe(
+        DbContext context, EntityEntry<User> entry, Guid? actor, DateTimeOffset now)
     {
         var user = entry.Entity;
 
@@ -94,6 +95,13 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
                 null, null, actor, now);
         }
 
+        var jobTitle = entry.Property(u => u.JobTitleId);
+        if (jobTitle.IsModified && jobTitle.OriginalValue != jobTitle.CurrentValue)
+        {
+            yield return New(user.Id, UserAuditAction.JobTitleChanged,
+                JobTitleName(context, jobTitle.OriginalValue), JobTitleName(context, jobTitle.CurrentValue), actor, now);
+        }
+
         var entra = entry.Property(u => u.EntraObjectId);
         if (entra.IsModified && entra.CurrentValue is { } objectId && entra.OriginalValue != objectId)
         {
@@ -107,6 +115,13 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
             yield return New(user.Id, reason, null, null, actor, now);
         }
     }
+
+    /// <summary>
+    /// Nome do cargo, para a trilha. O serviço deixa os dois cargos rastreados antes de
+    /// gravar, e o <c>Find</c> os acha sem consulta; fora disso, ele consulta.
+    /// </summary>
+    private static string? JobTitleName(DbContext context, Guid? jobTitleId) =>
+        jobTitleId is { } id ? context.Set<JobTitle>().Find(id)?.Name : null;
 
     private static UserAuditEntry New(
         Guid userId, UserAuditAction action, string? previous, string? current, Guid? actor, DateTimeOffset now) => new()

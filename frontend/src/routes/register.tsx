@@ -44,7 +44,7 @@ export function Register() {
         <CardHeader>
           <CardTitle>Criar conta</CardTitle>
           <CardDescription>
-            Sua conta é criada com perfil de usuário. Para acesso de técnico ou gestor,
+            Sua conta é criada com perfil de usuário. Para acesso de técnico ou administrador,
             procure a equipe de TI.
           </CardDescription>
         </CardHeader>

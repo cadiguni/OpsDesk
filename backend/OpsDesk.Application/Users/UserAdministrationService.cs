@@ -12,9 +12,10 @@ using OpsDesk.Domain.Tickets;
 namespace OpsDesk.Application.Users;
 
 /// <summary>
-/// Administração de usuários pelo gestor: listar, trocar perfil, desativar e reativar.
+/// Administração de usuários pelo administrador: listar, cadastrar, trocar perfil e cargo,
+/// desativar e reativar.
 ///
-/// O acesso é restrito a gestor pela política da rota, e a verificação se repete aqui
+/// O acesso é restrito a administrador pela política da rota, e a verificação se repete aqui
 /// pelo mesmo motivo do <c>AssignAsync</c>: a política barra o endpoint, mas é o serviço
 /// que conhece a regra, e serviço chamado de outro lugar não herda atributo de rota.
 ///
@@ -32,7 +33,7 @@ public class UserAdministrationService(
 {
     /// <summary>
     /// Cadastra uma pessoa (README, seção 13.9). Com e-mail disponível, ela recebe um
-    /// convite para definir a senha; sem, o gestor recebe uma senha provisória.
+    /// convite para definir a senha; sem, o administrador recebe uma senha provisória.
     /// </summary>
     public async Task<ChangeUserResult> CreateAsync(
         CreateUserRequest request, TicketViewer actor, CancellationToken cancellationToken = default)
@@ -49,7 +50,15 @@ public class UserAdministrationService(
             return new ChangeUserResult.EmailAlreadyUsed();
         }
 
-        var user = new User { Name = request.Name.Trim(), Email = email, Role = request.Role };
+        if (request.JobTitleId is { } jobTitleId && !await IsSelectableJobTitleAsync(jobTitleId, cancellationToken))
+        {
+            return new ChangeUserResult.JobTitleUnavailable();
+        }
+
+        var user = new User
+        {
+            Name = request.Name.Trim(), Email = email, Role = request.Role, JobTitleId = request.JobTitleId
+        };
         db.Users.Add(user);
 
         string? temporaryPassword = null;
@@ -140,6 +149,59 @@ public class UserAdministrationService(
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Troca o cargo. Diferente de perfil e ativação, vale também para a própria conta:
+    /// cargo não dá permissão, então não há como alguém se trancar fora mexendo nele.
+    /// </summary>
+    public async Task<ChangeUserResult> ChangeJobTitleAsync(
+        Guid userId,
+        ChangeJobTitleRequest request,
+        TicketViewer actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await IsActiveManagerAsync(actor, cancellationToken))
+        {
+            return new ChangeUserResult.NotAllowed();
+        }
+
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return new ChangeUserResult.UserNotFound();
+        }
+
+        if (user.JobTitleId == request.JobTitleId)
+        {
+            return await ChangedAsync(user.Id, cancellationToken);
+        }
+
+        if (request.JobTitleId is { } jobTitleId && !await IsSelectableJobTitleAsync(jobTitleId, cancellationToken))
+        {
+            return new ChangeUserResult.JobTitleUnavailable();
+        }
+
+        // O antigo e o novo ficam no rastreamento para a trilha de auditoria gravar os
+        // nomes sem ir ao banco de dentro do interceptor.
+        await db.JobTitles
+            .Where(j => j.Id == user.JobTitleId || j.Id == request.JobTitleId)
+            .LoadAsync(cancellationToken);
+
+        var previous = user.JobTitleId;
+        user.JobTitleId = request.JobTitleId;
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Cargo de {UserId} alterado de {PreviousJobTitle} para {NewJobTitle} por {ActorId}.",
+            user.Id, previous, request.JobTitleId, actor.UserId);
+
+        return await ChangedAsync(user.Id, cancellationToken);
+    }
+
+    private Task<bool> IsSelectableJobTitleAsync(Guid jobTitleId, CancellationToken cancellationToken) =>
+        db.JobTitles.AnyAsync(j => j.Id == jobTitleId && j.IsActive, cancellationToken);
+
     private Task<ManagedUser> ProjectOneAsync(Guid userId, CancellationToken cancellationToken) =>
         Project(db.Users.AsNoTracking().Where(u => u.Id == userId)).SingleAsync(cancellationToken);
 
@@ -195,7 +257,7 @@ public class UserAdministrationService(
         }
 
         // Rebaixar a solicitante tira a pessoa da equipe, e chamado atribuído a quem não é
-        // da equipe é chamado que nenhum técnico vê como seu. Técnico ↔ gestor não mexe
+        // da equipe é chamado que nenhum técnico vê como seu. Técnico ↔ administrador não mexe
         // nisso: os dois atendem.
         if (request.Role == UserRole.Requester)
         {
@@ -272,12 +334,12 @@ public class UserAdministrationService(
     }
 
     /// <summary>
-    /// Confere que quem age é gestor ativo, e carrega o alvo.
+    /// Confere que quem age é administrador ativo, e carrega o alvo.
     ///
     /// O perfil de quem age é conferido no banco, e não só na claim. O token de acesso
-    /// carrega o perfil do momento em que foi emitido, e um gestor recém-rebaixado ou
+    /// carrega o perfil do momento em que foi emitido, e um administrador recém-rebaixado ou
     /// desativado seguiria com ele por até <c>Jwt:AccessTokenMinutes</c>. Para ler chamado
-    /// essa janela é aceitável; para promover alguém a gestor, não.
+    /// essa janela é aceitável; para promover alguém a administrador, não.
     /// </summary>
     private async Task<(User? Target, ChangeUserResult? Refusal)> LoadAsync(
         Guid userId, TicketViewer actor, CancellationToken cancellationToken)
@@ -340,6 +402,8 @@ public class UserAdministrationService(
             u.Name,
             u.Email,
             u.Role,
+            u.JobTitleId,
+            u.JobTitle == null ? null : u.JobTitle.Name,
             u.IsActive,
             u.MustChangePassword,
             u.CreatedAt,

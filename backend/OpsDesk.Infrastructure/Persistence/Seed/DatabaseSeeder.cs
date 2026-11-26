@@ -194,7 +194,7 @@ public class DatabaseSeeder(
 
         if (await db.Users.AnyAsync(u => u.Role == UserRole.Manager, cancellationToken))
         {
-            logger.LogInformation("Bootstrap: já existe gestor no sistema, nada a fazer.");
+            logger.LogInformation("Bootstrap: já existe administrador no sistema, nada a fazer.");
 
             return BootstrapAdminResult.ManagerAlreadyExists;
         }
@@ -212,7 +212,7 @@ public class DatabaseSeeder(
             await db.SaveChangesAsync(cancellationToken);
 
             logger.LogWarning(
-                "Bootstrap: {Email} já existia e foi promovido a gestor. A senha configurada " +
+                "Bootstrap: {Email} já existia e foi promovido a administrador. A senha configurada " +
                 "foi ignorada — a conta mantém a senha que já tinha.", email);
 
             return BootstrapAdminResult.Promoted;
@@ -235,7 +235,7 @@ public class DatabaseSeeder(
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogWarning(
-            "Bootstrap: gestor {Email} criado. A senha configurada vale uma vez e precisa ser " +
+            "Bootstrap: administrador {Email} criado. A senha configurada vale uma vez e precisa ser " +
             "trocada no primeiro acesso.", email);
 
         return BootstrapAdminResult.Created;
@@ -245,7 +245,7 @@ public class DatabaseSeeder(
     {
         (string Email, string Name, UserRole Role)[] users =
         [
-            ("gestor@opsdesk.local", "Gestora de Suporte", UserRole.Manager),
+            ("gestor@opsdesk.local", "Administradora de Suporte", UserRole.Manager),
             ("tecnico@opsdesk.local", "Técnico de Suporte", UserRole.Technician),
             ("usuario@opsdesk.local", "Usuário de Exemplo", UserRole.Requester)
         ];

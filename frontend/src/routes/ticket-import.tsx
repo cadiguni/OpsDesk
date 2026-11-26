@@ -50,7 +50,7 @@ export function TicketImport() {
   })
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores importam chamados.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores importam chamados.</p>
   }
 
   function reset() {

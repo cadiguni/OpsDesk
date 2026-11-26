@@ -87,7 +87,7 @@ public class PostgresFixture : IAsyncLifetime
             """
             TRUNCATE TABLE inbound_emails, spam_rules, email_accounts, user_audit, password_reset_tokens, system_settings, sla_alerts, notifications, outbound_emails, email_settings, settings_audit,
                            ticket_attachments, ticket_history, ticket_comments, tickets,
-                           refresh_tokens, users, categories, sla_policies, holidays
+                           refresh_tokens, users, job_titles, categories, sla_policies, holidays
             RESTART IDENTITY CASCADE;
             ALTER SEQUENCE ticket_code_seq RESTART WITH 1;
             """);

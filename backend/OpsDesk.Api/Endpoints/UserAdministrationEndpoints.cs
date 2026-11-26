@@ -8,7 +8,7 @@ using OpsDesk.Domain.Enums;
 namespace OpsDesk.Api.Endpoints;
 
 /// <summary>
-/// Administração de usuários (README, seção 13.9). Só gestor.
+/// Administração de usuários (README, seção 13.9). Só administrador.
 ///
 /// Rota própria, e não mais parâmetros em <c>/api/users</c>: aquela é o catálogo de gente
 /// ativa para os seletores da equipe, com teto fixo de linhas; esta lista inativos,
@@ -39,6 +39,10 @@ public static class UserAdministrationEndpoints
         group.MapPost("/{id:guid}/role", ChangeRole)
             .ValidatingBody<ChangeRoleRequest>()
             .WithSummary("Troca o perfil. Rebaixar derruba as sessões da pessoa.");
+
+        group.MapPost("/{id:guid}/job-title", ChangeJobTitle)
+            .ValidatingBody<ChangeJobTitleRequest>()
+            .WithSummary("Troca o cargo, só informativo. Vale também para a própria conta.");
 
         group.MapPost("/{id:guid}/activation", ChangeActivation)
             .WithSummary("Desativa ou reativa a conta. Desativar derruba as sessões da pessoa.");
@@ -94,6 +98,14 @@ public static class UserAdministrationEndpoints
         CancellationToken cancellationToken) =>
         ToResult(await users.ChangeRoleAsync(id, request, currentUser.Viewer, cancellationToken));
 
+    private static async Task<IResult> ChangeJobTitle(
+        Guid id,
+        ChangeJobTitleRequest request,
+        UserAdministrationService users,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        ToResult(await users.ChangeJobTitleAsync(id, request, currentUser.Viewer, cancellationToken));
+
     private static async Task<IResult> ChangeActivation(
         Guid id,
         ChangeActivationRequest request,
@@ -115,20 +127,25 @@ public static class UserAdministrationEndpoints
 
         ChangeUserResult.UserNotFound => TypedResults.NotFound(),
 
+        ChangeUserResult.JobTitleUnavailable unavailable => TypedResults.Problem(
+            detail: unavailable.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Cargo indisponível"),
+
         ChangeUserResult.NotAllowed => TypedResults.Problem(
-            detail: "Apenas gestores ativos administram usuários.",
+            detail: "Apenas administradores ativos administram usuários.",
             statusCode: StatusCodes.Status403Forbidden,
             title: "Administração não permitida"),
 
-        // 409 e não 403: o gestor tem permissão para a operação em geral; é o alvo — ele
-        // mesmo — que conflita com a regra de o sistema nunca ficar sem gestor.
+        // 409 e não 403: o administrador tem permissão para a operação em geral; é o alvo —
+        // ele mesmo — que conflita com a regra de o sistema nunca ficar sem administrador.
         ChangeUserResult.SelfChangeNotAllowed self => TypedResults.Problem(
             detail: self.Message,
             statusCode: StatusCodes.Status409Conflict,
             title: "Alteração da própria conta não permitida"),
 
         // Os chamados vão no corpo para a interface listar o que reatribuir, em vez de
-        // mandar o gestor procurar.
+        // mandar o administrador procurar.
         ChangeUserResult.HasOpenAssignedTickets blocking => TypedResults.Problem(
             detail: blocking.Message,
             statusCode: StatusCodes.Status409Conflict,

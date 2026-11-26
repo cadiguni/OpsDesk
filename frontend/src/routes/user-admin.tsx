@@ -9,9 +9,12 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { userRoleLabels, userRoles, type UserRole } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
+import type { JobTitleOption } from '@/features/job-titles/api'
+import { useJobTitleOptions } from '@/features/job-titles/queries'
 import { blockingTickets, type AccessGranted, type ManagedUser, type UserAuditAction } from '@/features/users/api'
 import {
   useChangeActivation,
+  useChangeJobTitle,
   useChangeRole,
   useCreateUser,
   useManagedUsers,
@@ -23,7 +26,7 @@ import { formatDate, formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
- * Administração de usuários (README, seção 13.9). Só gestor.
+ * Administração de usuários (README, seção 13.9). Só administrador.
  *
  * Os filtros vivem na URL, como na lista de chamados. As regras — não mexer na própria
  * conta, não tirar da equipe quem tem chamado em aberto — são do servidor; a tela só as
@@ -41,13 +44,15 @@ export function UserAdmin() {
 
   const [creating, setCreating] = useState(false)
 
+  const jobTitles = useJobTitleOptions(role === 'Manager').data ?? []
+
   const users = useManagedUsers(
     { search: search || undefined, role: roleFilter, isActive, page },
     role === 'Manager',
   )
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores administram usuários.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores gerenciam usuários.</p>
   }
 
   function update(changes: Record<string, string | null>) {
@@ -85,7 +90,7 @@ export function UserAdmin() {
         )}
       </div>
 
-      {creating && <NewUser onClose={() => setCreating(false)} />}
+      {creating && <NewUser jobTitles={jobTitles} onClose={() => setCreating(false)} />}
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <form
@@ -150,7 +155,7 @@ export function UserAdmin() {
       {users.data && users.data.items.length > 0 && (
         <ul className={cn('divide-y rounded-xl border bg-card shadow-sm', users.isPlaceholderData && 'opacity-60')}>
           {users.data.items.map((user) => (
-            <UserRow key={user.id} user={user} />
+            <UserRow key={user.id} user={user} jobTitles={jobTitles} />
           ))}
         </ul>
       )}
@@ -186,12 +191,13 @@ export function UserAdmin() {
   )
 }
 
-/** Cadastro pelo gestor: convite por e-mail quando há envio configurado, senha provisória quando não. */
-function NewUser({ onClose }: { onClose: () => void }) {
+/** Cadastro pelo administrador: convite por e-mail quando há envio configurado, senha provisória quando não. */
+function NewUser({ jobTitles, onClose }: { jobTitles: JobTitleOption[]; onClose: () => void }) {
   const create = useCreateUser()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('Requester')
+  const [jobTitleId, setJobTitleId] = useState('')
 
   if (create.data) {
     return (
@@ -209,7 +215,7 @@ function NewUser({ onClose }: { onClose: () => void }) {
       className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 shadow-sm"
       onSubmit={(event) => {
         event.preventDefault()
-        create.mutate({ name, email, role })
+        create.mutate({ name, email, role, jobTitleId: jobTitleId || null })
       }}
     >
       <label className="grid min-w-52 flex-1 gap-1.5 text-xs font-medium">
@@ -229,6 +235,10 @@ function NewUser({ onClose }: { onClose: () => void }) {
             </option>
           ))}
         </Select>
+      </label>
+      <label className="grid gap-1.5 text-xs font-medium">
+        Cargo
+        <JobTitleSelect jobTitles={jobTitles} value={jobTitleId} onChange={setJobTitleId} />
       </label>
       <Button type="submit" disabled={create.isPending || !name.trim() || !email.trim()}>
         Cadastrar
@@ -295,6 +305,7 @@ const auditLabels: Record<UserAuditAction, string> = {
   PasswordReset: 'Senha redefinida',
   PasswordSetByLink: 'Senha definida pelo link do e-mail',
   MicrosoftAccountLinked: 'Passou a entrar com a conta Microsoft',
+  JobTitleChanged: 'Cargo alterado',
 }
 
 function UserHistory({ userId }: { userId: string }) {
@@ -321,6 +332,12 @@ function UserHistory({ userId }: { userId: string }) {
             <> de {roleLabel(entry.previousValue)} para {roleLabel(entry.newValue)}</>
           )}
           {entry.action === 'Created' && entry.newValue && <> como {roleLabel(entry.newValue)}</>}
+          {entry.action === 'JobTitleChanged' && (
+            <>
+              {' '}
+              de {entry.previousValue ?? 'nenhum'} para {entry.newValue ?? 'nenhum'}
+            </>
+          )}
           <span className="text-muted-foreground">
             {' '}
             · {entry.changedByName ?? 'pela própria pessoa ou pelo sistema'} · {formatDateTime(entry.createdAt)}
@@ -335,19 +352,54 @@ function roleLabel(value: string): string {
   return (userRoles as readonly string[]).includes(value) ? userRoleLabels[value as UserRole] : value
 }
 
-function UserRow({ user }: { user: ManagedUser }) {
+/**
+ * Seletor de cargo. O cargo atual da pessoa entra como opção mesmo desativado, para o
+ * seletor não mostrar outro valor; o servidor só recusa atribuí-lo de novo.
+ */
+function JobTitleSelect({
+  jobTitles,
+  value,
+  current,
+  onChange,
+  ...props
+}: {
+  jobTitles: JobTitleOption[]
+  value: string
+  current?: JobTitleOption | null
+  onChange: (value: string) => void
+  disabled?: boolean
+  'aria-label'?: string
+}) {
+  const options = current && !jobTitles.some((option) => option.id === current.id) ? [...jobTitles, current] : jobTitles
+
+  return (
+    <Select value={value} onChange={(event) => onChange(event.target.value)} {...props}>
+      <option value="">Sem cargo</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
+        </option>
+      ))}
+    </Select>
+  )
+}
+
+function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOption[] }) {
   const { user: me } = useSession()
   const changeRole = useChangeRole()
+  const changeJobTitle = useChangeJobTitle()
   const changeActivation = useChangeActivation()
   const resetPassword = useResetUserPassword()
   const [showHistory, setShowHistory] = useState(false)
 
   // O servidor recusa mexer na própria conta: é o que garante que sempre sobra um
-  // gestor. Desabilitar aqui só poupa a pessoa do clique que daria erro.
+  // administrador. Desabilitar aqui só poupa a pessoa do clique que daria erro. O cargo
+  // fica de fora: não dá permissão, e a própria conta pode trocá-lo.
   const isSelf = me?.id === user.id
   const hasOpenTickets = user.openAssignedTickets > 0
-  const pending = changeRole.isPending || changeActivation.isPending || resetPassword.isPending
-  const error = changeRole.error ?? changeActivation.error ?? resetPassword.error
+  const pending =
+    changeRole.isPending || changeActivation.isPending || resetPassword.isPending || changeJobTitle.isPending
+  const error = changeRole.error ?? changeActivation.error ?? resetPassword.error ?? changeJobTitle.error
   const blocking = blockingTickets(error)
 
   function onRoleChange(role: UserRole) {
@@ -405,6 +457,22 @@ function UserRow({ user }: { user: ManagedUser }) {
               </option>
             ))}
           </Select>
+        </label>
+
+        <label className="grid gap-1.5 text-xs font-medium">
+          Cargo
+          <JobTitleSelect
+            jobTitles={jobTitles}
+            value={user.jobTitleId ?? ''}
+            current={user.jobTitleId && user.jobTitleName ? { id: user.jobTitleId, name: user.jobTitleName } : null}
+            disabled={pending}
+            aria-label={`Cargo de ${user.name}`}
+            onChange={(value) => {
+              changeRole.reset()
+              changeActivation.reset()
+              changeJobTitle.mutate({ userId: user.id, jobTitleId: value || null })
+            }}
+          />
         </label>
 
         <Button

@@ -4,9 +4,9 @@ Instruções para agentes de IA que trabalham neste repositório.
 
 ## O projeto
 
-OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis: Usuário, Técnico e Gestor. O domínio é pequeno e bem definido; a complexidade real está em três pontos, e é neles que o cuidado deve se concentrar:
+OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis: Usuário, Técnico e Administrador (até a versão 2.0, "Gestor"; no código e no banco continua `Manager`). Cada pessoa pode ter também um **cargo** (`JobTitle`), só informativo. O domínio é pequeno e bem definido; a complexidade real está em três pontos, e é neles que o cuidado deve se concentrar:
 
-1. **autorização por recurso** — a fronteira é entre equipe e solicitante: técnico e gestor enxergam todos os chamados, e o solicitante nunca vê chamado de terceiro, comentário interno nem anexo interno;
+1. **autorização por recurso** — a fronteira é entre equipe e solicitante: técnico e administrador enxergam todos os chamados, e o solicitante nunca vê chamado de terceiro, comentário interno nem anexo interno;
 2. **máquina de estados do chamado** — sete status, toda transição auditada;
 3. **SLA em horas úteis** — com pausa enquanto o chamado aguarda o solicitante.
 
@@ -35,25 +35,27 @@ POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
 POST   /api/tickets/{id}/classification   (prioridade e categoria; prioridade recalcula o SLA)
 GET    /api/categories (?includeInactive, equipe)   GET /api/staff   GET /api/dashboard   GET /api/dashboard/period
 GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
-GET    /api/admin/users           (gestor; ativos e inativos, filtros, paginação)   POST /api/admin/users
+GET    /api/admin/users           (administrador; ativos e inativos, filtros, paginação)   POST /api/admin/users
 POST   /api/admin/users/{id}/role   POST /api/admin/users/{id}/activation
 POST   /api/admin/users/{id}/password-reset   GET /api/admin/users/{id}/history
-GET    /api/admin/categories      POST /api/admin/categories   (gestor)
+GET    /api/admin/categories      POST /api/admin/categories   (administrador)
 PUT    /api/admin/categories/{id}  POST /api/admin/categories/{id}/activation
+GET    /api/admin/job-titles   GET …/options   POST …   PUT …/{id}   POST …/{id}/activation   (administrador)
+POST   /api/admin/users/{id}/job-title   (administrador; vale também para a própria conta)
 GET    /api/notifications   GET /api/notifications/unread-count   (as do próprio usuário)
 POST   /api/notifications/{id}/read   POST /api/notifications/read-all
-GET    /api/admin/settings/email   PUT /api/admin/settings/email   POST /api/admin/settings/email/test   (gestor)
-GET    /api/admin/settings/email/accounts   POST …/accounts   PUT …/accounts/{id}   (gestor; caixas monitoradas)
-GET    /api/admin/settings/general   PUT /api/admin/settings/general   (gestor)
+GET    /api/admin/settings/email   PUT /api/admin/settings/email   POST /api/admin/settings/email/test   (administrador)
+GET    /api/admin/settings/email/accounts   POST …/accounts   PUT …/accounts/{id}   (administrador; caixas monitoradas)
+GET    /api/admin/settings/general   PUT /api/admin/settings/general   (administrador)
 GET    /api/admin/holidays?year=   POST /api/admin/holidays   POST /api/admin/holidays/{id}/activation   DELETE /api/admin/holidays/{id}
-POST   /api/admin/import/tickets?format=&dryRun=   (gestor; multipart, dryRun padrão true)
+POST   /api/admin/import/tickets?format=&dryRun=   (administrador; multipart, dryRun padrão true)
 GET    /api/inbound   GET /api/inbound/{id}   POST /api/inbound/{id}/review   POST /api/inbound/{id}/reprocess   (equipe)
-DELETE /api/inbound/{id} (gestor)   GET /api/inbound/rules   POST /api/inbound/rules/{id}/activation
+DELETE /api/inbound/{id} (administrador)   GET /api/inbound/rules   POST /api/inbound/rules/{id}/activation
 POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments
 ```
 
-O **primeiro** gestor sai do comando de bootstrap; os demais são cadastrados ou promovidos por ele em `/usuarios`.
+O **primeiro** administrador sai do comando de bootstrap; os demais são cadastrados ou promovidos por ele em `/usuarios`.
 
 ## Documentação
 
@@ -103,7 +105,7 @@ Fora de Development a instalação é um comando explícito, no mesmo executáve
 docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e OpsDesk__Bootstrap__Password='uma-senha-provisoria'   api --setup            # = --migrate + --seed + --bootstrap-admin
 ```
 
-`--seed` nunca cria usuários de exemplo. O gestor do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum gestor. `--seed-demo` cria cinco pessoas e oito chamados, e recusa banco que já tem chamado.
+`--seed` nunca cria usuários de exemplo. O administrador do bootstrap nasce com `MustChangePassword`, e o bootstrap só age quando não existe nenhum administrador. `--seed-demo` cria cinco pessoas e oito chamados, e recusa banco que já tem chamado.
 
 Produção usa outro compose, com nome de projeto próprio (`opsdesk-prod`) para não compartilhar volume com este:
 
@@ -176,7 +178,7 @@ Criados pelo seed só em Development, senha `OpsDesk@123`:
 
 | E-mail | Perfil |
 | --- | --- |
-| `gestor@opsdesk.local` | Gestor |
+| `gestor@opsdesk.local` | Administrador |
 | `tecnico@opsdesk.local` | Técnico |
 | `usuario@opsdesk.local` | Usuário |
 
@@ -228,7 +230,7 @@ Testes de integração usam PostgreSQL real via Testcontainers. Não use o provi
 * O Npgsql rejeita `DateTime` com `Kind = Unspecified` em coluna `timestamptz`. Use `DateTimeOffset` ou `DateTime` em UTC explícito.
 * **Trocar para `DateTimeOffset` não basta:** o Npgsql só aceita deslocamento **zero** em `timestamptz`. Um `DateTimeOffset` com `-03:00` é recusado na escrita, mesmo sendo o instante correto. Por isso o `IBusinessCalendar` faz a conta no fuso do expediente mas devolve o prazo em UTC. Há teste fixando os dois lados disso (`Npgsql_recusa_data_com_deslocamento_diferente_de_utc` e `O_prazo_volta_em_UTC_porque_e_assim_que_o_banco_aceita`).
 * O expediente tem **dez** horas (08:00–18:00), então "1 dia útil" do README são 10 horas úteis, não 8. A tradução de dias para horas está no `DatabaseSeeder`, não espalhada.
-* **O seed de categorias só age em banco sem nenhuma.** Comparar por nome, como antes, recriava a categoria que o gestor renomeou — a cada subida em Development e a cada `--seed` em produção. Há teste fixando isso (`Seed_nao_ressuscita_categoria_renomeada_nem_reativa_desativada`).
+* **O seed de categorias só age em banco sem nenhuma.** Comparar por nome, como antes, recriava a categoria que o administrador renomeou — a cada subida em Development e a cada `--seed` em produção. Há teste fixando isso (`Seed_nao_ressuscita_categoria_renomeada_nem_reativa_desativada`).
 * A imagem `postgres:18` quer o volume montado em `/var/lib/postgresql`, não em `/var/lib/postgresql/data`. Montar no caminho antigo faz o container recusar a subida.
 * **Rotação de refresh token de uso único é estrita demais sem janela de tolerância.** Duas abas recarregando, ou o `StrictMode` do React executando o efeito duas vezes, produzem duas renovações concorrentes com o mesmo cookie — e a segunda parece reuso. `JwtOptions.RefreshTokenGraceSeconds` cobre isso no servidor, e no cliente `refreshSession` garante uma renovação por vez. Os dois lados são necessários: um sozinho não resolve.
 * **O `UseRateLimiter` vem depois do `UseAuthentication`.** A cota de envio de anexo é por usuário, e a partição só lê a claim do token depois que a autenticação preencheu o `context.User`. Com o limitador antes, toda requisição autenticada cai na partição de fallback por IP — num escritório atrás de NAT isso é uma cota única para a empresa, e na suíte de testes era uma cota única para todos os testes, que passaram a falhar em bloco com 429. Há teste fixando os dois lados (`UploadRateLimitTests`).

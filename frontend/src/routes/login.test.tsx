@@ -45,7 +45,7 @@ describe('tela de login', () => {
     expect(screen.queryByRole('link', { name: 'Cadastre-se' })).not.toBeInTheDocument()
   })
 
-  it('oferece a conta Microsoft só quando o gestor ligou e o aplicativo está configurado', async () => {
+  it('oferece a conta Microsoft só quando o administrador ligou e o aplicativo está configurado', async () => {
     withOptions({ microsoftSignInAvailable: true })
 
     renderWithProviders(<Login />, { route: '/entrar' })

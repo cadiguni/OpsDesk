@@ -358,7 +358,7 @@ public abstract record CreateTicketResult
     public sealed record RequesterNotAllowed : CreateTicketResult
     {
         public string Message =>
-            "Apenas técnicos e gestores abrem chamado em nome de outra pessoa.";
+            "Apenas técnicos e administradores abrem chamado em nome de outra pessoa.";
     }
 
     public sealed record AttachmentsInvalid : CreateTicketResult

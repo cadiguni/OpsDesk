@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from 'react'
-import { CalendarDays, FileUp, Headphones, Inbox, KeyRound, LayoutDashboard, LogOut, Plus, Settings, Tags, Ticket, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarDays, FileUp, Headphones, Inbox, KeyRound, LayoutDashboard, LogOut, Plus, Settings, Tags, Ticket, Users } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { ThemeSelect } from '@/components/theme-select'
@@ -12,7 +12,7 @@ import { CHANGE_PASSWORD_PATH } from '@/routes/protected-route'
 import { cn } from '@/lib/utils'
 
 /** Páginas da área de administração, para o título do cabeçalho. */
-const adminPrefixes = ['/usuarios', '/categorias', '/feriados', '/importacao', '/configuracoes']
+const adminPrefixes = ['/usuarios', '/cargos', '/categorias', '/feriados', '/importacao', '/configuracoes']
 
 export function AppLayout() {
   const { user, signOut, role, isStaff } = useSession()
@@ -40,6 +40,7 @@ export function AppLayout() {
                 Administração
               </p>
               <SidebarLink to="/usuarios" icon={<Users className="size-4" />}>Usuários</SidebarLink>
+              <SidebarLink to="/cargos" icon={<BriefcaseBusiness className="size-4" />}>Cargos</SidebarLink>
               <SidebarLink to="/categorias" icon={<Tags className="size-4" />}>Categorias</SidebarLink>
               <SidebarLink to="/feriados" icon={<CalendarDays className="size-4" />}>Feriados</SidebarLink>
               <SidebarLink to="/importacao" icon={<FileUp className="size-4" />}>Importação</SidebarLink>

@@ -7,7 +7,7 @@ const keys = {
   list: (query: categoriesApi.ManagedCategoryQuery) => ['admin-categories', 'list', query] as const,
 }
 
-/** `enabled` evita o 403 garantido quando quem abre a tela não é gestor. */
+/** `enabled` evita o 403 garantido quando quem abre a tela não é administrador. */
 export function useManagedCategories(query: categoriesApi.ManagedCategoryQuery, enabled: boolean) {
   return useQuery({
     queryKey: keys.list(query),

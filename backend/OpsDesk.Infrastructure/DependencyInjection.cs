@@ -11,6 +11,7 @@ using OpsDesk.Application.Abstractions;
 using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Auth;
 using OpsDesk.Application.Categories;
+using OpsDesk.Application.JobTitles;
 using OpsDesk.Application.Dashboard;
 using OpsDesk.Application.Holidays;
 using OpsDesk.Application.Import;
@@ -134,6 +135,7 @@ public static class DependencyInjection
         services.AddScoped<UserDirectoryService>();
         services.AddScoped<UserAdministrationService>();
         services.AddScoped<CategoryAdministrationService>();
+        services.AddScoped<JobTitleAdministrationService>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<NotificationService>();
         services.AddScoped<EmailSettingsService>();

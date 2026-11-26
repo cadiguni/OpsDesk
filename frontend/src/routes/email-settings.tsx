@@ -30,7 +30,7 @@ export function EmailSettingsPage() {
   const settings = useEmailSettings(role === 'Manager')
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores alteram as configurações.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores alteram as configurações.</p>
   }
 
   if (settings.isPending) {

@@ -33,7 +33,7 @@ public static class InboundEmailEndpoints
 
         inbound.MapDelete("/{id:guid}", Delete)
             .RequireAuthorization(AuthorizationPolicies.Manager)
-            .WithSummary("Exclui a mensagem. Só gestor.");
+            .WithSummary("Exclui a mensagem. Só administrador.");
 
         inbound.MapGet("/rules", ListRules).WithSummary("Regras de liberação e bloqueio.");
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { signIn, users } from './session'
 
-test('gestor vê o dashboard com os indicadores do período', async ({ page }) => {
+test('administrador vê o dashboard com os indicadores do período', async ({ page }) => {
   await signIn(page, users.manager)
 
   await page.getByRole('link', { name: 'Dashboard' }).click()

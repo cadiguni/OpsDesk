@@ -17,7 +17,7 @@ export function GeneralSettingsPage() {
   const settings = useGeneralSettings(role === 'Manager')
 
   if (role !== 'Manager') {
-    return <p className="text-muted-foreground text-sm">Apenas gestores alteram as configurações.</p>
+    return <p className="text-muted-foreground text-sm">Apenas administradores alteram as configurações.</p>
   }
 
   return (
@@ -84,7 +84,7 @@ function GeneralForm({ settings }: { settings: GeneralSettings }) {
         <CardHeader>
           <CardTitle>Acesso</CardTitle>
           <CardDescription>
-            Quem pode criar a própria conta pelo portal. Técnicos e gestores sempre são cadastrados por um gestor, em
+            Quem pode criar a própria conta pelo portal. Técnicos e administradores sempre são cadastrados por um administrador, em
             Usuários.
           </CardDescription>
         </CardHeader>

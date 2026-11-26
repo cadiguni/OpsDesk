@@ -47,7 +47,7 @@ export type UserRole = (typeof userRoles)[number]
 export const userRoleLabels: Record<UserRole, string> = {
   Requester: 'Usuário',
   Technician: 'Técnico',
-  Manager: 'Gestor',
+  Manager: 'Administrador',
 }
 
 export const ticketSources = [

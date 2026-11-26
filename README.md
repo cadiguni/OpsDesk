@@ -58,7 +58,7 @@ A API aplica as migrations e popula o seed na subida, apenas em ambiente de dese
 **Fora de desenvolvimento, instalar é uma etapa explícita.** O mesmo executável da API aceita comandos que fazem a tarefa e terminam, sem abrir porta nenhuma:
 
 ```bash
-# Schema, dados de referência e primeiro gestor, nesta ordem.
+# Schema, dados de referência e primeiro administrador, nesta ordem.
 docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e OpsDesk__Bootstrap__Password='uma-senha-provisoria'   api --setup
 ```
 
@@ -66,13 +66,13 @@ docker compose run --rm   -e OpsDesk__Bootstrap__Email=voce@empresa.com   -e Ops
 | --- | --- |
 | `--migrate` | aplica as migrations pendentes |
 | `--seed` | insere categorias (só em banco sem nenhuma), políticas de SLA e feriados (sem usuários de exemplo) |
-| `--bootstrap-admin` | cria o primeiro gestor a partir de `OpsDesk:Bootstrap` |
+| `--bootstrap-admin` | cria o primeiro administrador a partir de `OpsDesk:Bootstrap` |
 | `--setup` | os três acima, na ordem |
 | `--seed-demo` | dados de demonstração: cinco pessoas e oito chamados. Recusa banco que já tem chamado |
 
 Migration continua fora da subida da aplicação de propósito: ninguém deve descobrir uma alteração de schema lendo log de inicialização.
 
-O gestor criado pelo bootstrap nasce com **troca de senha obrigatória** — a senha chegou por variável de ambiente, e variável de ambiente aparece em log de deploy, em `docker inspect` e no histórico do shell. Até a troca acontecer, a API recusa com 403 tudo fora de `/api/auth` e a interface prende a navegação na tela de troca. O bootstrap só age quando **não existe nenhum gestor**: a variável esquecida no orquestrador não ressuscita conta administrativa a cada deploy. Se o e-mail já pertencer a alguém, essa conta é promovida e mantém a senha que já tinha.
+O administrador criado pelo bootstrap nasce com **troca de senha obrigatória** — a senha chegou por variável de ambiente, e variável de ambiente aparece em log de deploy, em `docker inspect` e no histórico do shell. Até a troca acontecer, a API recusa com 403 tudo fora de `/api/auth` e a interface prende a navegação na tela de troca. O bootstrap só age quando **não existe nenhum administrador**: a variável esquecida no orquestrador não ressuscita conta administrativa a cada deploy. Se o e-mail já pertencer a alguém, essa conta é promovida e mantém a senha que já tinha.
 
 `/health` e `/ready` respondem perguntas diferentes. O primeiro diz se o processo está vivo e o banco alcançável — é o que decide **reiniciar** o contêiner. O segundo acrescenta schema na versão da aplicação e dados de referência presentes — é o que decide **mandar tráfego**, e quem esquecer o `--setup` é acusado ali, com o comando que falta no corpo da resposta.
 
@@ -93,7 +93,7 @@ O que continua aberto, com a decisão pendente de cada item, está no fim da se�
 
 ## 2. Objetivo do sistema
 
-O objetivo do OpsDesk é permitir que usuários internos abram chamados de suporte para a equipe de TI, enquanto técnicos e gestores conseguem acompanhar, priorizar, atender e analisar esses chamados.
+O objetivo do OpsDesk é permitir que usuários internos abram chamados de suporte para a equipe de TI, enquanto técnicos e administradores conseguem acompanhar, priorizar, atender e analisar esses chamados.
 
 O sistema deve permitir:
 
@@ -152,7 +152,9 @@ Essas funcionalidades poderão ser adicionadas em versões futuras. Várias já 
 
 ## 4. Perfis de acesso
 
-O sistema terá inicialmente três perfis principais.
+O sistema tem três perfis: Usuário, Técnico e Administrador. O perfil decide o que a pessoa pode fazer no portal.
+
+O **cargo** (Tech Lead, Analista, Estagiário...) é outra coisa: só informativo, cadastrado pelo administrador (seção 13.16) e independente do perfil. Um analista pode ser Técnico e outro Administrador, sem que o catálogo precise de "Analista administrador".
 
 ---
 
@@ -210,16 +212,16 @@ Não pode:
 
 ---
 
-### 4.3 Gestor
+### 4.3 Administrador
 
-Representa o responsável pela operação da equipe de suporte.
+Representa o responsável pela operação da equipe de suporte e pela administração do portal. Até a versão 2.0 este perfil se chamava **Gestor**; o valor gravado no banco e levado no token continua `Manager`.
 
 Permissões:
 
 * visualizar todos os chamados;
 * atribuir chamados a técnicos;
 * alterar status, prioridade e categoria;
-* gerenciar categorias;
+* gerenciar categorias e cargos;
 * visualizar dashboard;
 * acompanhar chamados vencidos;
 * visualizar indicadores por técnico, categoria e prioridade;
@@ -238,11 +240,11 @@ A fronteira de visibilidade é entre **equipe e solicitante**, e não entre os t
 
 | Perfil | Enxerga |
 | --- | --- |
-| Gestor | todos os chamados |
+| Administrador | todos os chamados |
 | Técnico | todos os chamados |
 | Usuário | apenas os próprios, e neles nunca o que é interno |
 
-Técnico já viu apenas os chamados sem responsável e os atribuíos a ele. A restrição custava mais do que protegia: quem encaminhava um chamado para um colega o perdia de vista no mesmo instante, ninguém conseguia reclassificar nem comentar no chamado que o colega havia assumido, e cobrir uma ausência exigia passar pelo gestor. E não protegia dado de ninguém — é a mesma equipe, com o mesmo acesso a comentário e anexo internos.
+Técnico já viu apenas os chamados sem responsável e os atribuíos a ele. A restrição custava mais do que protegia: quem encaminhava um chamado para um colega o perdia de vista no mesmo instante, ninguém conseguia reclassificar nem comentar no chamado que o colega havia assumido, e cobrir uma ausência exigia passar pelo administrador. E não protegia dado de ninguém — é a mesma equipe, com o mesmo acesso a comentário e anexo internos.
 
 Ver tudo não é o mesmo que trabalhar sobre tudo: a fila pessoal continua disponível na listagem, agora como filtro ("Meus chamados") em vez de imposição do backend.
 
@@ -282,7 +284,7 @@ Status usado quando a equipe de TI está analisando o chamado antes de iniciar o
 
 Exemplo:
 
-> O gestor ou técnico está verificando categoria, prioridade e responsável.
+> O administrador ou técnico está verificando categoria, prioridade e responsável.
 
 ---
 
@@ -323,7 +325,7 @@ Status final do chamado.
 Pode acontecer quando:
 
 * usuário confirma a resolução;
-* gestor fecha manualmente;
+* administrador fecha manualmente;
 * sistema fecha automaticamente após determinado período, em versão futura.
 
 ---
@@ -355,7 +357,7 @@ O ciclo de vida não é um campo livre: cada status tem um conjunto fechado de d
 Observações:
 
 * **Aberto não vai direto para Resolvido.** Resolver sem passar por atendimento deixaria o chamado sem responsável e sem marco de resposta, e o indicador de SLA não teria o que medir.
-* **Fechamento direto pela equipe:** técnicos e gestores podem fechar qualquer chamado não terminal ao qual tenham acesso, inclusive com “Enviar e fechar”. O fechamento preenche `ResolvedAt` se ainda não houver resolução e encerra eventual pausa de SLA. O solicitante só fecha chamados já resolvidos.
+* **Fechamento direto pela equipe:** técnicos e administradores podem fechar qualquer chamado não terminal ao qual tenham acesso, inclusive com “Enviar e fechar”. O fechamento preenche `ResolvedAt` se ainda não houver resolução e encerra eventual pausa de SLA. O solicitante só fecha chamados já resolvidos.
 * **Resolvido volta para Em atendimento** quando a solução não resolveu. É o caminho de retrabalho antes do fechamento.
 * **Fechado volta para Em atendimento** por reabertura, dentro de sete dias do fechamento (seção 5.9). **Cancelado é terminal:** quem cancelou desistiu, e "o problema voltou" não se aplica.
 
@@ -363,7 +365,7 @@ Quem pode mover o chamado:
 
 | Perfil | Transições |
 | --- | --- |
-| Gestor | qualquer uma da tabela acima |
+| Administrador | qualquer uma da tabela acima |
 | Técnico | qualquer uma da tabela acima |
 | Usuário | cancelar o próprio chamado; fechar um chamado já resolvido, confirmando a solução. A reabertura do solicitante não passa por aqui: ela acontece quando ele responde (seção 5.9) |
 
@@ -437,7 +439,7 @@ Exemplos:
 
 ### 6.1 Reclassificação: trocar prioridade e categoria
 
-Prioridade e categoria de abertura são um palpite de quem abriu o chamado. Corrigir esse palpite é o trabalho da triagem, e **técnico e gestor podem trocar os dois** a qualquer momento enquanto o chamado não estiver encerrado.
+Prioridade e categoria de abertura são um palpite de quem abriu o chamado. Corrigir esse palpite é o trabalho da triagem, e **técnico e administrador podem trocar os dois** a qualquer momento enquanto o chamado não estiver encerrado.
 
 O solicitante não reclassifica, nem o próprio chamado: prioridade definida por quem abre transformaria a fila de atendimento numa negociação com quem escreve o pedido.
 
@@ -477,7 +479,7 @@ As categorias iniciais serão:
 
 Cada chamado deverá estar associado a uma categoria.
 
-Esta lista é o catálogo **inicial**: o seed a cria só quando não existe categoria nenhuma. Depois disso o catálogo é do gestor, pela tela da seção 13.10 — o seed não recria categoria renomeada nem reativa categoria desativada.
+Esta lista é o catálogo **inicial**: o seed a cria só quando não existe categoria nenhuma. Depois disso o catálogo é do administrador, pela tela da seção 13.10 — o seed não recria categoria renomeada nem reativa categoria desativada.
 
 Na versão 1, a categoria poderá ser selecionada pelo usuário na abertura do chamado.
 
@@ -520,7 +522,7 @@ Expediente padrão da versão 1:
 * segunda a sexta-feira;
 * das 08:00 às 18:00;
 * fuso horário `America/Sao_Paulo`;
-* feriados nacionais, renovados sozinhos, e os que o gestor cadastrar (seção 13.11).
+* feriados nacionais, renovados sozinhos, e os que o administrador cadastrar (seção 13.11).
 
 O expediente é fixo na versão 1 e não é configurável pela interface.
 
@@ -543,7 +545,7 @@ Justificativa: sem essa pausa, o indicador de chamados vencidos passa a medir a 
 
 ### 8.3 Marcos que encerram cada prazo
 
-* **SLA de resposta**: encerrado no primeiro comentário público de um técnico ou gestor no chamado. O instante é gravado em `FirstRespondedAt`.
+* **SLA de resposta**: encerrado no primeiro comentário público de um técnico ou administrador no chamado. O instante é gravado em `FirstRespondedAt`.
 * **SLA de resolução**: encerrado quando o chamado entra em "Resolvido". O instante é gravado em `ResolvedAt`. No fechamento direto pela equipe, a resolução é registrada junto com o fechamento; se já existia uma data de resolução, ela é preservada.
 
 Chamados cancelados não entram nos indicadores de SLA.
@@ -580,7 +582,7 @@ Campos automáticos:
 
 Por padrão, o solicitante é quem está autenticado, e o corpo do pedido não precisa informá-lo.
 
-**Técnico e gestor podem abrir chamado em nome de outro usuário.** É o atendimento por telefone ou presencial: quem registra é a equipe, mas o problema é de quem pediu, e o chamado precisa aparecer na lista dessa pessoa para que as respostas cheguem a ela. O solicitante recebe 403 se tentar — abrir chamado no nome de um colega não é atribuição dele.
+**Técnico e administrador podem abrir chamado em nome de outro usuário.** É o atendimento por telefone ou presencial: quem registra é a equipe, mas o problema é de quem pediu, e o chamado precisa aparecer na lista dessa pessoa para que as respostas cheguem a ela. O solicitante recebe 403 se tentar — abrir chamado no nome de um colega não é atribuição dele.
 
 O campo `requesterId` aceita apenas usuário ativo; inexistente ou inativo é recusado com 400. Informar o próprio identificador é abertura comum, não abertura em nome de terceiro.
 
@@ -613,10 +615,10 @@ Um chamado poderá ser atribuído de quatro formas:
 
 1. técnico assume manualmente;
 2. técnico encaminha para outro técnico;
-3. gestor atribui a um técnico;
+3. administrador atribui a um técnico;
 4. regra automática, em versão futura.
 
-Encaminhar não é privilégio de gestão: quem recebeu o chamado errado precisa poder passá-lo adiante sem depender do gestor. E, como a equipe enxerga a fila inteira (seção 4.4), encaminhar não tira o chamado da vista de quem encaminhou — dá para acompanhar o que foi passado adiante.
+Encaminhar não é privilégio de gestão: quem recebeu o chamado errado precisa poder passá-lo adiante sem depender do administrador. E, como a equipe enxerga a fila inteira (seção 4.4), encaminhar não tira o chamado da vista de quem encaminhou — dá para acompanhar o que foi passado adiante.
 
 Quando um técnico assumir o chamado:
 
@@ -636,7 +638,7 @@ Visível para:
 
 * usuário solicitante;
 * técnico responsável;
-* gestor.
+* administrador.
 
 Usado para comunicação normal entre usuário e equipe de TI.
 
@@ -651,7 +653,7 @@ Exemplo:
 Visível apenas para:
 
 * técnicos;
-* gestores.
+* administradores.
 
 Usado para observações internas da equipe.
 
@@ -746,7 +748,7 @@ Campos:
 Ações:
 
 * entrar;
-* **entrar com a conta Microsoft**, quando o gestor ligou e o aplicativo do Entra ID está configurado (seção 13.12). A pessoa não cria senha: no primeiro acesso a conta nasce como solicitante, e quem já tinha conta com o mesmo e-mail — com senha, criada por e-mail recebido ou pela importação — passa a entrar por ela, com o mesmo perfil e os mesmos chamados. Conta desativada não entra;
+* **entrar com a conta Microsoft**, quando o administrador ligou e o aplicativo do Entra ID está configurado (seção 13.12). A pessoa não cria senha: no primeiro acesso a conta nasce como solicitante, e quem já tinha conta com o mesmo e-mail — com senha, criada por e-mail recebido ou pela importação — passa a entrar por ela, com o mesmo perfil e os mesmos chamados. Conta desativada não entra;
 * acessar tela de cadastro, quando o autocadastro estiver ligado (seção 13.12);
 * "Esqueci minha senha", quando o envio de e-mail estiver configurado (seção 13.13).
 
@@ -769,7 +771,7 @@ Campos:
 
 Na versão 1, todo usuário cadastrado pelo portal será criado com perfil “Usuário”.
 
-Perfis técnicos e gestores são atribuídos pelo gestor na administração de usuários (seção 13.9). O primeiro gestor vem do bootstrap.
+Perfis técnicos e administradores são atribuídos pelo administrador na administração de usuários (seção 13.9). O primeiro administrador vem do bootstrap.
 
 O cadastro segue as configurações gerais (seção 13.12): com o autocadastro desligado, a API recusa com 403 e a tela de login não mostra o link; com uma lista de domínios, e-mail de outro domínio é recusado com 400.
 
@@ -800,7 +802,7 @@ Campos:
 * descrição;
 * categoria;
 * prioridade;
-* solicitante — só para técnico e gestor, e só para abrir em nome de outra pessoa. O padrão é “eu mesmo”;
+* solicitante — só para técnico e administrador, e só para abrir em nome de outra pessoa. O padrão é “eu mesmo”;
 * anexos — opcional.
 
 Ações:
@@ -848,7 +850,7 @@ Ações para técnico:
 * adicionar comentário interno;
 * marcar como resolvido.
 
-Ações para gestor:
+Ações para administrador:
 
 * atribuir técnico;
 * alterar prioridade;
@@ -883,7 +885,7 @@ Ordenação: mais recentes, mais antigos, prazo mais próximo, prioridade, e **a
 
 ---
 
-### 13.7 Dashboard do gestor
+### 13.7 Dashboard do administrador
 
 Tela com visão geral da operação.
 
@@ -915,38 +917,39 @@ Percentual sem base aparece como "—", e não como 0%: "ninguém cumpriu" e "n�
 
 Formulário com senha atual, nova senha e confirmação. Trocar a senha encerra as demais sessões do usuário e reabre a atual, para a pessoa não ser devolvida ao login logo depois de ter provado quem é.
 
-Atende dois casos com a mesma tela. Na troca voluntária é uma tela como as outras. Na **troca obrigatória** — o primeiro acesso do gestor criado pelo bootstrap — ela fica fora do layout do aplicativo, sem menu, e a navegação não sai dali: não há para onde ir, porque a API recusa todo o resto. A única outra saída é sair da conta.
+Atende dois casos com a mesma tela. Na troca voluntária é uma tela como as outras. Na **troca obrigatória** — o primeiro acesso do administrador criado pelo bootstrap — ela fica fora do layout do aplicativo, sem menu, e a navegação não sai dali: não há para onde ir, porque a API recusa todo o resto. A única outra saída é sair da conta.
 
 ### 13.9 Administração de usuários
 
-Só gestor. Lista todos os usuários, ativos e desativados, com busca por nome ou e-mail e filtros por perfil e situação, paginada no servidor. Em cada linha: perfil, situação, marca de senha provisória e quantos chamados em aberto a pessoa tem sob responsabilidade.
+Só administrador. Lista todos os usuários, ativos e desativados, com busca por nome ou e-mail e filtros por perfil e situação, paginada no servidor. Em cada linha: perfil, cargo, situação, marca de senha provisória e quantos chamados em aberto a pessoa tem sob responsabilidade.
 
 Ações:
 
-* **cadastrar** uma pessoa, com nome, e-mail e perfil;
+* **cadastrar** uma pessoa, com nome, e-mail, perfil e, opcionalmente, cargo;
+* **trocar o cargo**, inclusive o da própria conta — cargo não dá permissão, então a trava da própria conta não se aplica a ele;
 * **redefinir a senha** de alguém;
-* **trocar o perfil** entre Usuário, Técnico e Gestor;
+* **trocar o perfil** entre Usuário, Técnico e Administrador;
 * **desativar** e **reativar** a conta. Não existe exclusão: a pessoa é autora de chamados e comentários, e o histórico precisa continuar apontando para ela;
 * **ver o histórico** da conta.
 
 **Cadastro e redefinição entregam o acesso de um de dois jeitos**, conforme o envio de e-mail esteja configurado:
 
-* **com e-mail:** a pessoa recebe um link para definir a própria senha, válido por três dias. O gestor nunca vê nem escolhe a senha de ninguém. Na redefinição, a senha antiga deixa de valer na hora, e não só quando o link for usado — redefinir é o que se faz quando se desconfia da senha;
-* **sem e-mail:** a tela mostra uma senha provisória **uma única vez**, para o gestor repassar, e a conta nasce com troca obrigatória no primeiro acesso, a mesma trava do bootstrap.
+* **com e-mail:** a pessoa recebe um link para definir a própria senha, válido por três dias. O administrador nunca vê nem escolhe a senha de ninguém. Na redefinição, a senha antiga deixa de valer na hora, e não só quando o link for usado — redefinir é o que se faz quando se desconfia da senha;
+* **sem e-mail:** a tela mostra uma senha provisória **uma única vez**, para o administrador repassar, e a conta nasce com troca obrigatória no primeiro acesso, a mesma trava do bootstrap.
 
 Redefinir derruba as sessões abertas da pessoa.
 
 Regras:
 
-* **o gestor não altera o próprio perfil nem desativa a própria conta.** Quem age é sempre um gestor ativo; se ele não pode se tirar do posto, o sistema nunca fica sem gestor — situação que não teria volta pela interface, e que o bootstrap também não resolve, porque só age quando não existe gestor nenhum;
-* **desativar, ou rebaixar a Usuário, quem é responsável por chamado em aberto é recusado** (409), com a lista dos chamados no corpo da resposta. O gestor reatribui antes. Aberto aqui é qualquer status não terminal — Resolvido conta, porque o solicitante ainda pode devolvê-lo. Chamado que a pessoa *abriu* não bloqueia nada: continua na fila e continua sendo atendido;
+* **o administrador não altera o próprio perfil nem desativa a própria conta.** Quem age é sempre um administrador ativo; se ele não pode se tirar do posto, o sistema nunca fica sem administrador — situação que não teria volta pela interface, e que o bootstrap também não resolve, porque só age quando não existe administrador nenhum;
+* **desativar, ou rebaixar a Usuário, quem é responsável por chamado em aberto é recusado** (409), com a lista dos chamados no corpo da resposta. O administrador reatribui antes. Aberto aqui é qualquer status não terminal — Resolvido conta, porque o solicitante ainda pode devolvê-lo. Chamado que a pessoa *abriu* não bloqueia nada: continua na fila e continua sendo atendido;
 * **rebaixar e desativar derrubam as sessões** da pessoa (todos os refresh tokens são revogados). O token de acesso já emitido vale até expirar, no máximo `Jwt:AccessTokenMinutes` (15 minutos por padrão); a administração de usuários confere o perfil de quem age no banco, para que essa janela não sirva para promover ninguém. **Promover não derruba nada**: a renovação seguinte já traz o perfil novo.
 
-**Trilha de auditoria.** Cadastro, troca de perfil, desativação, reativação, troca de senha, redefinição pelo gestor e senha definida por link ficam registrados em `UserAuditEntry`, com quem fez, quando, e valor anterior e novo quando houver. A tela mostra o histórico de cada conta. Como o `TicketHistory`, a tabela é preenchida por interceptor do EF Core e não aceita alteração. Senha nunca entra no registro, só o fato de ela ter mudado.
+**Trilha de auditoria.** Cadastro, troca de perfil, troca de cargo, desativação, reativação, troca de senha, redefinição pelo administrador e senha definida por link ficam registrados em `UserAuditEntry`, com quem fez, quando, e valor anterior e novo quando houver. A tela mostra o histórico de cada conta. Como o `TicketHistory`, a tabela é preenchida por interceptor do EF Core e não aceita alteração. Senha nunca entra no registro, só o fato de ela ter mudado.
 
 ### 13.10 Administração de categorias
 
-Só gestor. Lista todas as categorias, ativas e desativadas, com busca por nome e filtro por situação, e quantos chamados cada uma tem, no total e em aberto.
+Só administrador. Lista todas as categorias, ativas e desativadas, com busca por nome e filtro por situação, e quantos chamados cada uma tem, no total e em aberto.
 
 Ações: **criar**, **editar** nome e descrição, **desativar** e **reativar**. Não existe exclusão.
 
@@ -959,21 +962,21 @@ Regras:
 
 ### 13.11 Feriados
 
-Só gestor. Os feriados de um ano, com navegação entre anos, ligados e desligados.
+Só administrador. Os feriados de um ano, com navegação entre anos, ligados e desligados.
 
 * **Os nacionais vêm do sistema e se renovam sozinhos.** Uma tarefa diária garante o ano corrente e os dois seguintes (`Holidays:RenewalIntervalHours`; zero desliga). Antes, em produção, a janela só andava com o seed, e em algum ano o cálculo de horas úteis passaria a contar feriado como expediente — em silêncio;
-* **nacional se desliga, não se apaga**, para a empresa que trabalha no dia. A renovação respeita a escolha: não religa o que o gestor desligou;
-* **o gestor cadastra os que a tabela nacional não tem**: municipal, estadual, recesso de fim de ano. Data já ocupada é recusada (409). Esses ele pode apagar;
+* **nacional se desliga, não se apaga**, para a empresa que trabalha no dia. A renovação respeita a escolha: não religa o que o administrador desligou;
+* **o administrador cadastra os que a tabela nacional não tem**: municipal, estadual, recesso de fim de ano. Data já ocupada é recusada (409). Esses ele pode apagar;
 * **mudar um feriado vale para os chamados abertos dali em diante.** Prazo de chamado já aberto não é recalculado: é o compromisso assumido na abertura.
 
 ### 13.12 Configurações
 
-Só gestor, em duas abas.
+Só administrador, em duas abas.
 
 **Geral:**
 
 * **nome da organização**, que aparece no login, no menu e nos e-mails de convite e de senha;
-* **autocadastro**, ligado ou desligado. Desligado, só o gestor cria contas;
+* **autocadastro**, ligado ou desligado. Desligado, só o administrador cria contas;
 * **domínios de e-mail aceitos no autocadastro**, como `empresa.com.br`. A comparação é exata: `empresa.com.br` não aceita `outra-empresa.com.br` nem `sub.empresa.com.br`. Lista vazia aceita qualquer domínio. A mesma lista serve à caixa monitorada configurada para aceitar só domínios internos;
 * **entrar com a conta Microsoft**, ligado ou desligado. Usa o aplicativo do Entra ID da aba E-mail — tenant, client id e secret —, que precisa ter o tenant pelo ID ou pelo domínio, nunca `common` ou `organizations`. A tela mostra o URI de redirecionamento a registrar no aplicativo e avisa enquanto faltar algo. É independente do autocadastro: com o autocadastro desligado, as pessoas do tenant continuam entrando pela Microsoft, e só a conta com senha deixa de ser criada pelo portal.
 
@@ -986,7 +989,7 @@ Toda mudança de configuração é auditada: quem, o quê e quando, nunca o valo
 Duas portas para a mesma tela, `/redefinir-senha`, aberta por um link enviado por e-mail:
 
 * **Esqueci minha senha**, a partir do login. A resposta é sempre a mesma, exista ou não a conta: o formulário não pode servir para descobrir quem tem cadastro. O link vale **uma hora**;
-* **convite**, enviado quando o gestor cadastra uma pessoa ou redefine a senha dela (seção 13.9). Vale **três dias**.
+* **convite**, enviado quando o administrador cadastra uma pessoa ou redefine a senha dela (seção 13.9). Vale **três dias**.
 
 Regras:
 
@@ -996,11 +999,11 @@ Regras:
 * o corpo do e-mail com o link é apagado da fila de saída depois do envio. A fila guarda o que foi enviado para diagnóstico, e um link de senha guardado ali seria uma credencial esquecida no banco;
 * é também por aqui que quem foi cadastrado sem senha — pela caixa de e-mail ou pela importação — passa a entrar no portal, e reencontra os próprios chamados.
 
-Sem envio de e-mail configurado, nada disso aparece: a tela de login esconde o link e o gestor recebe senha provisória no lugar do convite.
+Sem envio de e-mail configurado, nada disso aparece: a tela de login esconde o link e o administrador recebe senha provisória no lugar do convite.
 
 ### 13.14 Importação de chamados
 
-Só gestor. Traz o histórico de outra ferramenta, em dois passos: **conferir** e **importar**.
+Só administrador. Traz o histórico de outra ferramenta, em dois passos: **conferir** e **importar**.
 
 | Origem | Arquivo | Colunas reconhecidas |
 | --- | --- | --- |
@@ -1021,13 +1024,30 @@ Regras:
 * **responsável pelo e-mail, ou pelo nome quando ele é único na equipe.** Nome que dois técnicos compartilham não é adivinhado: o chamado entra sem responsável;
 * **status e prioridade** em português ou nos nomes da ferramenta de origem ("Pending" vira Aguardando usuário, "Urgent" vira Crítica). Vazio é Aberto e Média; valor desconhecido pula a linha;
 * **datas sem fuso são hora de São Paulo**, nos formatos `2026-09-30 14:00` e `30/09/2026 14:00`; com fuso explícito, vale o do arquivo;
-* **importar não notifica ninguém** — nem e-mail, nem portal. A abertura entra no histórico, em nome do gestor que importou;
+* **importar não notifica ninguém** — nem e-mail, nem portal. A abertura entra no histórico, em nome do administrador que importou;
 * **chamado importado fica fora dos indicadores de SLA** (seção 8.3);
 * até 10 MB e 5.000 linhas por arquivo.
 
 ### 13.15 E-mails recebidos e caixa de SPAM
 
-Técnico e gestor. As mensagens recebidas pela caixa monitorada, em abas: **SPAM**, **Falhas**, **Processados**, **Duplicados** e **Regras**. Ações na mensagem retida: não é spam (vira chamado ou resposta), não é spam e liberar o remetente, confirmar e bloquear o remetente, bloquear o domínio. Falha pode ser reprocessada. Só o gestor exclui. Especificação completa em [docs/integracao-email.md](docs/integracao-email.md).
+Técnico e administrador. As mensagens recebidas pela caixa monitorada, em abas: **SPAM**, **Falhas**, **Processados**, **Duplicados** e **Regras**. Ações na mensagem retida: não é spam (vira chamado ou resposta), não é spam e liberar o remetente, confirmar e bloquear o remetente, bloquear o domínio. Falha pode ser reprocessada. Só o administrador exclui. Especificação completa em [docs/integracao-email.md](docs/integracao-email.md).
+
+---
+
+### 13.16 Administração de cargos
+
+Só administrador, em `/cargos`. Lista os cargos, ativos e desativados, com quantas pessoas têm cada um.
+
+Ações: **criar**, **renomear**, **desativar** e **reativar**. Não existe exclusão.
+
+Regras:
+
+* **cargo é só informativo.** Não entra em autorização nenhuma: o que a pessoa pode fazer é o perfil (seção 4);
+* **cargo desativado sai do seletor**, e quem já o tem continua com ele. Atribuí-lo de novo é recusado;
+* **o nome é único sem diferenciar maiúsculas**, contando os desativados, como nas categorias;
+* **a trilha da conta guarda o nome do cargo da época**, e não o identificador: renomear depois não reescreve o passado.
+
+O catálogo inicial — Tech Lead, Analista, Assistente, Estagiário e Aprendiz — vem da migration `AddJobTitles`, e não do seed, porque o deploy de produção roda só `--migrate`. Depois disso o catálogo é do administrador, e nenhuma etapa o recria.
 
 ---
 
@@ -1044,6 +1064,7 @@ Campos:
 * Email;
 * PasswordHash;
 * Role;
+* JobTitleId — cargo, anulável e só informativo;
 * IsActive;
 * MustChangePassword;
 * EntraObjectId;
@@ -1052,9 +1073,9 @@ Campos:
 
 `EntraObjectId` é o identificador da pessoa no Entra ID (claim `oid`), gravado no primeiro login com a conta Microsoft. Nos logins seguintes é ele, e não o e-mail, que reconhece a pessoa. Único quando preenchido. O vínculo entra na trilha de auditoria da conta.
 
-`MustChangePassword` marca senha provisória. Nasce do bootstrap do primeiro gestor, cuja senha chega por variável de ambiente, e da senha provisória que o gestor recebe ao cadastrar ou redefinir alguém sem e-mail configurado (seção 13.9). Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém uma credencial que passou pela mão de outra pessoa valendo uma vez, e não para sempre.
+`MustChangePassword` marca senha provisória. Nasce do bootstrap do primeiro administrador, cuja senha chega por variável de ambiente, e da senha provisória que o administrador recebe ao cadastrar ou redefinir alguém sem e-mail configurado (seção 13.9). Enquanto for verdadeiro, a API recusa toda rota fora de `/api/auth` com 403, e a troca pelo próprio usuário limpa a marca. É o que mantém uma credencial que passou pela mão de outra pessoa valendo uma vez, e não para sempre.
 
-`PasswordHash` é anulável. Conta sem senha não autentica **com senha** até a pessoa definir uma por link (seção 13.13) — pela conta Microsoft, entra normalmente. Nasce assim o solicitante que chegou pela caixa de e-mail ou pela importação, a pessoa convidada pelo gestor e a conta cuja senha o gestor redefiniu por e-mail.
+`PasswordHash` é anulável. Conta sem senha não autentica **com senha** até a pessoa definir uma por link (seção 13.13) — pela conta Microsoft, entra normalmente. Nasce assim o solicitante que chegou pela caixa de e-mail ou pela importação, a pessoa convidada pelo administrador e a conta cuja senha o administrador redefiniu por e-mail.
 
 ---
 
@@ -1092,6 +1113,20 @@ Observações:
 * `ExternalId` guarda o identificador da origem externa — o `Message-ID` do e-mail que gerou o chamado, ou o código do chamado na ferramenta de onde foi importado. É único por origem, e é o que impede a mesma mensagem ou a mesma linha de virar dois chamados;
 * `FirstRespondedAt` fecha o SLA de resposta;
 * `SlaPausedAt` e `SlaPausedBusinessMinutes` sustentam a pausa descrita na seção 8.2.
+
+---
+
+### JobTitle
+
+Cargo da pessoa (seção 13.16). Só informativo.
+
+Campos:
+
+* Id;
+* Name — único sem diferenciar maiúsculas;
+* IsActive;
+* CreatedAt;
+* UpdatedAt.
 
 ---
 
@@ -1169,7 +1204,7 @@ Campos:
 * IsActive;
 * IsCustom.
 
-`IsCustom` separa o feriado cadastrado pelo gestor do nacional, que vem do sistema; `IsActive` desliga um feriado sem apagá-lo (seção 13.11).
+`IsCustom` separa o feriado cadastrado pelo administrador do nacional, que vem do sistema; `IsActive` desliga um feriado sem apagá-lo (seção 13.11).
 
 O seed popula os feriados nacionais do ano corrente e dos dois seguintes, calculando as datas móveis a partir da Páscoa, e uma tarefa diária mantém essa janela andando. Carnaval e Corpus Christi entram na lista: são ponto facultativo federal, mas a equipe de suporte não está de plantão, e SLA contando hora útil em dia sem ninguém atendendo é indicador mentiroso.
 
@@ -1201,7 +1236,7 @@ Campos:
 
 * Id;
 * UserId;
-* Action — `Created`, `RoleChanged`, `Deactivated`, `Reactivated`, `PasswordChanged`, `PasswordReset` ou `PasswordSetByLink`;
+* Action — `Created`, `RoleChanged`, `JobTitleChanged`, `Deactivated`, `Reactivated`, `PasswordChanged`, `PasswordReset`, `PasswordSetByLink` ou `MicrosoftAccountLinked`;
 * PreviousValue;
 * NewValue;
 * ChangedById;
@@ -1275,7 +1310,7 @@ Não pode acessar:
 
 * chamados de outros usuários;
 * comentários internos;
-* dashboard de gestor;
+* dashboard de administrador;
 * painel técnico.
 
 ---
@@ -1299,7 +1334,7 @@ Não pode acessar:
 
 ---
 
-### Gestor
+### Administrador
 
 Pode acessar:
 
@@ -1429,20 +1464,20 @@ Cada item traz o que é, por que está na lista, e o que ainda precisa ser decid
 * SLA em horas úteis, com pausa e retomada;
 * categorias, prioridades e dashboard;
 * **anexos** em chamados e comentários, antecipados da 1.1;
-* **instalação em branco**: comandos de migration, seed e bootstrap do primeiro gestor, com troca de senha obrigatória no primeiro acesso;
+* **instalação em branco**: comandos de migration, seed e bootstrap do primeiro administrador, com troca de senha obrigatória no primeiro acesso;
 * **diagnóstico de instalação**: `/ready` separado do `/health`, e validação de configuração na subida.
 
 ### Primeira execução: instalar em branco
 
-Até a 1.0 o projeto subia pronto para uso **em desenvolvimento**, e apenas nele. A API aplicava migration e seed na subida só quando o ambiente era `Development`; em qualquer outro, `ApplyDatabaseStartupTasksAsync` retornava cedo e nada acontecia. Quem clonasse e subisse em produção encontrava banco sem schema, zero categorias e políticas de SLA — abrir chamado respondia **500** —, zero feriados e zero usuários, sem caminho pela interface para o primeiro gestor existir. O ambiente de desenvolvimento escondia tudo isso, o que é justamente o que tornava o problema traiçoeiro: funcionava na máquina de quem escreveu.
+Até a 1.0 o projeto subia pronto para uso **em desenvolvimento**, e apenas nele. A API aplicava migration e seed na subida só quando o ambiente era `Development`; em qualquer outro, `ApplyDatabaseStartupTasksAsync` retornava cedo e nada acontecia. Quem clonasse e subisse em produção encontrava banco sem schema, zero categorias e políticas de SLA — abrir chamado respondia **500** —, zero feriados e zero usuários, sem caminho pela interface para o primeiro administrador existir. O ambiente de desenvolvimento escondia tudo isso, o que é justamente o que tornava o problema traiçoeiro: funcionava na máquina de quem escreveu.
 
 **Entregue: instalação como etapa explícita de deploy.** O executável da API aceita `--migrate`, `--seed`, `--bootstrap-admin` e `--setup`, faz a tarefa e termina, sem abrir porta. Os comandos e o exemplo de uso estão na seção 1, em "Como executar". A decisão entre comando explícito e execução automática na subida ficou com o comando, pelo mesmo argumento que já valia para a migration: ninguém deve descobrir alteração de banco pelo log de inicialização. O preço é conhecido e aceito — quem esquecer de rodar sobe um sistema que parece saudável e recusa o primeiro chamado, e é o que o item de readiness abaixo passa a acusar.
 
-**Entregue: o primeiro gestor, por variável de ambiente.** `OpsDesk__Bootstrap__Email` e `OpsDesk__Bootstrap__Password`, aplicadas uma única vez quando não existir nenhum gestor, com **troca de senha obrigatória no primeiro acesso** (`User.MustChangePassword`). As outras duas opções foram descartadas: o comando de linha dedicado exigiria um passo manual e acesso ao contêiner sem ganho real de segurança sobre isto, e "o primeiro usuário cadastrado vira gestor" é cómodo e perigoso — numa instância exposta antes de ser configurada, quem chegasse primeiro viraria administrador do sistema.
+**Entregue: o primeiro administrador, por variável de ambiente.** `OpsDesk__Bootstrap__Email` e `OpsDesk__Bootstrap__Password`, aplicadas uma única vez quando não existir nenhum administrador, com **troca de senha obrigatória no primeiro acesso** (`User.MustChangePassword`). As outras duas opções foram descartadas: o comando de linha dedicado exigiria um passo manual e acesso ao contêiner sem ganho real de segurança sobre isto, e "o primeiro usuário cadastrado vira administrador" é cómodo e perigoso — numa instância exposta antes de ser configurada, quem chegasse primeiro viraria administrador do sistema.
 
 O custo do caminho escolhido é a senha existir em configuração, que é lugar que vaza: log de deploy, `docker inspect`, histórico do shell. A troca obrigatória é o que paga esse custo, e por isso ela não é cosmética — enquanto a marca estiver de pé, a API recusa com 403 tudo fora de `/api/auth`, por middleware e não por atributo de rota, para que endpoint novo nasça coberto.
 
-**Entregue: promover os demais.** O bootstrap resolve o primeiro gestor; os seguintes, e os técnicos, saem da tela de administração de usuários (seção 13.9), antecipada da 1.1.
+**Entregue: promover os demais.** O bootstrap resolve o primeiro administrador; os seguintes, e os técnicos, saem da tela de administração de usuários (seção 13.9), antecipada da 1.1.
 
 **Entregue: feriados que se renovam, e tela para administrá-los.** O seed cobria o ano corrente e os dois seguintes, e essa janela só "andava" porque rodava a cada subida em desenvolvimento. Em produção, em algum ano o cálculo de horas úteis passaria a contar feriado como expediente — em silêncio. Decidido: as duas coisas. Uma tarefa diária mantém a janela, e a tela da seção 13.11 resolve o que nenhuma tabela nacional tem, o feriado municipal e o recesso.
 
@@ -1464,9 +1499,9 @@ O custo do caminho escolhido é a senha existir em configuração, que é lugar 
 
 ### Versão 1.1 — Melhorias operacionais
 
-**Entregue antes do prazo: tela de administração de usuários.** Seção 13.9. As três decisões que estavam pendentes ficaram assim: só gestor administra; desativar ou rebaixar quem tem chamado em aberto exige reatribuir antes; e o gestor não mexe na própria conta.
+**Entregue antes do prazo: tela de administração de usuários.** Seção 13.9. As três decisões que estavam pendentes ficaram assim: só administrador administra; desativar ou rebaixar quem tem chamado em aberto exige reatribuir antes; e o administrador não mexe na própria conta.
 
-**Entregue: trilha de auditoria de usuário.** Decidido pela tabela própria, `UserAuditEntry`, preenchida por interceptor no molde do `TicketHistory` (seção 13.9). Junto vieram cadastro pelo gestor, convite por e-mail, "esqueci minha senha" e as configurações gerais de autocadastro (seções 13.12 e 13.13).
+**Entregue: trilha de auditoria de usuário.** Decidido pela tabela própria, `UserAuditEntry`, preenchida por interceptor no molde do `TicketHistory` (seção 13.9). Junto vieram cadastro pelo administrador, convite por e-mail, "esqueci minha senha" e as configurações gerais de autocadastro (seções 13.12 e 13.13).
 
 **Entregue antes do prazo: tela de administração de categorias.** Seção 13.10. A decisão pendente ficou como a intenção previa: chamado de categoria desativada continua válido, e a categoria só sai dos seletores. Implementar revelou uma armadilha no seed, que comparava por nome e por isso recriava a categoria renomeada a cada subida; ele agora só semeia em banco sem categoria nenhuma.
 
@@ -1506,7 +1541,7 @@ Quem recebe o quê:
 
 O solicitante recebe no portal os mesmos avisos do e-mail, e no portal eles chegam mesmo com o envio de e-mail desligado ou parado no spam. Quando resposta e mudança de status vêm juntas, como em "enviar e fechar", o aviso do portal é o da mudança de status — é o que muda a vida dele; a resposta ele lê ao abrir.
 
-* **o gestor não recebe nada por ser gestor**: recebe no portal quando o chamado está no nome dele, pela mesma regra de qualquer responsável;
+* **o administrador não recebe nada por ser administrador**: recebe no portal quando o chamado está no nome dele, pela mesma regra de qualquer responsável;
 * **ninguém é avisado da própria ação**;
 * **uma gravação, um aviso por pessoa.** "Enviar e fechar" é um e-mail com a resposta e o novo status, não dois;
 * **o e-mail avisa que respostas a ele não são lidas.** Até a versão 2.0 ninguém lê a caixa de suporte, e uma resposta por e-mail se perderia sem que a pessoa soubesse. O aviso sai quando a ingestão existir;
@@ -1516,7 +1551,7 @@ O solicitante recebe no portal os mesmos avisos do e-mail, e no portal eles cheg
 
 **Decidido: envio pelo Microsoft Graph, configurado no próprio portal.** A empresa usa Microsoft 365. O envio é pela API `sendMail` do Graph, com um aplicativo registrado no Entra ID, e não por SMTP: a Microsoft anunciou a desativação da autenticação básica no SMTP do Exchange Online, e SMTP com OAuth dá o mesmo trabalho de registro sem vantagem. O remetente é a caixa de suporte — a mesma que a versão 2.0 vai monitorar —, para que "responder" no e-mail volte para ela.
 
-A configuração fica numa tela **Configurações → E-mail**, só para gestor, e não em variável de ambiente. O motivo decisivo é que o *client secret* do Entra ID expira, em no máximo 24 meses: em variável de ambiente, trocá-lo exige acesso ao servidor e deploy, e esquecer faz o sistema parar de mandar e-mail em silêncio. A tela tem:
+A configuração fica numa tela **Configurações → E-mail**, só para administrador, e não em variável de ambiente. O motivo decisivo é que o *client secret* do Entra ID expira, em no máximo 24 meses: em variável de ambiente, trocá-lo exige acesso ao servidor e deploy, e esquecer faz o sistema parar de mandar e-mail em silêncio. A tela tem:
 
 * envio ligado ou desligado;
 * endereço remetente e nome de exibição;
@@ -1526,7 +1561,7 @@ A configuração fica numa tela **Configurações → E-mail**, só para gestor,
 
 Regras da configuração:
 
-* **o secret é só de escrita.** A API nunca o devolve: a tela mostra "configurado em" e um botão de trocar. Devolvê-lo entregaria a credencial a qualquer sessão de gestor, inclusive a um token roubado;
+* **o secret é só de escrita.** A API nunca o devolve: a tela mostra "configurado em" e um botão de trocar. Devolvê-lo entregaria a credencial a qualquer sessão de administrador, inclusive a um token roubado;
 * **o secret é cifrado no banco** pelo Data Protection do ASP.NET, e **as chaves do Data Protection ficam em volume persistente.** Guardadas dentro do contêiner, um reinício gera chaves novas, o secret gravado deixa de ser decifrável e o e-mail para depois do deploy, sem erro que aponte a causa;
 * **mudança de configuração é auditada**: quem, o quê, quando — nunca o valor do secret.
 
@@ -1548,7 +1583,7 @@ Com o envio desligado, **nenhum e-mail entra na fila** — ligar o envio não di
 
 **Entregue: alertas de SLA no portal.** Dois avisos por prazo — resposta e resolução —: um quando resta **25% do prazo da prioridade**, em horas úteis, e outro quando ele vence. Proporcional porque um valor fixo chegaria tarde para o crítico ou cedo para o de baixa prioridade: crítico, com 4 horas de resolução, avisa com 1 hora; média, com 30, avisa com 7h30.
 
-* **quem recebe:** o responsável. Chamado sem responsável, ou com responsável desativado, avisa os gestores — do contrário o alerta mais importante, o do chamado que ninguém pegou, não iria para ninguém. O solicitante não recebe: o prazo é compromisso da equipe;
+* **quem recebe:** o responsável. Chamado sem responsável, ou com responsável desativado, avisa os administradores — do contrário o alerta mais importante, o do chamado que ninguém pegou, não iria para ninguém. O solicitante não recebe: o prazo é compromisso da equipe;
 * **só no portal**, sem e-mail;
 * **prazo que não corre não alerta:** resposta já dada, chamado resolvido, fechado ou cancelado, e resolução pausada enquanto aguarda o solicitante;
 * **um aviso por prazo.** Quando o prazo se move — pausa encerrada, reabertura, reclassificação —, o prazo novo pode alertar de novo;
@@ -1562,7 +1597,7 @@ A verificação roda a cada cinco minutos no processo da API (`SlaAlerts:Interva
 
 **Entregue: importação de CSV e JSON, e do Freshdesk e do Freshservice.** Pelo arquivo de exportação das duas ferramentas, com conferência antes de gravar (seção 13.14). Chamado importado fica fora dos indicadores de SLA (seção 8.3).
 
-**Entregue: entrar com a conta Microsoft.** Botão no login, ligado pelo gestor nas configurações gerais, com o mesmo aplicativo do Entra ID do e-mail. Quem é da empresa entra sem criar senha (seção 13.1). Decisões em [docs/arquitetura.md](docs/arquitetura.md), 4.25; o registro no Entra ID em [docs/integracao-email.md](docs/integracao-email.md), seção 6.2.
+**Entregue: entrar com a conta Microsoft.** Botão no login, ligado pelo administrador nas configurações gerais, com o mesmo aplicativo do Entra ID do e-mail. Quem é da empresa entra sem criar senha (seção 13.1). Decisões em [docs/arquitetura.md](docs/arquitetura.md), 4.25; o registro no Entra ID em [docs/integracao-email.md](docs/integracao-email.md), seção 6.2.
 
 ### Infraestrutura, quando sair do ambiente local
 
@@ -1583,7 +1618,7 @@ O caminho está preparado: é uma implementação nova de `IAttachmentStorage` (
 
 **Entregue: forwarded headers.** O rate limiting particiona por IP de origem nas rotas anônimas, e atrás de proxy todo pedido chegaria com o IP do proxy. `UseForwardedHeaders` é o primeiro middleware, e só confia no cabeçalho vindo das redes e proxies listados em `ForwardedHeaders:KnownNetworks` e `KnownProxies` — confiar em qualquer origem deixaria o cliente escolher a própria partição. O compose de produção configura a rede interna dele.
 
-**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir — junto com o seed de dados de referência e o bootstrap do primeiro gestor, descritos em "Primeira execução" acima. No compose de produção, é o serviço `setup`.
+**Migration como etapa de deploy.** A API só aplica migration automaticamente em Development. Em qualquer outro ambiente o schema sobe como passo explícito, antes da aplicação nova subir — junto com o seed de dados de referência e o bootstrap do primeiro administrador, descritos em "Primeira execução" acima. No compose de produção, é o serviço `setup`.
 
 ### Em aberto
 
@@ -1609,7 +1644,7 @@ A versão 1 será considerada concluída quando:
 * um usuário conseguir se cadastrar e abrir chamado;
 * um técnico conseguir visualizar e assumir chamado;
 * um técnico conseguir responder e alterar status;
-* um gestor conseguir visualizar todos os chamados;
+* um administrador conseguir visualizar todos os chamados;
 * o sistema impedir acesso indevido por perfil;
 * o chamado possuir histórico de alterações;
 * o dashboard mostrar indicadores básicos;

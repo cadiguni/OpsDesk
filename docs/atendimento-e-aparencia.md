@@ -4,7 +4,7 @@
 
 Na conversa do chamado, **Enviar** publica o comentário e mantém o status. **Enviar e fechar** publica o mesmo comentário e muda o chamado para **Fechado** em uma única operação. A ação serve tanto para respostas públicas quanto para notas internas da equipe.
 
-- Técnicos e gestores podem fechar chamados não terminais dentro da sua visibilidade.
+- Técnicos e administradores podem fechar chamados não terminais dentro da sua visibilidade.
 - O solicitante pode enviar uma confirmação e fechar seu próprio chamado quando ele estiver resolvido.
 - Chamados cancelados não aceitam novos comentários. Chamado fechado aceita resposta do solicitante dentro da janela de reabertura, e ela o reabre (README, seção 5.9); a equipe reabre pela ação de status antes de comentar.
 - A opção aparece conforme `allowedNextStatuses`, calculado pela API. A autorização também é verificada no servidor.
@@ -39,9 +39,9 @@ A descrição de abertura é a primeira mensagem da conversa, marcada como abert
 
 O editor oferece **Resposta pública** e **Nota interna**, com indicação explícita de quem poderá ler. A opção de nota interna só aparece para a equipe. Histórico recebe uma apresentação de linha do tempo, e textos longos da conversa e descrição quebram para caber na tela.
 
-No painel de gerenciamento, **Assumir chamado** e **Devolver para a fila** continuam como botão, porque são o gesto mais frequente e não devem custar abrir um seletor e achar o próprio nome. Ao lado deles, **Encaminhar para** lista a equipe: técnico também repassa chamado, não só gestor. Encaminhar para um colega tira o chamado da visibilidade de quem encaminhou, então a tela volta para a lista em vez de renderizar um chamado que a API já não devolve.
+No painel de gerenciamento, **Assumir chamado** e **Devolver para a fila** continuam como botão, porque são o gesto mais frequente e não devem custar abrir um seletor e achar o próprio nome. Ao lado deles, **Encaminhar para** lista a equipe: técnico também repassa chamado, não só administrador. Encaminhar para um colega tira o chamado da visibilidade de quem encaminhou, então a tela volta para a lista em vez de renderizar um chamado que a API já não devolve.
 
-Na abertura, técnico e gestor veem um campo **Solicitante**, com o padrão “eu mesmo”, para registrar chamado em nome de quem ligou ou apareceu no balcão. O solicitante não vê esse campo.
+Na abertura, técnico e administrador veem um campo **Solicitante**, com o padrão “eu mesmo”, para registrar chamado em nome de quem ligou ou apareceu no balcão. O solicitante não vê esse campo.
 
 As transições viram botões com o nome da ação — **Enviar para triagem**, **Iniciar atendimento**, **Aguardar solicitante**, **Marcar como resolvido** —, e não um seletor com o nome do estado. A lista de botões continua vindo de `allowedNextStatuses`. Fechar e cancelar pedem um segundo clique de confirmação no próprio botão.
 

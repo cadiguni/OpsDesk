@@ -47,7 +47,7 @@ Os arquivos ficam em [deploy/](../deploy):
 
 Os comandos são executados na raiz do repositório.
 
-**1. Gerar o `.env`.** O script copia o `.env.example`, sorteia a senha do banco, a chave dos tokens e a senha provisória do primeiro gestor, e mostra essa senha uma vez:
+**1. Gerar o `.env`.** O script copia o `.env.example`, sorteia a senha do banco, a chave dos tokens e a senha provisória do primeiro administrador, e mostra essa senha uma vez:
 
 ```bash
 ./deploy/new-env.sh opsdesk.empresa.com voce@empresa.com
@@ -62,7 +62,7 @@ Revise o `deploy/.env` gerado. As decisões que não têm padrão seguro são du
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env build
 ```
 
-**3. Instalar o banco.** O serviço `setup` aplica as migrations, insere os dados de referência (categorias, políticas de SLA e feriados nacionais) e cria o primeiro gestor. Depois disso, termina:
+**3. Instalar o banco.** O serviço `setup` aplica as migrations, insere os dados de referência (categorias, políticas de SLA e feriados nacionais) e cria o primeiro administrador. Depois disso, termina:
 
 ```bash
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile setup run --rm setup
@@ -77,7 +77,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps    # todos
 
 **5. Primeiro acesso.** Entre com o e-mail e a senha provisória do passo 1. O sistema exige trocar a senha antes de mostrar qualquer outra tela, e a API recusa tudo o mais até a troca acontecer. Depois disso, apague `OPSDESK_ADMIN_PASSWORD` do `.env`: ela não vale mais nada, mas não há motivo para guardá-la.
 
-O bootstrap só age quando **não existe nenhum gestor**. Rodar o `setup` de novo, a cada atualização, não recria nem altera conta nenhuma.
+O bootstrap só age quando **não existe nenhum administrador**. Rodar o `setup` de novo, a cada atualização, não recria nem altera conta nenhuma.
 
 ### Depois do primeiro acesso
 
@@ -135,7 +135,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env --profile set
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
 
-O `setup` é seguro de repetir. Ele aplica só as migrations pendentes e só insere o dado de referência que falta. O seed de categorias, por exemplo, só age em banco sem nenhuma, para não ressuscitar a categoria que o gestor renomeou.
+O `setup` é seguro de repetir. Ele aplica só as migrations pendentes e só insere o dado de referência que falta. O seed de categorias, por exemplo, só age em banco sem nenhuma, para não ressuscitar a categoria que o administrador renomeou.
 
 Esquecer o `setup` não derruba nada em silêncio: o `/ready` reprova a migration pendente, com o comando no corpo da resposta.
 

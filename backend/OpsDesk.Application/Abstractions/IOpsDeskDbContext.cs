@@ -26,6 +26,8 @@ public interface IOpsDeskDbContext
 
     DbSet<Category> Categories { get; }
 
+    DbSet<JobTitle> JobTitles { get; }
+
     DbSet<TicketComment> TicketComments { get; }
 
     DbSet<TicketAttachment> TicketAttachments { get; }

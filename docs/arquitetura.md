@@ -105,14 +105,14 @@ Quatro projetos são o suficiente. A regra prática: se uma classe nova não tem
 Toda leitura de chamados passa por um filtro derivado do usuário autenticado, aplicado no `IQueryable` antes de qualquer projeção:
 
 * **Usuário**: apenas chamados em que ele é o solicitante;
-* **Técnico**: todos os chamados, como o gestor — a fronteira de visibilidade é entre equipe e solicitante, e não entre perfis da equipe;
-* **Gestor**: todos.
+* **Técnico**: todos os chamados, como o administrador — a fronteira de visibilidade é entre equipe e solicitante, e não entre perfis da equipe;
+* **Administrador**: todos.
 
 Comentários internos (`IsInternal = true`) são removidos na mesma camada quando o solicitante é o requisitante do chamado.
 
 **Por quê:** se a proteção viver em atributo de rota, basta alguém criar um endpoint novo e esquecer o atributo para vazar chamado de terceiro. Amarrando ao acesso aos dados, o caminho inseguro deixa de existir.
 
-Todos os predicados decidem por `TicketViewer.IsStaff`, que é falso para qualquer valor de perfil fora de técnico e gestor. É um fail closed deliberado: perfil novo que ninguém lembrou de tratar cai no caso mais restrito em vez de virar acesso amplo, e há teste fixando isso.
+Todos os predicados decidem por `TicketViewer.IsStaff`, que é falso para qualquer valor de perfil fora de técnico e administrador. É um fail closed deliberado: perfil novo que ninguém lembrou de tratar cai no caso mais restrito em vez de virar acesso amplo, e há teste fixando isso.
 
 ### 4.2 Histórico é gravado por interceptor do EF Core
 
@@ -235,7 +235,7 @@ A cópia do `IsInternal` no anexo é redundância deliberada. O filtro de visibi
 
 ### 4.17 Instalar é um comando do próprio executável da API
 
-Fora de `Development`, schema, dados de referência e primeiro gestor sobem por `--migrate`, `--seed`, `--bootstrap-admin` e `--setup`, passados ao mesmo binário que serve a API. O processo faz a tarefa e termina, sem abrir porta e sem iniciar os serviços em segundo plano.
+Fora de `Development`, schema, dados de referência e primeiro administrador sobem por `--migrate`, `--seed`, `--bootstrap-admin` e `--setup`, passados ao mesmo binário que serve a API. O processo faz a tarefa e termina, sem abrir porta e sem iniciar os serviços em segundo plano.
 
 **Por quê o mesmo executável, e não um utilitário separado:** a imagem do contêiner já é essa, e as migrations já estão nela. Um `opsdesk-cli` seria uma segunda imagem para publicar, versionar e manter em sincronia com a primeira, carregando exatamente o mesmo código.
 
@@ -243,13 +243,13 @@ Fora de `Development`, schema, dados de referência e primeiro gestor sobem por 
 
 ### 4.18 A credencial de bootstrap vale uma vez
 
-O primeiro gestor nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePassword`. Enquanto a marca estiver de pé, um middleware recusa com 403 toda requisição autenticada fora de `/api/auth`.
+O primeiro administrador nasce de `OpsDesk:Bootstrap`, e nasce com `User.MustChangePassword`. Enquanto a marca estiver de pé, um middleware recusa com 403 toda requisição autenticada fora de `/api/auth`.
 
 **Por quê a marca existe:** a senha chegou por variável de ambiente, que aparece em log de deploy, em `docker inspect` e no histórico do shell de quem instalou. Sem a troca obrigatória, uma credencial que passou por todos esses lugares seria a senha permanente do administrador do sistema.
 
 **Por quê middleware, e não filtro de endpoint:** filtro se declara rota a rota, e rota nova nasce sem ele — o mesmo raciocínio da decisão 4.1. Aqui o padrão é recusar, e abrir exceção exige dizer qual.
 
-**Por quê o bootstrap só age sem nenhum gestor:** a variável tende a ficar esquecida no orquestrador. Recriar a conta a cada deploy ressuscitaria, em silêncio, um administrador que alguém pode ter desativado de propósito.
+**Por quê o bootstrap só age sem nenhum administrador:** a variável tende a ficar esquecida no orquestrador. Recriar a conta a cada deploy ressuscitaria, em silêncio, um administrador que alguém pode ter desativado de propósito.
 
 ### 4.19 Liveness e readiness respondem perguntas diferentes
 
@@ -321,7 +321,7 @@ Produção tem compose próprio, em `deploy/`, descrito em [instalacao.md](insta
 
 Os cabeçalhos de segurança (CSP, HSTS e os demais) ficam no nginx do SPA, em `frontend/nginx/security-headers.conf`, e não na borda: o nginx é o único componente presente em toda forma de subir. A configuração do nginx é um template, e o endereço da API (`OPSDESK_API_UPSTREAM`) e o tratamento do `X-Forwarded-For` (`OPSDESK_EDGE_SETS_FORWARDED_FOR`) vêm de variável de ambiente.
 
-O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhuma: depois da instalação o catálogo é do gestor), as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
+O seed inicial cria as categorias da seção 7 do README (só em banco sem nenhuma: depois da instalação o catálogo é do administrador), as políticas de SLA da seção 8 e um usuário de cada perfil. Os **usuários** só entram em ambiente de desenvolvimento; os dados de referência valem em qualquer ambiente, e fora de `Development` sobem pelo comando `--seed` (decisão 4.17).
 
 ---
 

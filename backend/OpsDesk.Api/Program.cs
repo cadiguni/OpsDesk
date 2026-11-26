@@ -208,6 +208,7 @@ try
     app.MapDashboardEndpoints();
     app.MapUserAdministrationEndpoints();
     app.MapCategoryAdministrationEndpoints();
+    app.MapJobTitleAdministrationEndpoints();
     app.MapNotificationEndpoints();
     app.MapHolidayEndpoints();
     app.MapInboundEmailEndpoints();

@@ -101,9 +101,9 @@ describe('validade do secret', () => {
   })
 })
 
-it('não carrega a configuração para quem não é gestor', async () => {
+it('não carrega a configuração para quem não é administrador', async () => {
   renderWithProviders(<EmailSettingsPage />, { role: 'Technician' })
 
-  expect(await screen.findByText(/apenas gestores/i)).toBeInTheDocument()
+  expect(await screen.findByText(/apenas administradores/i)).toBeInTheDocument()
   expect(settingsApi.getEmailSettings).not.toHaveBeenCalled()
 })

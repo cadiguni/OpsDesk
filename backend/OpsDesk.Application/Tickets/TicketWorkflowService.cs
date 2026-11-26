@@ -203,7 +203,7 @@ public class TicketWorkflowService(
     {
         if (!viewer.IsStaff)
         {
-            return new AssignResult.NotAllowed("Apenas técnicos e gestores atribuem responsável.");
+            return new AssignResult.NotAllowed("Apenas técnicos e administradores atribuem responsável.");
         }
 
         var ticket = await db.Tickets

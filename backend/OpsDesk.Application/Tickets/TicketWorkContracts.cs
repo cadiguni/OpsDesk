@@ -38,7 +38,7 @@ public abstract record AddCommentResult
 
     public sealed record InternalNotAllowed : AddCommentResult
     {
-        public string Message => "Apenas técnicos e gestores podem registrar comentário interno.";
+        public string Message => "Apenas técnicos e administradores podem registrar comentário interno.";
     }
 
     public sealed record TicketClosed : AddCommentResult
@@ -101,7 +101,7 @@ public abstract record AssignResult
 
     public sealed record TechnicianInvalid : AssignResult
     {
-        public string Message => "O responsável precisa ser um técnico ou gestor ativo.";
+        public string Message => "O responsável precisa ser um técnico ou administrador ativo.";
     }
 }
 
@@ -124,7 +124,7 @@ public abstract record ChangeClassificationResult
 
     public sealed record NotAllowed : ChangeClassificationResult
     {
-        public string Message => "Apenas técnicos e gestores reclassificam chamado.";
+        public string Message => "Apenas técnicos e administradores reclassificam chamado.";
     }
 
     public sealed record CategoryNotFound : ChangeClassificationResult

@@ -16,6 +16,8 @@ public class OpsDeskDbContext(DbContextOptions<OpsDeskDbContext> options)
 
     public DbSet<Category> Categories => Set<Category>();
 
+    public DbSet<JobTitle> JobTitles => Set<JobTitle>();
+
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
 
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
