@@ -18,7 +18,7 @@ OpsDesk é um sistema interno de chamados de TI (service desk), com três perfis
 
 **Frontend:** login (com senha ou conta Microsoft), cadastro, troca e definição de senha, lista de chamados com filtros na URL, abertura, detalhe com comentários e histórico, ações de status (inclusive reabrir) e atribuição, dashboard com gráficos e período, notificações, e-mails recebidos e SPAM, e a área de administração (usuários, categorias, feriados, importação, configurações).
 
-**Produção:** `deploy/` — compose com Caddy e HTTPS, `.env` gerado com segredos aleatórios, backup e restauração. Guia em `docs/instalacao.md`. No Azure, uma Web App com nginx e API como contêineres (sidecar), descrita em `docs/azure.md`; o `azure-pipelines.yml` da raiz só estende o template de um repositório de deploy privado.
+**Produção:** `deploy/` — compose com Caddy e HTTPS, `.env` gerado com segredos aleatórios, backup e restauração. Guia em `docs/instalacao.md`. No Azure, uma Web App com nginx e API como contêineres (sidecar), descrita em `docs/azure.md`; o pipeline mora num repositório de deploy privado, que baixa este como resource e roda à mão.
 
 **Endpoints:**
 

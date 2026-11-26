@@ -74,26 +74,27 @@ Rollback de imagem é rodar o pipeline de novo num commit anterior. Rollback de 
 
 ## 6. Pipeline no Azure DevOps
 
-O [azure-pipelines.yml](../azure-pipelines.yml) da raiz só dispara e estende um template de um repositório de deploy no Azure Repos:
+O pipeline mora num repositório de deploy no Azure Repos, privado, e baixa este como resource:
 
 ```yaml
+trigger: none
 resources:
   repositories:
-    - repository: deploy
-      type: git
-      name: <projeto>/<repositório-de-deploy>
-extends:
-  template: pipelines/build-deploy.yml@deploy
-  parameters:
-    databaseCommand: --migrate   # ou --setup
+    - repository: code
+      type: github
+      endpoint: <service connection do GitHub>
+      name: <dono>/OpsDesk
+      ref: refs/heads/main
 ```
+
+Os jobs de build fazem `checkout: code`, e a tag das imagens é o commit deste repositório (`resources.repositories.code.version`), não o do repositório de deploy.
 
 O desenho tem dois motivos:
 
-* **O gatilho precisa estar deste lado.** O Azure Pipelines não dispara pipeline a partir de um repositório do GitHub declarado como resource; só a partir do repositório do próprio pipeline.
-* **Este repositório é público.** Pool de agentes, nomes de recurso, service connection e variable groups são do ambiente de quem hospeda e ficam no repositório de deploy, privado.
+* **Este repositório é público.** Pool de agentes, nomes de recurso, service connection e variable groups são do ambiente de quem hospeda e ficam no repositório de deploy. Este não sabe nada de lá: não há arquivo de pipeline na raiz.
+* **O deploy é manual.** O Azure Pipelines não dispara por push num repositório do GitHub declarado como resource. Quem quiser deploy a cada push precisa pôr um pipeline neste repositório que estenda o do repositório de deploy como template, e então proteger a service connection com o check **Required template**.
 
-O template recebe `databaseCommand` e faz as etapas da seção 5. Proteja a service connection e o environment de produção com o check **Required template**, apontando para esse template. Sem ele, quem pudesse alterar este `azure-pipelines.yml` conseguiria usar a service connection sem passar pelo template. Pull request não dispara o pipeline (`pr: none`): código de fork nunca roda com as credenciais do deploy.
+O parâmetro `databaseCommand` escolhe entre `--migrate` (padrão) e `--setup` (primeira instalação), e o pipeline faz as etapas da seção 5.
 
 ## 7. Depois do primeiro deploy
 
