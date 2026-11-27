@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Copy, History, KeyRound, Pencil, Search, UserPlus } from 'lucide-react'
+import { Copy, History, KeyRound, Pencil, Search, Trash2, UserPlus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { Pagination } from '@/components/pagination'
@@ -19,6 +19,7 @@ import {
   useChangeName,
   useChangeRole,
   useCreateUser,
+  useDeleteUser,
   useManagedUsers,
   useResetUserPassword,
   useUserHistory,
@@ -384,6 +385,7 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
   const changeJobTitle = useChangeJobTitle()
   const changeActivation = useChangeActivation()
   const resetPassword = useResetUserPassword()
+  const deleteUser = useDeleteUser()
   const [showHistory, setShowHistory] = useState(false)
 
   // O servidor recusa mexer na própria conta: é o que garante que sempre sobra um
@@ -396,9 +398,15 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
     changeActivation.isPending ||
     resetPassword.isPending ||
     changeJobTitle.isPending ||
-    changeName.isPending
+    changeName.isPending ||
+    deleteUser.isPending
   const error =
-    changeRole.error ?? changeActivation.error ?? resetPassword.error ?? changeJobTitle.error ?? changeName.error
+    changeRole.error ??
+    changeActivation.error ??
+    resetPassword.error ??
+    changeJobTitle.error ??
+    changeName.error ??
+    deleteUser.error
   const blocking = blockingTickets(error)
 
   function onRoleChange(role: UserRole) {
@@ -444,7 +452,23 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
     }
 
     changeRole.reset()
+    deleteUser.reset()
     changeActivation.mutate({ userId: user.id, isActive: !user.isActive })
+  }
+
+  // Só conta desativada: excluir é o segundo passo, nunca um clique na conta em uso. Quem
+  // tem histórico é recusado pelo servidor, e a mensagem dele explica por quê.
+  function onDelete() {
+    if (
+      !window.confirm(
+        `Excluir ${user.name} de vez? Só é possível se a pessoa não tiver chamados, comentários nem registros no sistema. Não há como desfazer.`,
+      )
+    ) {
+      return
+    }
+
+    changeActivation.reset()
+    deleteUser.mutate(user.id)
   }
 
   return (
@@ -547,6 +571,18 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
         >
           {user.isActive ? 'Desativar' : 'Reativar'}
         </Button>
+
+        {!user.isActive && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive self-end"
+            disabled={isSelf || pending}
+            onClick={onDelete}
+          >
+            <Trash2 /> Excluir
+          </Button>
+        )}
 
         <Button
           variant="ghost"

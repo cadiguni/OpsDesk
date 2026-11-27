@@ -361,7 +361,114 @@ public class UserAdministrationTests(PostgresFixture fixture) : TicketTestBase(f
         Assert.True((await db.Users.SingleAsync(u => u.Id == world.ManagerId)).IsActive);
     }
 
+    // ----- Exclusão -----
+
+    [Fact]
+    public async Task Conta_desativada_sem_historico_e_excluida_com_o_que_e_so_dela()
+    {
+        var world = await SetUpAsync();
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await ChangeActivationAsync(world.Manager, world.OtherRequesterId, false)).StatusCode);
+
+        var response = await DeleteUserAsync(world.Manager, world.OtherRequesterId);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // A sessão do login e a trilha da própria conta (criação, desativação) vão junto.
+        await using var db = Fixture.CreateContext();
+        Assert.False(await db.Users.AnyAsync(u => u.Id == world.OtherRequesterId));
+        Assert.False(await db.RefreshTokens.AnyAsync(t => t.UserId == world.OtherRequesterId));
+        Assert.False(await db.UserAudit.AnyAsync(a => a.UserId == world.OtherRequesterId));
+    }
+
+    [Fact]
+    public async Task Conta_ativa_nao_e_excluida()
+    {
+        var world = await SetUpAsync();
+
+        var response = await DeleteUserAsync(world.Manager, world.OtherRequesterId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var db = Fixture.CreateContext();
+        Assert.True(await db.Users.AnyAsync(u => u.Id == world.OtherRequesterId));
+    }
+
+    [Fact]
+    public async Task Solicitante_com_chamado_nao_e_excluido_mesmo_desativado()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+        await ChangeActivationAsync(world.Manager, world.RequesterId, false);
+
+        var response = await DeleteUserAsync(world.Manager, world.RequesterId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var db = Fixture.CreateContext();
+        Assert.True(await db.Users.AnyAsync(u => u.Id == world.RequesterId));
+        Assert.True(await db.Tickets.AnyAsync(t => t.Id == ticket));
+    }
+
+    [Fact]
+    public async Task Tecnico_que_ja_mexeu_em_chamado_de_outro_nao_e_excluido()
+    {
+        var world = await SetUpAsync();
+        var ticket = await OpenTicketAsync(world);
+
+        // Assume e devolve: nenhum chamado fica no nome dele, mas o histórico registra a autoria.
+        await AssignAsync(world.Technician, ticket, world.TechnicianId);
+        await AssignAsync(world.Manager, ticket, null);
+        await ChangeActivationAsync(world.Manager, world.TechnicianId, false);
+
+        var response = await DeleteUserAsync(world.Manager, world.TechnicianId);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var db = Fixture.CreateContext();
+        Assert.True(await db.Users.AnyAsync(u => u.Id == world.TechnicianId));
+        Assert.True(await db.TicketHistory.AnyAsync(h => h.TicketId == ticket && h.ChangedById == world.TechnicianId));
+    }
+
+    [Fact]
+    public async Task Gestor_nao_exclui_a_propria_conta_e_os_demais_perfis_nao_excluem()
+    {
+        var world = await SetUpAsync();
+        await ChangeActivationAsync(world.Manager, world.OtherRequesterId, false);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await DeleteUserAsync(world.Manager, world.ManagerId)).StatusCode);
+
+        foreach (var client in new[] { world.Technician, world.Requester })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await DeleteUserAsync(client, world.OtherRequesterId)).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.NotFound, (await DeleteUserAsync(world.Manager, Guid.NewGuid())).StatusCode);
+
+        await using var db = Fixture.CreateContext();
+        Assert.True(await db.Users.AnyAsync(u => u.Id == world.ManagerId));
+        Assert.True(await db.Users.AnyAsync(u => u.Id == world.OtherRequesterId));
+    }
+
+    [Fact]
+    public async Task Gestor_com_senha_provisoria_nao_exclui()
+    {
+        var world = await SetUpAsync();
+        await ChangeActivationAsync(world.Manager, world.OtherRequesterId, false);
+        var client = await SignInWithTemporaryPasswordAsync(UserRole.Manager);
+
+        var response = await DeleteUserAsync(client, world.OtherRequesterId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(PasswordChangeRequiredType, (await response.Content.ReadFromJsonAsync<ProblemBody>())?.Type);
+    }
+
     // ----- Atalhos -----
+
+    private static Task<HttpResponseMessage> DeleteUserAsync(HttpClient client, Guid userId) =>
+        client.DeleteAsync($"/api/admin/users/{userId}");
 
     private static Task<HttpResponseMessage> ChangeRoleAsync(HttpClient client, Guid userId, UserRole role) =>
         client.PostAsJsonAsync($"/api/admin/users/{userId}/role", new ChangeRoleRequest(role), TestJson.Options);

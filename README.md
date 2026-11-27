@@ -226,7 +226,7 @@ Permissões:
 * acompanhar chamados vencidos;
 * visualizar indicadores por técnico, categoria e prioridade;
 * visualizar histórico completo;
-* gerenciar usuários: cadastrar, promover, rebaixar, desativar, reativar e redefinir senha (seção 13.9);
+* gerenciar usuários: cadastrar, promover, rebaixar, desativar, reativar, excluir conta sem histórico e redefinir senha (seção 13.9);
 * administrar feriados (seção 13.11) e as configurações gerais e de e-mail (seção 13.12);
 * importar chamados de outra ferramenta (seção 13.14);
 * excluir mensagem da caixa de SPAM;
@@ -939,7 +939,8 @@ Ações:
 * **trocar o cargo**, inclusive o da própria conta — cargo não dá permissão, então a trava da própria conta não se aplica a ele;
 * **redefinir a senha** de alguém;
 * **trocar o perfil** entre Usuário, Técnico e Administrador;
-* **desativar** e **reativar** a conta. Não existe exclusão: a pessoa é autora de chamados e comentários, e o histórico precisa continuar apontando para ela;
+* **desativar** e **reativar** a conta;
+* **excluir** a conta desativada que não deixou rastro — o cadastro feito por engano, o convite que ninguém aceitou. Quem já participou de algo não é excluído: a pessoa é autora de chamados, comentários e registros, e o histórico precisa continuar apontando para ela. Para ela, desativar é o fim da linha;
 * **ver o histórico** da conta.
 
 **Cadastro e redefinição entregam o acesso de um de dois jeitos**, conforme o envio de e-mail esteja configurado:
@@ -953,6 +954,7 @@ Regras:
 
 * **o administrador não altera o próprio perfil nem desativa a própria conta.** Quem age é sempre um administrador ativo; se ele não pode se tirar do posto, o sistema nunca fica sem administrador — situação que não teria volta pela interface, e que o bootstrap também não resolve, porque só age quando não existe administrador nenhum;
 * **desativar, ou rebaixar a Usuário, quem é responsável por chamado em aberto é recusado** (409), com a lista dos chamados no corpo da resposta. O administrador reatribui antes. Aberto aqui é qualquer status não terminal — Resolvido conta, porque o solicitante ainda pode devolvê-lo. Chamado que a pessoa *abriu* não bloqueia nada: continua na fila e continua sendo atendido;
+* **só se exclui conta já desativada, e sem histórico** (409 nos dois casos). Desativar primeiro faz a exclusão passar pelas mesmas travas e ser um segundo passo deliberado. "Sem histórico" quer dizer que nada fora da própria conta aponta para ela: chamado aberto ou atendido, comentário, registro no histórico de chamado, anexo, notificação causada, alteração de configuração ou de outra conta. Vão junto só as sessões, os links de senha, as notificações recebidas e a trilha da própria conta; o registro da exclusão fica no log da aplicação;
 * **rebaixar e desativar derrubam as sessões** da pessoa (todos os refresh tokens são revogados). O token de acesso já emitido vale até expirar, no máximo `Jwt:AccessTokenMinutes` (15 minutos por padrão); a administração de usuários confere o perfil de quem age no banco, para que essa janela não sirva para promover ninguém. **Promover não derruba nada**: a renovação seguinte já traz o perfil novo.
 
 **Trilha de auditoria.** Cadastro, troca de perfil, troca de cargo, desativação, reativação, troca de senha, redefinição pelo administrador e senha definida por link ficam registrados em `UserAuditEntry`, com quem fez, quando, e valor anterior e novo quando houver. A tela mostra o histórico de cada conta. Como o `TicketHistory`, a tabela é preenchida por interceptor do EF Core e não aceita alteração. Senha nunca entra no registro, só o fato de ela ter mudado.
@@ -1654,6 +1656,8 @@ O que ficou para depois, com o que precisa ser decidido antes:
 | Tabela de SLA editável pela interface | qual chamado o prazo novo alcança: só os abertos dali em diante, como nos feriados, é a resposta mais provável |
 | Atribuição automática | por categoria, por rodízio ou por carga — e o que fazer com quem está ausente |
 | Imagem do frontend com endereço de API em tempo de execução | só quando existir topologia com SPA e API em domínios separados ("Primeira execução", acima) |
+| Base de conhecimento | artigos de solução escritos pela equipe e consultados pelo solicitante antes de abrir chamado. Falta decidir quem publica, se há artigo só para a equipe (a mesma fronteira do comentário interno) e se um chamado resolvido vira rascunho de artigo |
+| Gerador de assinatura de e-mail | trazer para o portal o gerador que hoje existe separado, reformulado: a assinatura sai dos dados da própria conta (nome, cargo) mais o que for da empresa. Falta decidir quem mantém o modelo — provavelmente o administrador, nas configurações — e se a pessoa pode editar o resultado |
 
 ---
 

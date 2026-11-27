@@ -14,6 +14,7 @@ vi.mock('@/features/users/api', async (original) => ({
   createUser: vi.fn(),
   changeJobTitle: vi.fn(),
   changeName: vi.fn(),
+  deleteUser: vi.fn(),
 }))
 
 vi.mock('@/features/job-titles/api', async (original) => ({
@@ -162,5 +163,36 @@ describe('cargo na lista', () => {
     const select = await screen.findByLabelText<HTMLSelectElement>('Cargo de Pessoa Nova')
     expect(select.value).toBe('aprendiz')
     expect(screen.getByRole('option', { name: 'Aprendiz' })).toBeInTheDocument()
+  })
+})
+
+describe('exclusão', () => {
+  it('só a conta desativada oferece excluir', async () => {
+    vi.mocked(usersApi.listManagedUsers).mockResolvedValue(
+      page([created, { ...created, id: 'inativa', name: 'Pessoa Inativa', isActive: false }]),
+    )
+
+    renderWithProviders(<UserAdmin />, { role: 'Manager', route: '/usuarios' })
+
+    await screen.findByText('Pessoa Inativa')
+    expect(screen.getAllByRole('button', { name: /excluir/i })).toHaveLength(1)
+  })
+
+  it('pede confirmação e não exclui quando a pessoa desiste', async () => {
+    vi.mocked(usersApi.listManagedUsers).mockResolvedValue(page([{ ...created, isActive: false }]))
+    vi.mocked(usersApi.deleteUser).mockResolvedValue()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+
+    const user = userEvent.setup()
+    renderWithProviders(<UserAdmin />, { role: 'Manager', route: '/usuarios' })
+
+    const button = await screen.findByRole('button', { name: /excluir/i })
+    await user.click(button)
+    expect(usersApi.deleteUser).not.toHaveBeenCalled()
+
+    await user.click(button)
+    await waitFor(() => expect(vi.mocked(usersApi.deleteUser).mock.calls.at(-1)?.[0]).toBe('novo'))
+
+    confirm.mockRestore()
   })
 })

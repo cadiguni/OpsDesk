@@ -51,6 +51,9 @@ public static class UserAdministrationEndpoints
         group.MapPost("/{id:guid}/activation", ChangeActivation)
             .WithSummary("Desativa ou reativa a conta. Desativar derruba as sessões da pessoa.");
 
+        group.MapDelete("/{id:guid}", Delete)
+            .WithSummary("Exclui conta desativada que não deixou rastro. Com histórico, a conta só fica desativada.");
+
         return routes;
     }
 
@@ -126,8 +129,14 @@ public static class UserAdministrationEndpoints
         CancellationToken cancellationToken) =>
         ToResult(await users.ChangeActivationAsync(id, request, currentUser.Viewer, cancellationToken));
 
+    private static async Task<IResult> Delete(
+        Guid id, UserAdministrationService users, ICurrentUser currentUser, CancellationToken cancellationToken) =>
+        ToResult(await users.DeleteAsync(id, currentUser.Viewer, cancellationToken));
+
     private static IResult ToResult(ChangeUserResult result) => result switch
     {
+        ChangeUserResult.Deleted => TypedResults.NoContent(),
+
         ChangeUserResult.Changed changed => TypedResults.Ok(changed.User),
 
         ChangeUserResult.AccessIssued issued => TypedResults.Ok(issued.Access),
@@ -163,6 +172,16 @@ public static class UserAdministrationEndpoints
             statusCode: StatusCodes.Status409Conflict,
             title: "Há chamados em aberto sob responsabilidade da pessoa",
             extensions: new Dictionary<string, object?> { ["tickets"] = blocking.Tickets }),
+
+        ChangeUserResult.StillActive active => TypedResults.Problem(
+            detail: active.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            title: "Conta ainda ativa"),
+
+        ChangeUserResult.HasActivity activity => TypedResults.Problem(
+            detail: activity.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            title: "A conta tem histórico no sistema"),
 
         _ => throw new InvalidOperationException(
             $"Resultado de administração de usuário não tratado: {result.GetType().Name}.")

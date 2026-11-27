@@ -39,6 +39,7 @@ GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outr
 GET    /api/admin/users           (administrador; ativos e inativos, filtros, paginação)   POST /api/admin/users
 POST   /api/admin/users/{id}/role   POST /api/admin/users/{id}/activation
 POST   /api/admin/users/{id}/password-reset   GET /api/admin/users/{id}/history
+DELETE /api/admin/users/{id}   (administrador; só conta desativada e sem histórico)
 GET    /api/admin/categories      POST /api/admin/categories   (administrador)
 PUT    /api/admin/categories/{id}  POST /api/admin/categories/{id}/activation
 GET    /api/admin/job-titles   GET …/options   POST …   PUT …/{id}   POST …/{id}/activation   (administrador)

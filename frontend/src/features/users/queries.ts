@@ -96,3 +96,9 @@ export function useChangeActivation() {
     onSettled: invalidate,
   })
 }
+
+export function useDeleteUser() {
+  const invalidate = useInvalidateUsers()
+
+  return useMutation({ mutationFn: usersApi.deleteUser, onSuccess: invalidate })
+}

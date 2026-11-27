@@ -370,6 +370,65 @@ public class UserAdministrationService(
     }
 
     /// <summary>
+    /// Exclui de vez uma conta desativada que não deixou rastro — o cadastro feito por
+    /// engano, o convite que ninguém aceitou.
+    ///
+    /// Quem já participou de algo fica: chamado, comentário, histórico, anexo e trilha de
+    /// auditoria apontam para a conta, e são registros que não se reescrevem. Para essa
+    /// pessoa a desativação já é o fim da linha. O que some junto com a conta é só o que é
+    /// dela e de mais ninguém: sessões, links de senha, notificações recebidas e a trilha da
+    /// própria conta.
+    /// </summary>
+    public async Task<ChangeUserResult> DeleteAsync(
+        Guid userId, TicketViewer actor, CancellationToken cancellationToken = default)
+    {
+        var (user, refusal) = await LoadAsync(userId, actor, cancellationToken);
+
+        if (user is null)
+        {
+            return refusal!;
+        }
+
+        if (user.IsActive)
+        {
+            return new ChangeUserResult.StillActive();
+        }
+
+        if (await HasActivityAsync(user.Id, cancellationToken))
+        {
+            return new ChangeUserResult.HasActivity();
+        }
+
+        db.Users.Remove(user);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // A verificação acima cobre as referências conhecidas; a chave estrangeira com
+            // Restrict é a rede para a que surgir depois dela, ou chegar no meio do caminho.
+            return new ChangeUserResult.HasActivity();
+        }
+
+        // O registro da exclusão fica no log: a trilha da conta vai embora com ela.
+        logger.LogInformation("Conta {UserId} excluída por {ActorId}.", user.Id, actor.UserId);
+
+        return new ChangeUserResult.Deleted();
+    }
+
+    /// <summary>Alguma coisa fora da própria conta aponta para a pessoa.</summary>
+    private async Task<bool> HasActivityAsync(Guid userId, CancellationToken cancellationToken) =>
+        await db.Tickets.AnyAsync(t => t.RequesterId == userId || t.AssignedTechnicianId == userId, cancellationToken)
+        || await db.TicketComments.AnyAsync(c => c.AuthorId == userId, cancellationToken)
+        || await db.TicketHistory.AnyAsync(h => h.ChangedById == userId, cancellationToken)
+        || await db.TicketAttachments.AnyAsync(a => a.UploadedById == userId, cancellationToken)
+        || await db.Notifications.AnyAsync(n => n.ActorId == userId, cancellationToken)
+        || await db.SettingsAudit.AnyAsync(s => s.ChangedById == userId, cancellationToken)
+        || await db.UserAudit.AnyAsync(a => a.ChangedById == userId && a.UserId != userId, cancellationToken);
+
+    /// <summary>
     /// Confere que quem age é administrador ativo, e carrega o alvo.
     ///
     /// O perfil de quem age é conferido no banco, e não só na claim. O token de acesso

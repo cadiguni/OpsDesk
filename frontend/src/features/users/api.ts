@@ -72,6 +72,14 @@ export async function changeActivation(userId: string, isActive: boolean): Promi
 }
 
 /**
+ * Exclui conta desativada que não deixou rastro. Com chamado, comentário ou auditoria no
+ * nome, o servidor recusa com 409 e a conta continua desativada.
+ */
+export async function deleteUser(userId: string): Promise<void> {
+  await api.delete(`/api/admin/users/${userId}`)
+}
+
+/**
  * Como a pessoa recebeu o acesso: convite por e-mail, ou senha provisória — que o servidor
  * devolve uma única vez, e que a tela mostra uma única vez.
  */

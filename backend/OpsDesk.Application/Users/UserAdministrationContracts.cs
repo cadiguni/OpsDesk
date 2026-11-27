@@ -61,6 +61,9 @@ public abstract record ChangeUserResult
 {
     public sealed record Changed(ManagedUser User) : ChangeUserResult;
 
+    /// <summary>A conta foi excluída. Não há o que devolver além do 204.</summary>
+    public sealed record Deleted : ChangeUserResult;
+
     public sealed record AccessIssued(AccessGranted Access) : ChangeUserResult;
 
     public sealed record EmailAlreadyUsed : ChangeUserResult
@@ -105,5 +108,27 @@ public abstract record ChangeUserResult
     {
         public string Message =>
             $"A pessoa é responsável por {Tickets.Count} chamado(s) em aberto. Reatribua antes de continuar.";
+    }
+
+    /// <summary>
+    /// Só se exclui conta desativada. Desativar primeiro derruba as sessões e passa pelas
+    /// mesmas travas — chamado em aberto sob responsabilidade, a própria conta — e deixa a
+    /// exclusão como um segundo passo deliberado, nunca um clique na conta em uso.
+    /// </summary>
+    public sealed record StillActive : ChangeUserResult
+    {
+        public string Message => "Desative a conta antes de excluí-la.";
+    }
+
+    /// <summary>
+    /// A pessoa deixou rastro: chamado, comentário, histórico, anexo, notificação ou trilha
+    /// de auditoria de outra conta. Apagá-la quebraria esse registro, que é append-only — a
+    /// conta fica desativada, que já tira o acesso e a tira dos seletores.
+    /// </summary>
+    public sealed record HasActivity : ChangeUserResult
+    {
+        public string Message =>
+            "A pessoa tem chamados, comentários ou registros de auditoria no sistema. " +
+            "Para preservar o histórico, a conta não pode ser excluída — mantenha-a desativada.";
     }
 }
