@@ -50,7 +50,8 @@ export function EmailSettingsPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground text-sm">
-          Envio pelo Microsoft 365. O solicitante recebe e-mail a cada resposta pública e mudança de status.
+          Integração com o Microsoft 365. Receber chamados por e-mail e avisar o solicitante por e-mail são
+          independentes: dá para ligar só um dos dois.
         </p>
       </div>
 
@@ -65,7 +66,9 @@ export function EmailSettingsPage() {
         </div>
       </div>
 
-      <MailboxAccounts emailEnabled={settings.data.isEnabled} />
+      <MailboxAccounts
+        credentialsReady={Boolean(settings.data.tenantId && settings.data.clientId && settings.data.clientSecretReadable)}
+      />
     </div>
   )
 }
@@ -119,9 +122,10 @@ function SettingsForm({ settings }: { settings: EmailSettings }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Envio</CardTitle>
+        <CardTitle>Aplicativo e envio</CardTitle>
         <CardDescription>
-          Dados do aplicativo registrado no Entra ID, com a permissão Mail.Send restrita à caixa de suporte.
+          Dados do aplicativo registrado no Entra ID. Tenant, client id e secret servem ao envio, à leitura das caixas
+          monitoradas e ao login com a conta Microsoft. Enviar exige a permissão Mail.Send restrita à caixa de suporte.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -132,7 +136,7 @@ function SettingsForm({ settings }: { settings: EmailSettings }) {
           </label>
 
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Endereço remetente" hint="A caixa de suporte." error={errors.senderAddress?.message}>
+            <Field label="Endereço remetente" hint="A caixa de suporte. Só para o envio." error={errors.senderAddress?.message}>
               {(field) => <Input {...field} {...form.register('senderAddress')} type="email" placeholder="suporte@empresa.com" />}
             </Field>
             <Field label="Nome de exibição" error={errors.senderName?.message}>

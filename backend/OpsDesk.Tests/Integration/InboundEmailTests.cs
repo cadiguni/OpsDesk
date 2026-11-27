@@ -335,9 +335,54 @@ public class InboundEmailTests(PostgresFixture fixture) : TicketTestBase(fixture
         Assert.False(await after.InboundEmails.AnyAsync());
     }
 
+    // ----- Receber sem enviar -----
+
+    /// <summary>
+    /// Receber chamado por e-mail e avisar o solicitante por e-mail são decisões separadas.
+    /// Com o envio desligado a caixa continua sendo lida, e nada entra na fila de saída —
+    /// nem quando a equipe responde o chamado que veio por e-mail.
+    /// </summary>
+    [Fact]
+    public async Task Caixa_e_lida_com_o_envio_desligado_e_nada_entra_na_fila()
+    {
+        var world = await SetUpWithMailboxAsync(sendingEnabled: false);
+        var requesterEmail = await EmailOfAsync(world.RequesterId);
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, requesterEmail, "Impressora travada", "Não imprime.");
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        var ticket = await db.Tickets.SingleAsync(t => t.Source == TicketSource.Email);
+
+        (await world.Technician.PostAsJsonAsync($"/api/tickets/{ticket.Id}/comments", new AddCommentRequest("Pode testar?")))
+            .EnsureSuccessStatusCode();
+
+        await using var after = Fixture.CreateContext();
+        Assert.False(await after.OutboundEmails.AnyAsync());
+    }
+
+    [Fact]
+    public async Task Sem_credenciais_do_aplicativo_a_caixa_nao_e_lida()
+    {
+        Fixture.Api.Email.Reset();
+        Fixture.Api.Mailbox.Reset();
+
+        var world = await SetUpAsync();
+
+        (await world.Manager.PostAsJsonAsync("/api/admin/settings/email/accounts",
+            new SaveEmailAccountRequest("Suporte TI", Mailbox, null, TicketPriority.Medium, false, true), TestJson.Options)).EnsureSuccessStatusCode();
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, "alguem@empresa.com", "Teste", "Corpo.");
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        Assert.False(await db.InboundEmails.AnyAsync());
+        Assert.Empty(Fixture.Api.Mailbox.MarkedAsRead);
+    }
+
     // ----- Atalhos -----
 
-    private async Task<World> SetUpWithMailboxAsync()
+    private async Task<World> SetUpWithMailboxAsync(bool sendingEnabled = true)
     {
         Fixture.Api.Email.Reset();
         Fixture.Api.Mailbox.Reset();
@@ -345,7 +390,7 @@ public class InboundEmailTests(PostgresFixture fixture) : TicketTestBase(fixture
         var world = await SetUpAsync();
 
         (await world.Manager.PutAsJsonAsync("/api/admin/settings/email", new UpdateEmailSettingsRequest(
-            true, Mailbox, "Suporte TI", "empresa.onmicrosoft.com",
+            sendingEnabled, Mailbox, "Suporte TI", "empresa.onmicrosoft.com",
             "11111111-2222-3333-4444-555555555555", "segredo", null, "https://opsdesk.empresa.com"))).EnsureSuccessStatusCode();
 
         (await world.Manager.PostAsJsonAsync("/api/admin/settings/email/accounts",

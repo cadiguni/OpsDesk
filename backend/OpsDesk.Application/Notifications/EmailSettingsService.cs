@@ -199,6 +199,27 @@ public class EmailSettingsService(
     }
 
     /// <summary>
+    /// Credenciais do aplicativo do Entra ID para <b>ler</b> a caixa monitorada, ou nulo
+    /// quando faltam.
+    ///
+    /// Não dependem de o envio estar ligado nem de haver remetente: receber chamado por
+    /// e-mail e avisar o solicitante por e-mail são decisões separadas, e é comum querer a
+    /// primeira antes da segunda. A leitura não usa o <c>SenderAddress</c>; ele vai
+    /// preenchido com o que houver só porque o tipo das credenciais é o mesmo do envio.
+    /// </summary>
+    internal EmailSenderCredentials? LoadApplicationCredentials(EmailSettings? settings)
+    {
+        if (settings is not { TenantId: { } tenant, ClientId: { } client, ProtectedClientSecret: { } stored })
+        {
+            return null;
+        }
+
+        return protector.TryUnprotect(stored) is { } secret
+            ? new EmailSenderCredentials(tenant, client, secret, settings.SenderAddress ?? string.Empty, settings.SenderName)
+            : null;
+    }
+
+    /// <summary>
     /// Envia e registra o resultado na configuração. Devolve a mensagem de erro, ou nulo
     /// em caso de sucesso. Quem chama grava.
     /// </summary>

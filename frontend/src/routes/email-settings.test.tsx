@@ -107,3 +107,22 @@ it('não carrega a configuração para quem não é administrador', async () => 
   expect(await screen.findByText(/apenas administradores/i)).toBeInTheDocument()
   expect(settingsApi.getEmailSettings).not.toHaveBeenCalled()
 })
+
+describe('caixa monitorada sem envio', () => {
+  it('com as credenciais salvas, não exige o envio ligado', async () => {
+    vi.mocked(settingsApi.getEmailSettings).mockResolvedValue(configured({ isEnabled: false }))
+
+    renderWithProviders(<EmailSettingsPage />, { role: 'Manager' })
+
+    expect(await screen.findByText('Caixas monitoradas')).toBeInTheDocument()
+    expect(screen.queryByText(/a leitura só acontece/i)).not.toBeInTheDocument()
+  })
+
+  it('sem client secret legível, avisa que a leitura não acontece', async () => {
+    vi.mocked(settingsApi.getEmailSettings).mockResolvedValue(configured({ clientSecretReadable: false }))
+
+    renderWithProviders(<EmailSettingsPage />, { role: 'Manager' })
+
+    expect(await screen.findByText(/a leitura só acontece/i)).toBeInTheDocument()
+  })
+})

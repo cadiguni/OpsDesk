@@ -39,7 +39,8 @@ public class MailboxSyncService(
     {
         var settings = await db.EmailSettings.SingleOrDefaultAsync(cancellationToken);
 
-        if (emailSettings.LoadCredentials(settings) is not { } credentials)
+        // As credenciais do aplicativo, e não as do envio: a leitura não exige o envio ligado.
+        if (emailSettings.LoadApplicationCredentials(settings) is not { } credentials)
         {
             return 0;
         }

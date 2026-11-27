@@ -22,11 +22,11 @@ const empty: SaveEmailAccountInput = {
 }
 
 /**
- * Caixas monitoradas (docs/integracao-email.md): o que chega nelas vira chamado. Usam as
- * mesmas credenciais do envio, acima — o aplicativo do Entra ID precisa também da permissão
- * Mail.ReadWrite, restrita a estas caixas.
+ * Caixas monitoradas (docs/integracao-email.md): o que chega nelas vira chamado. Usam o
+ * aplicativo do Entra ID configurado acima — tenant, client id e secret —, com a permissão
+ * Mail.ReadWrite restrita a estas caixas. Não dependem do envio estar ligado.
  */
-export function MailboxAccounts({ emailEnabled }: { emailEnabled: boolean }) {
+export function MailboxAccounts({ credentialsReady }: { credentialsReady: boolean }) {
   const accounts = useEmailAccounts(true)
   const [editing, setEditing] = useState<EmailAccount | 'new' | null>(null)
 
@@ -40,8 +40,11 @@ export function MailboxAccounts({ emailEnabled }: { emailEnabled: boolean }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!emailEnabled && (
-          <p className="text-muted-foreground text-sm">A leitura só acontece com o envio de e-mail ligado e configurado.</p>
+        {!credentialsReady && (
+          <p className="text-muted-foreground text-sm">
+            A leitura só acontece com tenant, client id e client secret preenchidos e salvos acima. O envio pode ficar
+            desligado.
+          </p>
         )}
 
         {accounts.isError && (
