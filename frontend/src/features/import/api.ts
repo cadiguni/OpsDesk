@@ -42,3 +42,40 @@ export async function importTickets(input: {
 
   return data
 }
+
+export type ReconciliationNote = {
+  spiceworksNumber: number
+  /** Código do chamado no OpsDesk, quando há correspondente. */
+  code: string | null
+  message: string
+}
+
+export type SpiceworksReconciliationReport = {
+  dryRun: boolean
+  /** Chamados na exportação. */
+  tickets: number
+  /** Abertos no Spiceworks sem e-mail (pelo portal de lá): não têm como casar. */
+  withoutMessageId: number
+  matched: number
+  notFound: number
+  datesFixed: number
+  closed: number
+  stillOpen: number
+  notes: ReconciliationNote[]
+}
+
+/**
+ * Confere (`dryRun`) ou aplica a conciliação dos chamados vindos do e-mail com a exportação
+ * JSON do Spiceworks: data real de abertura e fechamento, e fechado lá fica fechado aqui.
+ */
+export async function reconcileSpiceworks(input: { file: File; dryRun: boolean }): Promise<SpiceworksReconciliationReport> {
+  const form = new FormData()
+  form.append('file', input.file)
+
+  const { data } = await api.post<SpiceworksReconciliationReport>('/api/admin/import/spiceworks', form, {
+    params: { dryRun: input.dryRun },
+    headers: { 'Content-Type': undefined },
+  })
+
+  return data
+}

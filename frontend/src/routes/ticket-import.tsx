@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useSession } from '@/features/auth/session-context'
 import { importTickets, type ImportFormat, type ImportReport } from '@/features/import/api'
+import { SpiceworksReconciliation } from '@/features/import/spiceworks-reconciliation'
 import { errorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -166,6 +167,8 @@ export function TicketImport() {
           </Link>
         </div>
       )}
+
+      <SpiceworksReconciliation />
     </div>
   )
 }

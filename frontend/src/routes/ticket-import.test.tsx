@@ -43,7 +43,7 @@ async function chooseAndCheck(format?: string) {
   }
 
   await user.upload(screen.getByLabelText('Arquivo'), file)
-  await user.click(screen.getByRole('button', { name: /conferir/i }))
+  await user.click(screen.getByRole('button', { name: 'Conferir' }))
 
   return user
 }

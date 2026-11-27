@@ -147,6 +147,7 @@ public static class DependencyInjection
         services.AddScoped<EmailAccountService>();
         services.AddScoped<InboundRetentionService>();
         services.AddScoped<TicketImportService>();
+        services.AddScoped<SpiceworksReconciliation>();
         services.AddScoped<IBusinessCalendar, BusinessCalendar>();
         services.AddScoped<SlaClock>();
         services.AddScoped<SlaAlertService>();

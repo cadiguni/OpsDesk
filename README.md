@@ -1038,6 +1038,17 @@ Regras:
 * **chamado importado fica fora dos indicadores de SLA** (seção 8.3);
 * até 10 MB e 5.000 linhas por arquivo.
 
+**Conciliação com o Spiceworks.** É outra ferramenta, para outro problema: chamados que o OpsDesk **já tem**, abertos pela caixa de e-mail a partir de mensagens antigas. Um chamado desses nasce com a data em que a mensagem foi lida, aberto e com prazo de SLA contado dali. Quando a caixa traz meses de mensagens de uma vez, ele traz também meses de chamados "de hoje" e abertos. A exportação JSON do Spiceworks Cloud Help Desk (`ticket_export.json`) sabe a data real e se o chamado foi fechado. O elo entre as duas ferramentas é o Message-ID do e-mail de abertura: `email_message_id` lá, `ExternalId` aqui.
+
+Os passos são os mesmos da importação: conferir e depois aplicar. Para cada chamado casado:
+
+* **datas:** abertura, primeira resposta e última atualização passam a ser as do Spiceworks, e os prazos de SLA são recalculados a partir da abertura real. O chamado continua com origem E-mail, medido pelo SLA (seção 8.3), agora com as datas verdadeiras;
+* **fechado lá, fechado aqui:** o chamado que está em andamento no OpsDesk e fechado no Spiceworks fica fechado, com a data de lá. O que já estava resolvido ou fechado aqui só recebe a data. O cancelado não muda;
+* **aberto lá:** continua como está. Se aqui o chamado já terminou, a conferência aponta para ser revisto à mão, assim como o chamado aberto lá que não tem correspondente aqui;
+* **sem aviso e sem linha no histórico:** é correção de origem, não atendimento. Fechar pelo caminho normal mandaria um aviso a cada solicitante de chamados atendidos meses atrás. A gravação passa ao largo dos interceptores, como a recuperação de anexos (docs/integracao-email.md, 4.7.1);
+* **aplicar de novo não muda nada;**
+* fica de fora o chamado aberto no Spiceworks sem e-mail, que não tem Message-ID para casar. O arquivo pode ter até 25 MB.
+
 ### 13.15 E-mails recebidos e caixa de SPAM
 
 Técnico e administrador. As mensagens recebidas pela caixa monitorada, em abas: **SPAM**, **Falhas**, **Processados**, **Duplicados** e **Regras**. Ações na mensagem retida: não é spam (vira chamado ou resposta), não é spam e liberar o remetente, confirmar e bloquear o remetente, bloquear o domínio. Falha pode ser reprocessada. Só o administrador exclui. Especificação completa em [docs/integracao-email.md](docs/integracao-email.md).

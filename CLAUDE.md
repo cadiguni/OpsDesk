@@ -50,6 +50,7 @@ GET    /api/admin/settings/email/accounts   POST …/accounts   PUT …/accounts
 GET    /api/admin/settings/general   PUT /api/admin/settings/general   (administrador)
 GET    /api/admin/holidays?year=   POST /api/admin/holidays   POST /api/admin/holidays/{id}/activation   DELETE /api/admin/holidays/{id}
 POST   /api/admin/import/tickets?format=&dryRun=   (administrador; multipart, dryRun padrão true)
+POST   /api/admin/import/spiceworks?dryRun=   (administrador; concilia data e fechamento dos chamados de e-mail com a exportação do Spiceworks)
 GET    /api/inbound   GET /api/inbound/{id}   POST /api/inbound/{id}/review   POST /api/inbound/{id}/reprocess   (equipe)
 GET    /api/inbound/attachment-recovery   POST /api/inbound/attachment-recovery?after=   (administrador; anexos de e-mails lidos antes de os anexos serem trazidos, em lotes)
 DELETE /api/inbound/{id} (administrador)   GET /api/inbound/rules   POST /api/inbound/rules/{id}/activation
