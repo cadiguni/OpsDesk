@@ -121,7 +121,7 @@ public partial class InboundEmailProcessor(
         {
             var imported = await ImportAttachmentsAsync(email, requester.Id, cancellationToken);
             var reply = ReplyTextExtractor.Extract(ReplaceInlineImages(email.BodyText, imported));
-            var attachable = await AttachableAsync(linked.Id, imported, cancellationToken);
+            var attachable = await AttachableAsync(db, linked.Id, imported, cancellationToken);
 
             var result = await comments.AddAsync(
                 linked.Id,
@@ -192,7 +192,7 @@ public partial class InboundEmailProcessor(
     }
 
     /// <summary>Anexo do e-mail já gravado como pendente, em nome do remetente.</summary>
-    private sealed record ImportedAttachment(TicketAttachment Attachment, bool IsInline, string? ContentId);
+    internal sealed record ImportedAttachment(TicketAttachment Attachment, bool IsInline, string? ContentId);
 
     private List<ImportedAttachment>? _imported;
 
@@ -254,8 +254,8 @@ public partial class InboundEmailProcessor(
     /// com o mesmo nome e tamanho, não entra de novo. E nunca além do teto por chamado, que
     /// faria o comentário inteiro ser recusado.
     /// </summary>
-    private async Task<List<Guid>> AttachableAsync(
-        Guid ticketId, List<ImportedAttachment> imported, CancellationToken cancellationToken)
+    internal static async Task<List<Guid>> AttachableAsync(
+        IOpsDeskDbContext db, Guid ticketId, List<ImportedAttachment> imported, CancellationToken cancellationToken)
     {
         if (imported.Count == 0)
         {
@@ -276,7 +276,7 @@ public partial class InboundEmailProcessor(
     }
 
     /// <summary>A mesma imagem inline duas vezes na mesma mensagem entra uma vez.</summary>
-    private static IEnumerable<ImportedAttachment> Distinct(List<ImportedAttachment> imported)
+    internal static IEnumerable<ImportedAttachment> Distinct(List<ImportedAttachment> imported)
     {
         var seen = new HashSet<(string, long)>();
 
@@ -288,17 +288,17 @@ public partial class InboundEmailProcessor(
     /// marca vira o nome do arquivo, que aparece logo abaixo como anexo; a de imagem que
     /// não foi trazida — grande demais, tipo recusado — vira só "[imagem]".
     /// </summary>
-    private static string ReplaceInlineImages(string text, List<ImportedAttachment> imported) =>
+    internal static string ReplaceInlineImages(string text, List<ImportedAttachment> imported) =>
         ContentIdMark().Replace(text, match =>
             imported.FirstOrDefault(i => i.ContentId == NormalizeContentId(match.Groups[1].Value)) is { } found
                 ? $"[imagem: {found.Attachment.FileName}]"
                 : "[imagem]");
 
-    private static string? NormalizeContentId(string? contentId) =>
+    internal static string? NormalizeContentId(string? contentId) =>
         contentId?.Trim().Trim('<', '>').ToLowerInvariant();
 
     [GeneratedRegex(@"\[cid:([^\]\s]+)\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ContentIdMark();
+    internal static partial Regex ContentIdMark();
 
     /// <summary>
     /// O solicitante, pelo endereço do remetente. Desconhecido vira usuário sem senha: é

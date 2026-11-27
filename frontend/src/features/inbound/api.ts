@@ -109,3 +109,29 @@ export async function saveEmailAccount(id: string | null, input: SaveEmailAccoun
 
   return data
 }
+
+/** Resultado de um lote da recuperação dos anexos de mensagens antigas. */
+export type AttachmentRecoveryBatch = {
+  examined: number
+  recovered: number
+  attachments: number
+  notFound: number
+  remaining: number
+  /** De onde o próximo lote continua; nulo quando acabou. */
+  cursor: string | null
+  error: string | null
+}
+
+export async function getPendingAttachmentRecovery(): Promise<number> {
+  const { data } = await api.get<{ pending: number }>('/api/inbound/attachment-recovery')
+
+  return data.pending
+}
+
+export async function runAttachmentRecovery(after: string | null): Promise<AttachmentRecoveryBatch> {
+  const { data } = await api.post<AttachmentRecoveryBatch>('/api/inbound/attachment-recovery', null, {
+    params: after ? { after } : undefined,
+  })
+
+  return data
+}

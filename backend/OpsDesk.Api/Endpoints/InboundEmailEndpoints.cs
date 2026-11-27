@@ -35,6 +35,14 @@ public static class InboundEmailEndpoints
             .RequireAuthorization(AuthorizationPolicies.Manager)
             .WithSummary("Exclui a mensagem. Só administrador.");
 
+        inbound.MapGet("/attachment-recovery", PendingRecovery)
+            .RequireAuthorization(AuthorizationPolicies.Manager)
+            .WithSummary("Quantas mensagens antigas ainda podem ter os anexos trazidos. Só administrador.");
+
+        inbound.MapPost("/attachment-recovery", RunRecovery)
+            .RequireAuthorization(AuthorizationPolicies.Manager)
+            .WithSummary("Traz os anexos de um lote de mensagens antigas; repita com o cursor até acabar. Só administrador.");
+
         inbound.MapGet("/rules", ListRules).WithSummary("Regras de liberação e bloqueio.");
 
         inbound.MapPost("/rules/{id:guid}/activation", SetRuleActive)
@@ -102,6 +110,13 @@ public static class InboundEmailEndpoints
 
         return TypedResults.Ok((await inbound.GetAsync(id, cancellationToken))!.Email);
     }
+
+    private static async Task<IResult> PendingRecovery(InboundAttachmentRecovery recovery, CancellationToken cancellationToken) =>
+        TypedResults.Ok(new { Pending = await recovery.CountPendingAsync(cancellationToken) });
+
+    private static async Task<IResult> RunRecovery(
+        InboundAttachmentRecovery recovery, CancellationToken cancellationToken, Guid? after = null) =>
+        TypedResults.Ok(await recovery.RunBatchAsync(after, cancellationToken));
 
     private static async Task<IResult> Delete(Guid id, InboundEmailService inbound, CancellationToken cancellationToken) =>
         await inbound.DeleteAsync(id, cancellationToken) ? TypedResults.NoContent() : TypedResults.NotFound();

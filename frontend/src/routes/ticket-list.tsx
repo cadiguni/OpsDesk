@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlarmClock, Search, UserRound, UserX, X } from 'lucide-react'
 
+import { Pagination } from '@/components/pagination'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -14,11 +15,13 @@ import {
   type TicketStatus,
 } from '@/domain/enums'
 import { useSession } from '@/features/auth/session-context'
+import { BulkStatusBar } from '@/features/tickets/bulk-status-bar'
 import { useFilterCategories, useStaff, useTickets } from '@/features/tickets/queries'
 import { TicketCard, TicketCardSkeleton } from '@/features/tickets/ticket-card'
 import type { TicketSort } from '@/features/tickets/types'
 import { errorMessage } from '@/lib/api'
 import { formatDate, nextDay, startOfDayInSaoPaulo } from '@/lib/format'
+import { pageSizeOptions } from '@/lib/pagination'
 import { cn } from '@/lib/utils'
 
 const sortLabels: Record<TicketSort, string> = {
@@ -69,6 +72,10 @@ export function TicketList() {
   const sort = (params.get('sort') as TicketSort | null) ?? 'CreatedAtDescending'
   const page = Number(params.get('page') ?? '1')
 
+  // Fora das opções oferecidas, vale o padrão; o servidor limitaria de qualquer forma.
+  const requestedSize = Number(params.get('pageSize'))
+  const pageSize = (pageSizeOptions as readonly number[]).includes(requestedSize) ? requestedSize : pageSizeOptions[0]
+
   const tickets = useTickets({
     status: status.length > 0 ? status : undefined,
     priority: priority.length > 0 ? priority : undefined,
@@ -81,7 +88,25 @@ export function TicketList() {
     createdBefore: to ? startOfDayInSaoPaulo(nextDay(to)) : undefined,
     sort,
     page,
+    pageSize,
   })
+
+  // Seleção para a ação em lote, presa aos filtros e à página em que foi feita: trocar
+  // qualquer um deles a descarta, sem efeito, porque a chave deixa de bater. Selecionar
+  // numa página e aplicar depois de ir para outra agiria sobre chamados fora da vista.
+  const view = params.toString()
+  const [selection, setSelection] = useState<{ view: string; ids: string[] }>({ view, ids: [] })
+  const selectedIds = selection.view === view ? selection.ids : []
+  const pageIds = tickets.data?.items.map((ticket) => ticket.id) ?? []
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id))
+
+  function select(ids: string[]) {
+    setSelection({ view, ids })
+  }
+
+  function toggleSelected(id: string) {
+    select(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id])
+  }
 
   function update(changes: Record<string, string | string[] | null>) {
     const next = new URLSearchParams(params)
@@ -396,38 +421,58 @@ export function TicketList() {
             tickets.isPlaceholderData && 'opacity-60',
           )}
         >
-          {tickets.data.items.map((ticket) => (
-            <TicketCard key={ticket.id} ticket={ticket} showRequester={isStaff} />
-          ))}
+          {isStaff && (
+            <label className="text-muted-foreground flex items-center gap-2 text-sm lg:col-span-2">
+              <input
+                type="checkbox"
+                className="accent-primary size-4"
+                checked={allSelected}
+                ref={(element) => {
+                  if (element) {
+                    element.indeterminate = !allSelected && selectedIds.length > 0
+                  }
+                }}
+                onChange={() => select(allSelected ? [] : pageIds)}
+              />
+              Selecionar todos desta página
+            </label>
+          )}
+
+          {tickets.data.items.map((ticket) =>
+            isStaff ? (
+              <div key={ticket.id} className="flex items-start gap-2">
+                {/* Fora do cartão, que é um link inteiro: controle dentro de link é ambíguo
+                    para teclado e leitor de tela, e o clique abriria o chamado. */}
+                <input
+                  type="checkbox"
+                  aria-label={`Selecionar ${ticket.code}`}
+                  className="accent-primary mt-5 size-4 shrink-0"
+                  checked={selectedIds.includes(ticket.id)}
+                  onChange={() => toggleSelected(ticket.id)}
+                />
+                <div className="min-w-0 flex-1">
+                  <TicketCard ticket={ticket} showRequester />
+                </div>
+              </div>
+            ) : (
+              <TicketCard key={ticket.id} ticket={ticket} showRequester={false} />
+            ),
+          )}
         </div>
       )}
 
-      {tickets.data && tickets.data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Página {tickets.data.page} de {tickets.data.totalPages}
-          </p>
+      {isStaff && <BulkStatusBar selectedIds={selectedIds} onClear={() => select([])} onDone={select} />}
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={tickets.data.page <= 1}
-              onClick={() => update({ page: String(tickets.data.page - 1) })}
-            >
-              Anterior
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!tickets.data.hasNextPage}
-              onClick={() => update({ page: String(tickets.data.page + 1) })}
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
+      {tickets.data && (
+        <Pagination
+          page={tickets.data.page}
+          totalPages={tickets.data.totalPages}
+          totalCount={tickets.data.totalCount}
+          noun={['chamado', 'chamados']}
+          onPageChange={(next) => update({ page: String(next) })}
+          pageSize={pageSize}
+          onPageSizeChange={(next) => update({ pageSize: next === pageSizeOptions[0] ? null : String(next) })}
+        />
       )}
     </div>
   )

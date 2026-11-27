@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Copy, History, KeyRound, Pencil, Search, UserPlus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 
+import { Pagination } from '@/components/pagination'
 import { TicketStatusBadge } from '@/components/ticket-badges'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -161,32 +162,14 @@ export function UserAdmin() {
         </ul>
       )}
 
-      {users.data && users.data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Página {users.data.page} de {users.data.totalPages}
-          </p>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={users.data.page <= 1}
-              onClick={() => update({ page: String(users.data.page - 1) })}
-            >
-              Anterior
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!users.data.hasNextPage}
-              onClick={() => update({ page: String(users.data.page + 1) })}
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
+      {users.data && (
+        <Pagination
+          page={users.data.page}
+          totalPages={users.data.totalPages}
+          totalCount={users.data.totalCount}
+          noun={['pessoa', 'pessoas']}
+          onPageChange={(next) => update({ page: String(next) })}
+        />
       )}
     </div>
   )

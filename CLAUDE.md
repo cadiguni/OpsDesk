@@ -32,6 +32,7 @@ GET    /api/tickets/{id}
 GET    /api/tickets/{id}/comments    POST /api/tickets/{id}/comments
 GET    /api/tickets/{id}/history
 POST   /api/tickets/{id}/status      POST /api/tickets/{id}/assignment
+POST   /api/tickets/bulk/status   (equipe; até 100 chamados, resultado por chamado)
 POST   /api/tickets/{id}/classification   (prioridade e categoria; prioridade recalcula o SLA)
 GET    /api/categories (?includeInactive, equipe)   GET /api/staff   GET /api/dashboard   GET /api/dashboard/period
 GET    /api/users  (equipe; busca por nome ou e-mail, para abrir em nome de outra pessoa)
@@ -50,6 +51,7 @@ GET    /api/admin/settings/general   PUT /api/admin/settings/general   (administ
 GET    /api/admin/holidays?year=   POST /api/admin/holidays   POST /api/admin/holidays/{id}/activation   DELETE /api/admin/holidays/{id}
 POST   /api/admin/import/tickets?format=&dryRun=   (administrador; multipart, dryRun padrão true)
 GET    /api/inbound   GET /api/inbound/{id}   POST /api/inbound/{id}/review   POST /api/inbound/{id}/reprocess   (equipe)
+GET    /api/inbound/attachment-recovery   POST /api/inbound/attachment-recovery?after=   (administrador; anexos de e-mails lidos antes de os anexos serem trazidos, em lotes)
 DELETE /api/inbound/{id} (administrador)   GET /api/inbound/rules   POST /api/inbound/rules/{id}/activation
 POST   /api/attachments              GET  /api/attachments/{id}
 GET    /api/tickets/{id}/attachments

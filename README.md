@@ -883,6 +883,15 @@ Filtros:
 
 Ordenação: mais recentes, mais antigos, prazo mais próximo, prioridade, e **atualizados recentemente**. Nesta última, comentário conta como atualização — é a resposta do solicitante que a equipe mais precisa ver subir na fila.
 
+**Mudança de status em lote.** A equipe marca chamados na lista, um a um ou todos da página, e aplica o mesmo status a todos. Serve, por exemplo, para fechar de uma vez os resolvidos da semana.
+
+* **Confirmação:** toda mudança em lote pede uma segunda confirmação.
+* **Mesmas regras do individual:** cada chamado passa pelo mesmo caminho da mudança feita na tela dele. Isso inclui a máquina de estados, o perfil, a janela de reabertura, o SLA, o histórico e o aviso ao solicitante.
+* **Sem tudo ou nada:** o chamado que não pode mudar não impede os outros. Um cancelado, por exemplo, não fecha. Ele volta com o motivo e continua selecionado.
+* **Seleção presa à vista:** a seleção vale para a página e os filtros em que foi feita, e trocar qualquer um deles a descarta.
+* **Teto:** no máximo 100 chamados por vez, o tamanho máximo da página.
+* **Quem usa:** só a equipe. O solicitante não vê a seleção.
+
 ---
 
 ### 13.7 Dashboard do administrador
@@ -1375,7 +1384,7 @@ A regra é aplicada por middleware, e não por atributo em cada rota. O motivo �
 
 ### Performance
 
-* listagem de chamados deve ter paginação;
+* listagem de chamados deve ter paginação: 25 por página por padrão, com escolha de 50 ou 100, que é o máximo aceito pelo servidor. A navegação mostra o total, permite pular para a primeira, a última ou uma página digitada, e a página e o tamanho ficam na URL junto com os filtros;
 * filtros devem ser aplicados no backend;
 * dashboard deve usar consultas agregadas.
 

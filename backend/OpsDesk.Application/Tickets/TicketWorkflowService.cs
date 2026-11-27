@@ -72,6 +72,51 @@ public class TicketWorkflowService(
     }
 
     /// <summary>
+    /// A mesma mudança em vários chamados, um por um, pelo mesmo caminho da mudança
+    /// individual: máquina de estados, perfil, janela de reabertura, SLA, histórico e aviso
+    /// ao solicitante valem para cada chamado como valeriam no clique na tela dele.
+    ///
+    /// Não é tudo ou nada. Fechar quarenta chamados e ver a operação inteira recusada porque
+    /// um deles já estava cancelado obrigaria a caçar o culpado; cada chamado tem o seu
+    /// resultado, e a tela mostra os que não mudaram e por quê.
+    /// </summary>
+    public async Task<IReadOnlyList<BulkStatusItem>> BulkChangeStatusAsync(
+        BulkChangeStatusRequest request, TicketViewer viewer, CancellationToken cancellationToken = default)
+    {
+        var ids = request.TicketIds.Distinct().ToList();
+
+        // Pelo filtro de visibilidade: o código do chamado alheio não vaza na resposta.
+        var known = await db.Tickets.AsNoTracking()
+            .VisibleTo(viewer)
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => new { t.Id, t.Code, t.Status })
+            .ToDictionaryAsync(t => t.Id, cancellationToken);
+
+        var results = new List<BulkStatusItem>(ids.Count);
+
+        foreach (var id in ids)
+        {
+            if (!known.TryGetValue(id, out var ticket))
+            {
+                results.Add(new BulkStatusItem(id, null, BulkStatusOutcome.NotFound, null));
+                continue;
+            }
+
+            var result = await ChangeStatusAsync(id, new ChangeStatusRequest(request.Status), viewer, cancellationToken);
+
+            results.Add(result switch
+            {
+                ChangeStatusResult.Changed changed => new BulkStatusItem(id, ticket.Code, BulkStatusOutcome.Changed, changed.Ticket.Status),
+                ChangeStatusResult.TransitionRejected rejected => new BulkStatusItem(id, ticket.Code, BulkStatusOutcome.TransitionRejected, rejected.From),
+                ChangeStatusResult.ReopenWindowExpired => new BulkStatusItem(id, ticket.Code, BulkStatusOutcome.ReopenWindowExpired, ticket.Status),
+                _ => new BulkStatusItem(id, null, BulkStatusOutcome.NotFound, null)
+            });
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Efeitos da transição sobre o relógio de SLA e sobre as datas do chamado.
     /// Regras da seção 8.2 e 8.3 do README.
     /// </summary>

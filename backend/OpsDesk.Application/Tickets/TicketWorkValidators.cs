@@ -2,6 +2,19 @@ using FluentValidation;
 
 namespace OpsDesk.Application.Tickets;
 
+public class BulkChangeStatusRequestValidator : AbstractValidator<BulkChangeStatusRequest>
+{
+    public BulkChangeStatusRequestValidator()
+    {
+        RuleFor(r => r.Status).IsInEnum().WithMessage("Status inválido.");
+
+        RuleFor(r => r.TicketIds)
+            .NotEmpty().WithMessage("Selecione pelo menos um chamado.")
+            .Must(ids => ids is null || ids.Count <= BulkChangeStatusRequest.MaxTickets)
+            .WithMessage($"Selecione no máximo {BulkChangeStatusRequest.MaxTickets} chamados de uma vez.");
+    }
+}
+
 public class AddCommentRequestValidator : AbstractValidator<AddCommentRequest>
 {
     public AddCommentRequestValidator()

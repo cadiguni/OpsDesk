@@ -91,6 +91,22 @@ export async function changeStatus(ticketId: string, status: TicketStatus): Prom
   return data
 }
 
+export type BulkStatusOutcome = 'Changed' | 'NotFound' | 'TransitionRejected' | 'ReopenWindowExpired'
+
+/** O que aconteceu com um chamado do lote; `status` é o status em que ele ficou. */
+export type BulkStatusItem = {
+  ticketId: string
+  code: string | null
+  outcome: BulkStatusOutcome
+  status: TicketStatus | null
+}
+
+export async function bulkChangeStatus(ticketIds: string[], status: TicketStatus): Promise<BulkStatusItem[]> {
+  const { data } = await api.post<BulkStatusItem[]>('/api/tickets/bulk/status', { ticketIds, status })
+
+  return data
+}
+
 /**
  * Troca prioridade e categoria. Campo ausente quer dizer "nao mexa".
  *

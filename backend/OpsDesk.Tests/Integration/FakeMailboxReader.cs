@@ -11,6 +11,9 @@ public class FakeMailboxReader : IMailboxReader
 
     private readonly ConcurrentDictionary<string, IReadOnlyList<FetchedAttachment>> _attachments = new();
 
+    /// <summary>Toda mensagem entregue, lida ou não, por caixa e Message-ID.</summary>
+    private readonly ConcurrentDictionary<(string Mailbox, string MessageId), string> _stored = new();
+
     /// <summary>Mensagens cujos anexos foram pedidos, pelo identificador do provedor.</summary>
     public ConcurrentBag<string> AttachmentsFetched { get; } = [];
 
@@ -23,6 +26,7 @@ public class FakeMailboxReader : IMailboxReader
     {
         _unread.Clear();
         _attachments.Clear();
+        _stored.Clear();
         AttachmentsFetched.Clear();
         MarkedAsRead.Clear();
         FailWith = null;
@@ -53,6 +57,7 @@ public class FakeMailboxReader : IMailboxReader
             headers ?? new Dictionary<string, string>());
 
         _unread.GetOrAdd(mailbox.ToLowerInvariant(), _ => []).Add(message);
+        _stored[(mailbox.ToLowerInvariant(), message.MessageId!)] = message.ProviderId;
 
         if (attachments is not null)
         {
@@ -103,4 +108,15 @@ public class FakeMailboxReader : IMailboxReader
 
         return Task.FromResult(found);
     }
+
+    /// <summary>Troca os anexos de uma mensagem já entregue, como se tivessem estado lá desde sempre.</summary>
+    public void SetAttachments(string providerId, IReadOnlyList<FetchedAttachment> attachments) =>
+        _attachments[providerId] = attachments;
+
+    /// <summary>Simula a mensagem apagada da caixa de correio.</summary>
+    public void Remove(string mailbox, string messageId) => _stored.TryRemove((mailbox.ToLowerInvariant(), messageId), out _);
+
+    public Task<string?> FindByMessageIdAsync(
+        EmailSenderCredentials credentials, string mailbox, string messageId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_stored.TryGetValue((mailbox.ToLowerInvariant(), messageId), out var id) ? id : null);
 }

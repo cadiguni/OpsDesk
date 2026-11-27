@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useSession } from '@/features/auth/session-context'
+import { AttachmentRecovery } from '@/features/inbound/attachment-recovery'
 import { MailboxAccounts } from '@/features/inbound/mailbox-accounts'
 import type { EmailSettings } from '@/features/settings/api'
 import { useEmailSettings, useSendTestEmail, useUpdateEmailSettings } from '@/features/settings/queries'
@@ -45,6 +46,10 @@ export function EmailSettingsPage() {
     )
   }
 
+  const credentialsReady = Boolean(
+    settings.data.tenantId && settings.data.clientId && settings.data.clientSecretReadable,
+  )
+
   return (
     <div className="space-y-6">
       <div>
@@ -66,9 +71,9 @@ export function EmailSettingsPage() {
         </div>
       </div>
 
-      <MailboxAccounts
-        credentialsReady={Boolean(settings.data.tenantId && settings.data.clientId && settings.data.clientSecretReadable)}
-      />
+      <MailboxAccounts credentialsReady={credentialsReady} />
+
+      <AttachmentRecovery credentialsReady={credentialsReady} />
     </div>
   )
 }

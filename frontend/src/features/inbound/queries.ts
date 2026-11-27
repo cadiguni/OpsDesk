@@ -8,6 +8,7 @@ const keys = {
   detail: (id: string) => ['inbound', 'detail', id] as const,
   rules: ['inbound', 'rules'] as const,
   accounts: ['email-accounts'] as const,
+  recovery: ['inbound', 'attachment-recovery'] as const,
 }
 
 export function useInboundList(query: { status?: inboundApi.InboundEmailStatus; search?: string; page?: number }) {
@@ -85,4 +86,8 @@ export function useSaveEmailAccount() {
       inboundApi.saveEmailAccount(id, input),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.accounts }),
   })
+}
+
+export function usePendingAttachmentRecovery(enabled: boolean) {
+  return useQuery({ queryKey: keys.recovery, queryFn: inboundApi.getPendingAttachmentRecovery, enabled })
 }

@@ -51,4 +51,12 @@ public interface IMailboxReader
         string providerId,
         long maxSizeInBytes,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// O identificador do provedor da mensagem com este cabeçalho Message-ID, em qualquer
+    /// pasta da caixa, ou nulo quando ela não está mais lá. Serve à recuperação dos anexos
+    /// das mensagens lidas antes de o identificador ser guardado.
+    /// </summary>
+    Task<string?> FindByMessageIdAsync(
+        EmailSenderCredentials credentials, string mailbox, string messageId, CancellationToken cancellationToken = default);
 }

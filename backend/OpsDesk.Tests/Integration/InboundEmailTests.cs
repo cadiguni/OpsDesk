@@ -474,6 +474,131 @@ public class InboundEmailTests(PostgresFixture fixture) : TicketTestBase(fixture
         Assert.False(await db.TicketAttachments.AnyAsync());
     }
 
+    // ----- Recuperação dos anexos de mensagens antigas -----
+
+    /// <summary>
+    /// A abertura e a resposta lidas antes da versão que guarda o <c>ProviderId</c> ganham os
+    /// anexos onde a mensagem foi parar — o print da abertura no chamado, o da resposta no
+    /// comentário —, sem repetir a imagem da assinatura. Corrigir a exibição não é evento:
+    /// nada no histórico, nenhum aviso, o "atualizado em" fica como estava.
+    /// </summary>
+    [Fact]
+    public async Task Recupera_os_anexos_de_mensagens_antigas_sem_gerar_evento()
+    {
+        var world = await SetUpWithMailboxAsync();
+        var from = await EmailOfAsync(world.RequesterId);
+        var logo = new FetchedAttachment("logo.png", "image/png", Png, IsInline: true, ContentId: "logo");
+
+        const string openingBody = "Erro ao abrir.\n[cid:print]\n[cid:logo]";
+        var opening = Fixture.Api.Mailbox.Deliver(Mailbox, from, "Sistema fora", openingBody);
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        var ticket = await db.Tickets.AsNoTracking().SingleAsync(t => t.Source == TicketSource.Email);
+
+        const string replyText = "Segue outro print.\n[cid:tela]\n[cid:logo]";
+        var reply = Fixture.Api.Mailbox.Deliver(Mailbox, from, $"RE: [{ticket.Code}] Sistema fora", replyText);
+        await SyncAsync();
+
+        var comment = await db.TicketComments.AsNoTracking().SingleAsync(c => c.TicketId == ticket.Id);
+
+        // Como as mensagens ficaram na versão anterior: sem identificador e com as marcas.
+        await db.InboundEmails.ExecuteUpdateAsync(set => set.SetProperty(e => e.ProviderId, (string?)null));
+        await db.Tickets.Where(t => t.Id == ticket.Id).ExecuteUpdateAsync(set => set.SetProperty(t => t.Description, openingBody));
+        await db.TicketComments.Where(c => c.Id == comment.Id).ExecuteUpdateAsync(set => set.SetProperty(c => c.Content, replyText));
+
+        Fixture.Api.Mailbox.SetAttachments(opening.ProviderId,
+            [new FetchedAttachment("print.png", "image/png", [0x89, 0x50, 7, 7], IsInline: true, ContentId: "print"), logo]);
+        Fixture.Api.Mailbox.SetAttachments(reply.ProviderId,
+            [new FetchedAttachment("tela.png", "image/png", [0x89, 0x50, 8, 8, 8], IsInline: true, ContentId: "tela"), logo]);
+
+        var updatedAt = await db.Tickets.Where(t => t.Id == ticket.Id).Select(t => t.UpdatedAt).SingleAsync();
+        var history = await db.TicketHistory.CountAsync(h => h.TicketId == ticket.Id);
+        var notifications = await db.Notifications.CountAsync();
+
+        Assert.Equal(2, await PendingRecoveryAsync(world.Manager));
+
+        var batch = await RunRecoveryAsync(world.Manager);
+
+        Assert.Equal(new AttachmentRecoveryBatch(2, 2, 3, 0, 0, null, null), batch);
+
+        var attachments = await ListAttachmentsAsync(world.Requester, ticket.Id);
+        Assert.Equal(["logo.png", "print.png", "tela.png"], attachments.Select(a => a.FileName).Order().ToArray());
+        Assert.Null(attachments.Single(a => a.FileName == "print.png").CommentId);
+        Assert.Null(attachments.Single(a => a.FileName == "logo.png").CommentId);
+        Assert.Equal(comment.Id, attachments.Single(a => a.FileName == "tela.png").CommentId);
+        Assert.All(attachments, a => Assert.Equal(world.RequesterId, a.UploadedById));
+
+        var description = await db.Tickets.Where(t => t.Id == ticket.Id).Select(t => t.Description).SingleAsync();
+        Assert.Contains("[imagem: print.png]", description);
+        Assert.Contains("[imagem: logo.png]", description);
+
+        var content = await db.TicketComments.Where(c => c.Id == comment.Id).Select(c => c.Content).SingleAsync();
+        Assert.Contains("[imagem: tela.png]", content);
+
+        Assert.Equal(updatedAt, await db.Tickets.Where(t => t.Id == ticket.Id).Select(t => t.UpdatedAt).SingleAsync());
+        Assert.Equal(history, await db.TicketHistory.CountAsync(h => h.TicketId == ticket.Id));
+        Assert.Equal(notifications, await db.Notifications.CountAsync());
+
+        // Repetir não traz nada de novo.
+        Assert.Equal(0, await PendingRecoveryAsync(world.Manager));
+        Assert.Equal(0, (await RunRecoveryAsync(world.Manager)).Examined);
+        Assert.Equal(3, (await ListAttachmentsAsync(world.Requester, ticket.Id)).Count);
+    }
+
+    /// <summary>
+    /// Mensagem apagada da caixa de correio não tem de onde trazer: conta como não achada e
+    /// continua na fila, sem impedir as outras do lote.
+    /// </summary>
+    [Fact]
+    public async Task Mensagem_apagada_da_caixa_fica_de_fora_da_recuperacao()
+    {
+        var world = await SetUpWithMailboxAsync();
+        var from = await EmailOfAsync(world.RequesterId);
+
+        var gone = Fixture.Api.Mailbox.Deliver(Mailbox, from, "Impressora", "Não imprime.\n[cid:foto]");
+        var kept = Fixture.Api.Mailbox.Deliver(Mailbox, from, "Monitor", "Piscando.\n[cid:foto2]");
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        await db.InboundEmails.ExecuteUpdateAsync(set => set.SetProperty(e => e.ProviderId, (string?)null));
+
+        Fixture.Api.Mailbox.Remove(Mailbox, gone.MessageId!);
+        Fixture.Api.Mailbox.SetAttachments(kept.ProviderId,
+            [new FetchedAttachment("foto2.png", "image/png", Png, IsInline: true, ContentId: "foto2")]);
+
+        var batch = await RunRecoveryAsync(world.Manager);
+
+        Assert.Equal(2, batch.Examined);
+        Assert.Equal(1, batch.Recovered);
+        Assert.Equal(1, batch.NotFound);
+        Assert.Equal(1, await PendingRecoveryAsync(world.Manager));
+    }
+
+    [Fact]
+    public async Task So_administrador_recupera_anexos()
+    {
+        var world = await SetUpWithMailboxAsync();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await world.Technician.PostAsync("/api/inbound/attachment-recovery", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await world.Requester.GetAsync("/api/inbound/attachment-recovery")).StatusCode);
+    }
+
+    private static async Task<int> PendingRecoveryAsync(HttpClient client)
+    {
+        var body = await client.GetFromJsonAsync<Dictionary<string, int>>("/api/inbound/attachment-recovery", TestJson.Options);
+
+        return body!["pending"];
+    }
+
+    private static async Task<AttachmentRecoveryBatch> RunRecoveryAsync(HttpClient client)
+    {
+        var response = await client.PostAsync("/api/inbound/attachment-recovery", null);
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadJsonAsync<AttachmentRecoveryBatch>())!;
+    }
+
     // ----- Atalhos -----
 
     private static async Task<List<AttachmentItem>> ListAttachmentsAsync(HttpClient client, Guid ticketId)

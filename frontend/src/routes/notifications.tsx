@@ -1,5 +1,6 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { Pagination } from '@/components/pagination'
 import { Button } from '@/components/ui/button'
 import type { NotificationItem } from '@/features/notifications/api'
 import { describeNotification } from '@/features/notifications/notification-label'
@@ -109,20 +110,14 @@ export function Notifications() {
         </ul>
       )}
 
-      {notifications.data && notifications.data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Página {notifications.data.page} de {notifications.data.totalPages}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={notifications.data.page <= 1} onClick={() => setPage(page - 1)}>
-              Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={!notifications.data.hasNextPage} onClick={() => setPage(page + 1)}>
-              Próxima
-            </Button>
-          </div>
-        </div>
+      {notifications.data && (
+        <Pagination
+          page={notifications.data.page}
+          totalPages={notifications.data.totalPages}
+          totalCount={notifications.data.totalCount}
+          noun={['notificação', 'notificações']}
+          onPageChange={setPage}
+        />
       )}
     </div>
   )

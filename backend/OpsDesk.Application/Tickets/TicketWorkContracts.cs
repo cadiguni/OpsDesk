@@ -64,6 +64,27 @@ public abstract record AddCommentResult
 
 public record ChangeStatusRequest(TicketStatus Status);
 
+/// <summary>A mesma mudança de status em vários chamados de uma vez.</summary>
+public record BulkChangeStatusRequest(IReadOnlyList<Guid> TicketIds, TicketStatus Status)
+{
+    /// <summary>O mesmo teto da página da lista: seleciona-se no máximo o que cabe nela.</summary>
+    public const int MaxTickets = 100;
+}
+
+public enum BulkStatusOutcome
+{
+    Changed,
+    NotFound,
+    TransitionRejected,
+    ReopenWindowExpired
+}
+
+/// <summary>
+/// O que aconteceu com um chamado do lote. <paramref name="Status"/> é o status em que ele
+/// ficou: o novo, se mudou, ou o de antes, que explica a recusa.
+/// </summary>
+public record BulkStatusItem(Guid TicketId, string? Code, BulkStatusOutcome Outcome, TicketStatus? Status);
+
 public abstract record ChangeStatusResult
 {
     public sealed record Changed(TicketDetail Ticket) : ChangeStatusResult;

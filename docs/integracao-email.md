@@ -210,7 +210,15 @@ Os anexos de arquivo da mensagem entram no chamado: na abertura, quando a mensag
 * **Assinatura repetida:** a imagem inline da assinatura volta em toda resposta. Num chamado que já tem uma imagem inline com o mesmo nome e tamanho, ela não entra de novo.
 * **Imagem externa:** a imagem que a assinatura carrega de um site, como um GIF hospedado no servidor da empresa, não é anexo. Ela continua como o endereço entre colchetes no texto e não é carregada, pelo mesmo motivo do corpo em texto puro (seção 9): carregar imagem externa avisa o remetente de quem abriu e quando. O nome técnico disso é *pixel de rastreamento*.
 
-Mensagens lidas antes desta versão não guardaram o identificador do provedor (`ProviderId`) e são reprocessadas sem anexos.
+**Mensagens antigas.** As mensagens lidas antes desta versão não guardaram o identificador do provedor (`ProviderId`) e entraram sem anexos. O administrador as recupera em **Configurações → E-mail → Anexos de e-mails antigos** (`/api/inbound/attachment-recovery`):
+
+* **Busca:** cada mensagem é procurada na caixa monitorada pelo Message-ID, em qualquer pasta. Os anexos vão para onde a mensagem foi parar:
+  * na abertura, quando o chamado nasceu dela;
+  * no comentário da resposta, quando foi resposta. O comentário é o do remetente gravado junto com o processamento da mensagem, até dez minutos de distância.
+* **Regras:** valem as mesmas desta seção. A marca `[cid:…]` vira o nome do arquivo, a imagem da assinatura não se repete e os limites são os mesmos.
+* **Sem evento:** corrigir a exibição não é evento do chamado. O texto é trocado direto no banco, sem passar pelos interceptores: nada entra no histórico, ninguém é avisado e o "atualizado em" não muda.
+* **Lotes:** o servidor trabalha em lotes de 20 e a tela os encadeia. Repetir é seguro, porque a mensagem recuperada ganha o `ProviderId` e sai da fila.
+* **Sem origem:** mensagem já apagada da caixa de correio não tem de onde vir. Ela conta como não encontrada e continua na fila, para o caso de reaparecer.
 
 ### 4.8 Falhas
 

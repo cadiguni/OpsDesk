@@ -141,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<EmailSettingsService>();
         services.AddScoped<EmailOutboxService>();
         services.AddScoped<InboundEmailProcessor>();
+        services.AddScoped<InboundAttachmentRecovery>();
         services.AddScoped<MailboxSyncService>();
         services.AddScoped<InboundEmailService>();
         services.AddScoped<EmailAccountService>();

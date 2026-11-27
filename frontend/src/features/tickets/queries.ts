@@ -176,6 +176,21 @@ export function useChangeStatus(ticketId: string) {
   })
 }
 
+/** A mesma mudança de status em vários chamados, da lista. */
+export function useBulkChangeStatus() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ ticketIds, status }: { ticketIds: string[]; status: TicketStatus }) =>
+      ticketsApi.bulkChangeStatus(ticketIds, status),
+    onSuccess: () => {
+      // O prefixo `tickets` cobre listas, detalhes e históricos dos chamados que mudaram.
+      void queryClient.invalidateQueries({ queryKey: keys.all })
+      void queryClient.invalidateQueries({ queryKey: keys.dashboard })
+    },
+  })
+}
+
 export function useChangeClassification(ticketId: string) {
   const queryClient = useQueryClient()
 

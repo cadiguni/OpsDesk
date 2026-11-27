@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
+import { Pagination } from '@/components/pagination'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -108,31 +109,14 @@ export function JobTitleAdmin() {
         </ul>
       )}
 
-      {jobTitles.data && jobTitles.data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Página {jobTitles.data.page} de {jobTitles.data.totalPages}
-          </p>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={jobTitles.data.page <= 1}
-              onClick={() => update({ page: String(jobTitles.data.page - 1) })}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!jobTitles.data.hasNextPage}
-              onClick={() => update({ page: String(jobTitles.data.page + 1) })}
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
+      {jobTitles.data && (
+        <Pagination
+          page={jobTitles.data.page}
+          totalPages={jobTitles.data.totalPages}
+          totalCount={jobTitles.data.totalCount}
+          noun={['cargo', 'cargos']}
+          onPageChange={(next) => update({ page: String(next) })}
+        />
       )}
     </div>
   )

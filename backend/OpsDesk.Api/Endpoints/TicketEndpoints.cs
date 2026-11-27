@@ -48,6 +48,11 @@ public static class TicketEndpoints
             .ValidatingBody<ChangeStatusRequest>()
             .WithSummary("Move o chamado na maquina de estados.");
 
+        group.MapPost("/bulk/status", BulkChangeStatus)
+            .RequireAuthorization(AuthorizationPolicies.Staff)
+            .ValidatingBody<BulkChangeStatusRequest>()
+            .WithSummary("Aplica a mesma mudança de status a vários chamados; cada um tem o seu resultado.");
+
         group.MapPost("/{id:guid}/classification", ChangeClassification)
             .RequireAuthorization(AuthorizationPolicies.Staff)
             .ValidatingBody<ChangeClassificationRequest>()
@@ -258,6 +263,13 @@ public static class TicketEndpoints
                 $"Resultado de mudança de status não tratado: {result.GetType().Name}.")
         };
     }
+
+    private static async Task<IResult> BulkChangeStatus(
+        BulkChangeStatusRequest request,
+        TicketWorkflowService workflow,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(await workflow.BulkChangeStatusAsync(request, currentUser.Viewer, cancellationToken));
 
     private static async Task<IResult> ChangeClassification(
         Guid id,

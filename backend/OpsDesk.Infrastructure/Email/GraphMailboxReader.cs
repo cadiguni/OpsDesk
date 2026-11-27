@@ -133,6 +133,24 @@ public class GraphMailboxReader(HttpClient http, GraphTokenProvider tokens) : IM
         return result;
     }
 
+    public async Task<string?> FindByMessageIdAsync(
+        EmailSenderCredentials credentials, string mailbox, string messageId, CancellationToken cancellationToken = default)
+    {
+        var token = await tokens.GetAsync(credentials, cancellationToken);
+
+        // Aspas simples dobradas, como pede o OData; o valor inteiro vai codificado, porque
+        // Message-ID carrega '+', '=' e '/' que a query string leria de outro jeito.
+        var filter = $"internetMessageId eq '{messageId.Replace("'", "''")}'";
+        var url = $"{GraphEmailSender.GraphBaseAddress}users/{Uri.EscapeDataString(mailbox)}/messages" +
+                  $"?$filter={Uri.EscapeDataString(filter)}&$select=id&$top=1";
+
+        var body = await GetAsync(url, token, cancellationToken);
+
+        return body is { } found && found.GetProperty("value").EnumerateArray().FirstOrDefault() is { ValueKind: JsonValueKind.Object } first
+            ? Text(first, "id")
+            : null;
+    }
+
     private const string FileAttachmentType = "#microsoft.graph.fileAttachment";
 
     /// <summary>O corpo da resposta, ou nulo quando a mensagem ou o anexo não existe mais.</summary>

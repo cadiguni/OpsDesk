@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as ticketsApi from '@/features/tickets/api'
+import type { TicketListItem } from '@/features/tickets/types'
 import { TicketList } from '@/routes/ticket-list'
 import { locationSearch, renderWithProviders, userOf } from '@/test/render'
 
@@ -103,5 +104,139 @@ describe('filtros da lista na URL', () => {
     expect(screen.queryByRole('combobox', { name: 'Responsável' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /sem responsável/i })).not.toBeInTheDocument()
     expect(ticketsApi.listStaff).not.toHaveBeenCalled()
+  })
+})
+
+describe('paginação', () => {
+  beforeEach(() => {
+    vi.mocked(ticketsApi.listTickets).mockResolvedValue({
+      items: [],
+      page: 3,
+      pageSize: 25,
+      totalCount: 2437,
+      totalPages: 98,
+      hasNextPage: true,
+    })
+  })
+
+  it('mostra o total e vai direto para a página digitada, sem passar do limite', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<TicketList />, { route: '/chamados?search=vpn&page=3' })
+
+    expect(await screen.findByText(/2\.437 chamados · página 3 de 98/)).toBeInTheDocument()
+
+    await user.type(screen.getByRole('spinbutton', { name: 'Ir para a página' }), '500{Enter}')
+
+    expect(locationSearch().get('page')).toBe('98')
+    expect(locationSearch().get('search')).toBe('vpn')
+  })
+
+  it('a última página fica a um clique', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<TicketList />, { route: '/chamados?page=3' })
+
+    await user.click(await screen.findByRole('button', { name: 'Última página' }))
+
+    expect(locationSearch().get('page')).toBe('98')
+  })
+
+  it('trocar o tamanho da página volta para a primeira e pede o novo tamanho', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<TicketList />, { route: '/chamados?page=3' })
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Itens por página' }), '100')
+
+    expect(locationSearch().get('pageSize')).toBe('100')
+    expect(locationSearch().get('page')).toBeNull()
+    await waitFor(() => expect(lastQuery()).toMatchObject({ page: 1, pageSize: 100 }))
+  })
+})
+
+function listItem(id: string, code: string, overrides: Partial<TicketListItem> = {}): TicketListItem {
+  return {
+    id,
+    code,
+    title: `Chamado ${code}`,
+    status: 'InProgress',
+    priority: 'Medium',
+    categoryName: 'VPN',
+    requesterName: 'Ana Usuária',
+    assignedTechnicianName: null,
+    createdAt: '2026-09-10T12:00:00Z',
+    slaResponseDueAt: '2026-09-10T20:00:00Z',
+    slaResolutionDueAt: '2026-09-15T20:00:00Z',
+    firstRespondedAt: null,
+    resolvedAt: null,
+    updatedAt: '2026-09-10T12:00:00Z',
+    source: 'Portal',
+    ...overrides,
+  }
+}
+
+describe('mudança de status em lote', () => {
+  beforeEach(() => {
+    vi.mocked(ticketsApi.listTickets).mockResolvedValue({
+      items: [
+        listItem('t1', 'OPS-000001'),
+        listItem('t2', 'OPS-000002'),
+        listItem('t3', 'OPS-000003', { status: 'Cancelled' }),
+      ],
+      page: 1,
+      pageSize: 25,
+      totalCount: 3,
+      totalPages: 1,
+      hasNextPage: false,
+    })
+    vi.mocked(ticketsApi.bulkChangeStatus).mockReset()
+  })
+
+  it('o solicitante não vê seleção nenhuma', async () => {
+    renderWithProviders(<TicketList />, { role: 'Requester', route: '/chamados' })
+
+    expect(await screen.findByText('Chamado OPS-000001')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('fecha os selecionados depois da confirmação e mantém selecionado o que não mudou', async () => {
+    const user = userEvent.setup()
+    vi.mocked(ticketsApi.bulkChangeStatus).mockResolvedValue([
+      { ticketId: 't1', code: 'OPS-000001', outcome: 'Changed', status: 'Closed' },
+      { ticketId: 't2', code: 'OPS-000002', outcome: 'Changed', status: 'Closed' },
+      { ticketId: 't3', code: 'OPS-000003', outcome: 'TransitionRejected', status: 'Cancelled' },
+    ])
+
+    renderWithProviders(<TicketList />, { route: '/chamados' })
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Selecionar todos desta página' }))
+    expect(screen.getByText('3 chamados selecionados')).toBeInTheDocument()
+
+    // O primeiro clique só arma: nada vai para o servidor sem a confirmação.
+    await user.click(screen.getByRole('button', { name: 'Aplicar' }))
+    expect(ticketsApi.bulkChangeStatus).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar: fechar 3 chamados' }))
+
+    expect(ticketsApi.bulkChangeStatus).toHaveBeenCalledWith(['t1', 't2', 't3'], 'Closed')
+    expect(await screen.findByText('2 chamados passaram para Fechado.')).toBeInTheDocument()
+    expect(screen.getByText('OPS-000003: está Cancelado e não pode ir para Fechado.')).toBeInTheDocument()
+    expect(screen.getByText('1 chamado selecionado')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Selecionar OPS-000003' })).toBeChecked()
+  })
+
+  it('mudar de filtro descarta a seleção', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<TicketList />, { route: '/chamados' })
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Selecionar OPS-000002' }))
+    expect(screen.getByText('1 chamado selecionado')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Em triagem' }))
+
+    expect(screen.queryByText(/selecionado/)).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Selecionar OPS-000002' })).not.toBeChecked()
   })
 })

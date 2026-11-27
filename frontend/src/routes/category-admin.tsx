@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
+import { Pagination } from '@/components/pagination'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
@@ -144,32 +145,14 @@ export function CategoryAdmin() {
         </ul>
       )}
 
-      {categories.data && categories.data.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            Página {categories.data.page} de {categories.data.totalPages}
-          </p>
-
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={categories.data.page <= 1}
-              onClick={() => update({ page: String(categories.data.page - 1) })}
-            >
-              Anterior
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!categories.data.hasNextPage}
-              onClick={() => update({ page: String(categories.data.page + 1) })}
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
+      {categories.data && (
+        <Pagination
+          page={categories.data.page}
+          totalPages={categories.data.totalPages}
+          totalCount={categories.data.totalCount}
+          noun={['categoria', 'categorias']}
+          onPageChange={(next) => update({ page: String(next) })}
+        />
       )}
     </div>
   )
