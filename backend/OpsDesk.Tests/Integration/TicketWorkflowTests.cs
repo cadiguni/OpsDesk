@@ -481,9 +481,11 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
         var paused = await ChangeStatusAsync(world.Technician, ticket, TicketStatus.WaitingOnRequester);
 
-        // Avança o instante da pausa para trás, simulando tempo em espera sem esperar
-        // de verdade. Duas horas úteis: a janela de expediente é ampla o bastante para o
-        // instante deslocado continuar dentro dela na maior parte do dia.
+        // Recua o instante da pausa, simulando tempo em espera sem esperar de verdade.
+        // Sete dias corridos, e não algumas horas: a API usa o relógio real, e fora do
+        // expediente (à noite, no fim de semana) um recuo curto cai inteiro em horário
+        // não útil — a pausa conta zero minuto e o prazo não anda. Sete dias sempre
+        // contêm dias úteis, seja qual for a hora em que a suíte roda.
         await using var db = Fixture.CreateContext();
         var pausedAt = await db.Tickets
             .Where(t => t.Id == ticket)
@@ -493,7 +495,7 @@ public class TicketWorkflowTests(PostgresFixture fixture) : TicketTestBase(fixtu
         await db.Tickets
             .Where(t => t.Id == ticket)
             .ExecuteUpdateAsync(t => t.SetProperty(
-                x => x.SlaPausedAt, pausedAt!.Value.AddHours(-2)));
+                x => x.SlaPausedAt, pausedAt!.Value.AddDays(-7)));
 
         var resumed = await ChangeStatusAsync(world.Technician, ticket, TicketStatus.InProgress);
 
