@@ -1,6 +1,6 @@
-﻿import type { ReactNode } from 'react'
+﻿import { useRef, type MouseEvent, type ReactNode } from 'react'
 import { BriefcaseBusiness, CalendarDays, FileUp, Headphones, Inbox, KeyRound, LayoutDashboard, LogOut, Plus, Settings, Tags, Ticket, Users } from 'lucide-react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { ThemeSelect } from '@/components/theme-select'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -20,12 +20,13 @@ export function AppLayout() {
   const isManager = role === 'Manager'
   const organization = usePublicOptions().data?.organizationName ?? 'OpsDesk'
   const inAdmin = adminPrefixes.some((prefix) => location.pathname.startsWith(prefix))
+  const onLogoClick = useSecretClicks('/arquibancada')
 
   return (
     <div className="min-h-dvh bg-background md:pl-56">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:p-3">Pular para o conteúdo</a>
       <aside className="border-b bg-card md:fixed md:inset-y-0 md:left-0 md:flex md:w-56 md:flex-col md:border-r md:border-b-0">
-        <Link to="/" className="flex items-center gap-3 px-5 py-5">
+        <Link to="/" onClick={onLogoClick} className="flex items-center gap-3 px-5 py-5">
           <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground"><Headphones className="size-5" /></span>
           <div><p className="truncate text-lg font-bold tracking-tight">{organization}</p><p className="text-xs text-muted-foreground">Central de atendimento</p></div>
         </Link>
@@ -79,4 +80,24 @@ function SidebarLink({ to, icon, children }: { to: string; icon: ReactNode; chil
     'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
     isActive ? 'bg-primary/10 font-semibold text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
   )}>{icon}{children}</NavLink>
+}
+
+/**
+ * Atalho escondido: sete cliques no logotipo em menos de quatro segundos levam a `target`.
+ * Os cliques comuns continuam indo para o início, como sempre.
+ */
+function useSecretClicks(target: string, needed = 7, windowMs = 4000) {
+  const navigate = useNavigate()
+  const clicks = useRef<number[]>([])
+
+  return (event: MouseEvent) => {
+    const now = Date.now()
+    clicks.current = [...clicks.current.filter((at) => now - at < windowMs), now]
+
+    if (clicks.current.length >= needed) {
+      clicks.current = []
+      event.preventDefault()
+      navigate(target)
+    }
+  }
 }

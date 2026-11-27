@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { SessionProvider } from '@/features/auth/session'
 import { queryClient } from '@/lib/query-client'
 import { AppLayout } from '@/routes/app-layout'
+import { Arquibancada } from '@/routes/arquibancada'
 import { CategoryAdmin } from '@/routes/category-admin'
 import { JobTitleAdmin } from '@/routes/job-title-admin'
 import { ChangePassword } from '@/routes/change-password'
@@ -61,6 +62,8 @@ export function App() {
                 <Route path="/configuracoes/geral" element={<GeneralSettingsPage />} />
                 <Route path="/configuracoes/email" element={<EmailSettingsPage />} />
                 <Route path="/notificacoes" element={<Notifications />} />
+                {/* Sem link em menu nenhum, de propósito: ver routes/arquibancada.tsx. */}
+                <Route path="/arquibancada" element={<Arquibancada />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

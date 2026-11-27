@@ -213,6 +213,7 @@ try
     app.MapHolidayEndpoints();
     app.MapInboundEmailEndpoints();
     app.MapImportEndpoints();
+    app.MapFunEndpoints();
 
     if (app.Environment.IsDevelopment())
     {

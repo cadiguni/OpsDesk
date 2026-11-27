@@ -13,6 +13,7 @@ using OpsDesk.Application.Auth;
 using OpsDesk.Application.Categories;
 using OpsDesk.Application.JobTitles;
 using OpsDesk.Application.Dashboard;
+using OpsDesk.Application.Fun;
 using OpsDesk.Application.Holidays;
 using OpsDesk.Application.Import;
 using OpsDesk.Application.Inbound;
@@ -24,6 +25,7 @@ using OpsDesk.Application.Users;
 using OpsDesk.Domain.Entities;
 using OpsDesk.Infrastructure.Authentication;
 using OpsDesk.Infrastructure.Email;
+using OpsDesk.Infrastructure.Fun;
 using OpsDesk.Infrastructure.Persistence;
 using OpsDesk.Infrastructure.Persistence.Interceptors;
 using OpsDesk.Infrastructure.Persistence.Seed;
@@ -223,6 +225,13 @@ public static class DependencyInjection
 
         // Quem espera é uma pessoa diante da tela de login.
         services.AddHttpClient<IEntraSignIn, EntraSignIn>(client => client.Timeout = TimeSpan.FromSeconds(20));
+
+        // A arquibancada: opcional, sem chave a tela só avisa que não está configurada.
+        services
+            .AddOptions<FootballOptions>()
+            .Bind(configuration.GetSection(FootballOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddHttpClient<IFootballFeed, FootballDataFeed>(client => client.Timeout = TimeSpan.FromSeconds(15));
     }
 
     private static string ConnectionString(IServiceProvider provider) =>
