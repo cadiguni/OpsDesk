@@ -29,5 +29,8 @@ public enum UserAuditAction
     /// os identificadores: a trilha conta o que se via naquele dia, mesmo que o cargo seja
     /// renomeado depois.
     /// </summary>
-    JobTitleChanged
+    JobTitleChanged,
+
+    /// <summary>Nome exibido trocado pelo administrador. Os valores são o nome antigo e o novo.</summary>
+    NameChanged
 }

@@ -35,6 +35,7 @@ function sessionOf(role: UserRole): SessionState {
     signUp: noop,
     signOut: noop,
     changePassword: noop,
+    updateOwnName: () => {},
     mustChangePassword: false,
     role,
     isStaff: isStaff(role),

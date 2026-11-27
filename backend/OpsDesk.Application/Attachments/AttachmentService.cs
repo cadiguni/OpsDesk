@@ -129,6 +129,50 @@ public class AttachmentService(IOpsDeskDbContext db, IAttachmentStorage storage,
     }
 
     /// <summary>
+    /// Grava um anexo pendente vindo de fora do portal — hoje, o anexo de um e-mail
+    /// recebido —, com as mesmas regras de tipo e tamanho do envio pelo portal. Devolve
+    /// nulo quando o arquivo não serve, e aí ele é simplesmente deixado de fora.
+    ///
+    /// Não cobra a cota de pendentes por usuário: o anexo é vinculado logo em seguida, na
+    /// mesma entrega, e a cota existe contra quem acumula envio sem vincular. Não chama
+    /// <c>SaveChangesAsync</c>; quem chama grava.
+    /// </summary>
+    internal async Task<TicketAttachment?> StagePendingAsync(
+        string fileName,
+        string contentType,
+        byte[] content,
+        Guid uploaderId,
+        CancellationToken cancellationToken)
+    {
+        var type = Normalize(contentType);
+
+        if (content.Length == 0 || content.Length > MaxFileSizeInBytes || !AllowedContentTypes.Contains(type))
+        {
+            return null;
+        }
+
+        var now = clock.UtcNow;
+
+        var attachment = new TicketAttachment
+        {
+            UploadedById = uploaderId,
+            FileName = SafeFileName(fileName),
+            ContentType = type,
+            SizeInBytes = content.Length,
+            CreatedAt = now
+        };
+
+        attachment.StorageKey = BuildStorageKey(attachment, now);
+
+        using var stream = new MemoryStream(content, writable: false);
+        await storage.SaveAsync(attachment.StorageKey, stream, cancellationToken);
+
+        db.TicketAttachments.Add(attachment);
+
+        return attachment;
+    }
+
+    /// <summary>
     /// Vincula anexos pendentes ao chamado recém-aberto ou a um comentário.
     ///
     /// Só entra anexo que está pendente e que foi enviado por quem está vinculando: sem

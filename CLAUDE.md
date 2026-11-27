@@ -41,7 +41,7 @@ POST   /api/admin/users/{id}/password-reset   GET /api/admin/users/{id}/history
 GET    /api/admin/categories      POST /api/admin/categories   (administrador)
 PUT    /api/admin/categories/{id}  POST /api/admin/categories/{id}/activation
 GET    /api/admin/job-titles   GET …/options   POST …   PUT …/{id}   POST …/{id}/activation   (administrador)
-POST   /api/admin/users/{id}/job-title   (administrador; vale também para a própria conta)
+POST   /api/admin/users/{id}/job-title   POST /api/admin/users/{id}/name   (administrador; valem também para a própria conta)
 GET    /api/notifications   GET /api/notifications/unread-count   (as do próprio usuário)
 POST   /api/notifications/{id}/read   POST /api/notifications/read-all
 GET    /api/admin/settings/email   PUT /api/admin/settings/email   POST /api/admin/settings/email/test   (administrador)

@@ -67,6 +67,96 @@ public class GraphMailboxReader(HttpClient http, GraphTokenProvider tokens) : IM
         }
     }
 
+    /// <summary>
+    /// Duas etapas: a lista só com os metadados, e depois cada anexo que cabe, um por vez.
+    /// Pedir a lista completa traria o conteúdo de todos de uma vez, inclusive o vídeo de
+    /// cem megabytes que seria descartado pelo tamanho.
+    ///
+    /// Só <c>fileAttachment</c>: mensagem anexada (<c>itemAttachment</c>) e link para o
+    /// OneDrive (<c>referenceAttachment</c>) não têm arquivo para guardar.
+    /// </summary>
+    public async Task<IReadOnlyList<FetchedAttachment>> FetchAttachmentsAsync(
+        EmailSenderCredentials credentials,
+        string mailbox,
+        string providerId,
+        long maxSizeInBytes,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await tokens.GetAsync(credentials, cancellationToken);
+
+        var baseUrl = $"{GraphEmailSender.GraphBaseAddress}users/{Uri.EscapeDataString(mailbox)}" +
+                      $"/messages/{Uri.EscapeDataString(providerId)}/attachments";
+
+        var list = await GetAsync($"{baseUrl}?$select=id,name,contentType,size,isInline", token, cancellationToken);
+
+        if (list is null)
+        {
+            return [];
+        }
+
+        var result = new List<FetchedAttachment>();
+
+        foreach (var item in list.Value.GetProperty("value").EnumerateArray())
+        {
+            if (Text(item, "@odata.type") is { } type && type != FileAttachmentType)
+            {
+                continue;
+            }
+
+            if (item.TryGetProperty("size", out var size) && size.TryGetInt64(out var bytes) && bytes > maxSizeInBytes)
+            {
+                continue;
+            }
+
+            if (Text(item, "id") is not { } id
+                || await GetAsync($"{baseUrl}/{Uri.EscapeDataString(id)}", token, cancellationToken) is not { } full
+                || Text(full, "contentBytes") is not { } base64)
+            {
+                continue;
+            }
+
+            var content = Convert.FromBase64String(base64);
+
+            if (content.Length > maxSizeInBytes)
+            {
+                continue;
+            }
+
+            result.Add(new FetchedAttachment(
+                Text(full, "name") ?? "anexo",
+                Text(full, "contentType") ?? "application/octet-stream",
+                content,
+                full.TryGetProperty("isInline", out var inline) && inline.ValueKind == JsonValueKind.True,
+                Text(full, "contentId")));
+        }
+
+        return result;
+    }
+
+    private const string FileAttachmentType = "#microsoft.graph.fileAttachment";
+
+    /// <summary>O corpo da resposta, ou nulo quando a mensagem ou o anexo não existe mais.</summary>
+    private async Task<JsonElement?> GetAsync(string url, string token, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new("Bearer", token);
+
+        using var response = await GraphHttp.SendAsync(http, request, "Microsoft Graph", cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new EmailDeliveryException(
+                $"O Microsoft Graph recusou a leitura dos anexos ({(int)response.StatusCode}): {await GraphHttp.ErrorOf(response, cancellationToken)}");
+        }
+
+        return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
+
     private static FetchedMessage ToMessage(JsonElement message)
     {
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

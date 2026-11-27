@@ -3,7 +3,9 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsDesk.Application.Abstractions;
+using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Authorization;
+using OpsDesk.Application.Notifications;
 using OpsDesk.Application.Settings;
 using OpsDesk.Application.Tickets;
 using OpsDesk.Domain.Entities;
@@ -26,6 +28,9 @@ public partial class InboundEmailProcessor(
     IActorScope actor,
     TicketService tickets,
     TicketCommentService comments,
+    AttachmentService attachments,
+    IMailboxReader reader,
+    EmailSettingsService emailSettings,
     IClock clock,
     ILogger<InboundEmailProcessor> logger)
 {
@@ -114,8 +119,15 @@ public partial class InboundEmailProcessor(
 
         if (previousTicket is { } linked)
         {
-            var reply = ReplyTextExtractor.Extract(email.BodyText);
-            var result = await comments.AddAsync(linked.Id, new AddCommentRequest(Truncate(reply, 10_000)), viewer, cancellationToken);
+            var imported = await ImportAttachmentsAsync(email, requester.Id, cancellationToken);
+            var reply = ReplyTextExtractor.Extract(ReplaceInlineImages(email.BodyText, imported));
+            var attachable = await AttachableAsync(linked.Id, imported, cancellationToken);
+
+            var result = await comments.AddAsync(
+                linked.Id,
+                new AddCommentRequest(Truncate(reply, 10_000), AttachmentIds: attachable.Count > 0 ? [.. attachable] : null),
+                viewer,
+                cancellationToken);
 
             if (result is AddCommentResult.Added)
             {
@@ -146,7 +158,9 @@ public partial class InboundEmailProcessor(
             ? Truncate(clean, TitleMaxLength)
             : "Chamado sem assunto";
 
-        var description = string.IsNullOrWhiteSpace(email.BodyText) ? "(mensagem sem texto)" : email.BodyText.Trim();
+        var staged = await ImportAttachmentsAsync(email, requester.Id, cancellationToken);
+        var body = ReplaceInlineImages(email.BodyText, staged);
+        var description = string.IsNullOrWhiteSpace(body) ? "(mensagem sem texto)" : body.Trim();
 
         if (previousTicket is { } old)
         {
@@ -163,11 +177,128 @@ public partial class InboundEmailProcessor(
             ?? throw new InvalidOperationException(
                 $"Não há política de SLA ativa para a prioridade {email.EmailAccount.DefaultPriority}.");
 
+        // Anexos da abertura: do chamado, sem comentário, públicos como a descrição.
+        foreach (var item in Distinct(staged).Take(AttachmentService.MaxPerTicket))
+        {
+            item.Attachment.TicketId = ticket.Id;
+            item.Attachment.CommentId = null;
+            item.Attachment.IsInternal = false;
+        }
+
         email.TicketId = ticket.Id;
         await FinishAsync(email, InboundEmailStatus.Processed, cancellationToken);
 
         logger.LogInformation("E-mail de {From} virou o chamado {Code}.", email.FromAddress, ticket.Code);
     }
+
+    /// <summary>Anexo do e-mail já gravado como pendente, em nome do remetente.</summary>
+    private sealed record ImportedAttachment(TicketAttachment Attachment, bool IsInline, string? ContentId);
+
+    private List<ImportedAttachment>? _imported;
+
+    /// <summary>
+    /// Baixa os anexos da mensagem e os grava como anexos <b>pendentes</b> do remetente — o
+    /// mesmo caminho do envio pelo portal (invariante 9): é o vínculo, logo em seguida, que
+    /// os torna visíveis no chamado. Tipo e tamanho seguem as regras do portal; o que não
+    /// serve fica de fora, sem impedir o chamado.
+    ///
+    /// Feito só na entrega, e não na leitura da caixa: duplicata, resposta automática e
+    /// spam não ocupam armazenamento. Uma falha do Graph aqui falha o processamento, que
+    /// volta à fila antes de qualquer chamado existir.
+    /// </summary>
+    private async Task<List<ImportedAttachment>> ImportAttachmentsAsync(
+        InboundEmail email, Guid uploaderId, CancellationToken cancellationToken)
+    {
+        if (_imported is not null)
+        {
+            return _imported;
+        }
+
+        _imported = [];
+
+        if (email.ProviderId is not { } providerId)
+        {
+            return _imported;
+        }
+
+        var settings = await db.EmailSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+
+        if (emailSettings.LoadApplicationCredentials(settings) is not { } credentials)
+        {
+            return _imported;
+        }
+
+        var fetched = await reader.FetchAttachmentsAsync(
+            credentials, email.EmailAccount.Address, providerId, AttachmentService.MaxFileSizeInBytes, cancellationToken);
+
+        foreach (var file in fetched)
+        {
+            if (await attachments.StagePendingAsync(file.FileName, file.ContentType, file.Content, uploaderId, cancellationToken)
+                is { } attachment)
+            {
+                _imported.Add(new ImportedAttachment(attachment, file.IsInline, NormalizeContentId(file.ContentId)));
+            }
+        }
+
+        if (_imported.Count > 0)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        return _imported;
+    }
+
+    /// <summary>
+    /// Os anexos que entram num chamado que já existe. A imagem inline repetida — a da
+    /// assinatura, que volta em toda resposta — entra uma vez só: a que já está no chamado,
+    /// com o mesmo nome e tamanho, não entra de novo. E nunca além do teto por chamado, que
+    /// faria o comentário inteiro ser recusado.
+    /// </summary>
+    private async Task<List<Guid>> AttachableAsync(
+        Guid ticketId, List<ImportedAttachment> imported, CancellationToken cancellationToken)
+    {
+        if (imported.Count == 0)
+        {
+            return [];
+        }
+
+        var existing = await db.TicketAttachments
+            .Where(a => a.TicketId == ticketId)
+            .Select(a => new { a.FileName, a.SizeInBytes })
+            .ToListAsync(cancellationToken);
+
+        var onTicket = existing.Select(a => (a.FileName, a.SizeInBytes)).ToHashSet();
+
+        return [.. Distinct(imported)
+            .Where(i => !i.IsInline || !onTicket.Contains((i.Attachment.FileName, i.Attachment.SizeInBytes)))
+            .Take(Math.Max(0, AttachmentService.MaxPerTicket - existing.Count))
+            .Select(i => i.Attachment.Id)];
+    }
+
+    /// <summary>A mesma imagem inline duas vezes na mesma mensagem entra uma vez.</summary>
+    private static IEnumerable<ImportedAttachment> Distinct(List<ImportedAttachment> imported)
+    {
+        var seen = new HashSet<(string, long)>();
+
+        return imported.Where(i => !i.IsInline || seen.Add((i.Attachment.FileName, i.Attachment.SizeInBytes)));
+    }
+
+    /// <summary>
+    /// O texto puro que o Graph entrega marca cada imagem inline como <c>[cid:…]</c>. A
+    /// marca vira o nome do arquivo, que aparece logo abaixo como anexo; a de imagem que
+    /// não foi trazida — grande demais, tipo recusado — vira só "[imagem]".
+    /// </summary>
+    private static string ReplaceInlineImages(string text, List<ImportedAttachment> imported) =>
+        ContentIdMark().Replace(text, match =>
+            imported.FirstOrDefault(i => i.ContentId == NormalizeContentId(match.Groups[1].Value)) is { } found
+                ? $"[imagem: {found.Attachment.FileName}]"
+                : "[imagem]");
+
+    private static string? NormalizeContentId(string? contentId) =>
+        contentId?.Trim().Trim('<', '>').ToLowerInvariant();
+
+    [GeneratedRegex(@"\[cid:([^\]\s]+)\]", RegexOptions.IgnoreCase)]
+    private static partial Regex ContentIdMark();
 
     /// <summary>
     /// O solicitante, pelo endereço do remetente. Desconhecido vira usuário sem senha: é

@@ -15,6 +15,9 @@ export type SessionState = {
   signOut: () => Promise<void>
   changePassword: (input: authApi.ChangePasswordInput) => Promise<void>
 
+  /** O administrador trocou o próprio nome: atualiza o que a interface mostra sem nova sessão. */
+  updateOwnName: (name: string) => void
+
   /** Senha provisória: a navegação fica presa na tela de troca até isto ser falso. */
   mustChangePassword: boolean
 

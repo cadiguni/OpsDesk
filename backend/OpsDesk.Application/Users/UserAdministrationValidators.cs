@@ -22,6 +22,16 @@ public class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
     }
 }
 
+public class ChangeNameRequestValidator : AbstractValidator<ChangeNameRequest>
+{
+    public ChangeNameRequestValidator()
+    {
+        RuleFor(r => r.Name)
+            .Must(name => !string.IsNullOrWhiteSpace(name)).WithMessage("Informe o nome.")
+            .MaximumLength(200).WithMessage("O nome deve ter no máximo 200 caracteres.");
+    }
+}
+
 public class ChangeJobTitleRequestValidator : AbstractValidator<ChangeJobTitleRequest>
 {
     public ChangeJobTitleRequestValidator()

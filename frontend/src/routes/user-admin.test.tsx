@@ -13,6 +13,7 @@ vi.mock('@/features/users/api', async (original) => ({
   listManagedUsers: vi.fn(),
   createUser: vi.fn(),
   changeJobTitle: vi.fn(),
+  changeName: vi.fn(),
 }))
 
 vi.mock('@/features/job-titles/api', async (original) => ({
@@ -89,6 +90,43 @@ describe('cadastro pelo administrador', () => {
     await waitFor(() =>
       expect(vi.mocked(usersApi.createUser).mock.calls.at(-1)?.[0]).toMatchObject({ jobTitleId: 'tech-lead' }),
     )
+  })
+})
+
+describe('nome na lista', () => {
+  /** O administrador do bootstrap nasce com nome genérico; a própria conta precisa poder corrigi-lo. */
+  it('a própria conta troca o nome, já sem espaços nas pontas', async () => {
+    const me = userOf('Manager')
+    vi.mocked(usersApi.listManagedUsers).mockResolvedValue(
+      page([{ ...created, id: me.id, name: 'Gestor', role: 'Manager', mustChangePassword: false }]),
+    )
+    vi.mocked(usersApi.changeName).mockResolvedValue({ ...created, id: me.id, name: 'Maria Souza' })
+
+    const user = userEvent.setup()
+    renderWithProviders(<UserAdmin />, { role: 'Manager', route: '/usuarios' })
+
+    await user.click(await screen.findByRole('button', { name: 'Editar o nome de Gestor' }))
+    const input = screen.getByLabelText('Novo nome de Gestor')
+    await user.clear(input)
+    await user.type(input, '  Maria Souza  ')
+    await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() => expect(usersApi.changeName).toHaveBeenCalledWith(me.id, 'Maria Souza'))
+    await waitFor(() => expect(screen.queryByLabelText('Novo nome de Gestor')).not.toBeInTheDocument())
+  })
+
+  it('cancelar não chama a API', async () => {
+    vi.mocked(usersApi.listManagedUsers).mockResolvedValue(page([created]))
+
+    const user = userEvent.setup()
+    renderWithProviders(<UserAdmin />, { role: 'Manager', route: '/usuarios' })
+
+    await user.click(await screen.findByRole('button', { name: 'Editar o nome de Pessoa Nova' }))
+    await user.type(screen.getByLabelText('Novo nome de Pessoa Nova'), ' Silva')
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(usersApi.changeName).not.toHaveBeenCalled()
+    expect(screen.getByText('Pessoa Nova')).toBeInTheDocument()
   })
 })
 

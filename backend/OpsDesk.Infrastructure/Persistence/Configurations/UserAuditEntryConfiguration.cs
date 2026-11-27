@@ -11,8 +11,8 @@ public class UserAuditEntryConfiguration : IEntityTypeConfiguration<UserAuditEnt
         builder.HasKey(a => a.Id);
 
         builder.Property(a => a.Action).HasConversion<string>().HasMaxLength(40).IsRequired();
-        builder.Property(a => a.PreviousValue).HasMaxLength(100);
-        builder.Property(a => a.NewValue).HasMaxLength(100);
+        builder.Property(a => a.PreviousValue).HasMaxLength(200);
+        builder.Property(a => a.NewValue).HasMaxLength(200);
 
         builder.HasOne<User>()
             .WithMany()

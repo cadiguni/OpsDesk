@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpsDesk.Application.Attachments;
 using OpsDesk.Application.Common;
 using OpsDesk.Application.Inbound;
 using OpsDesk.Application.Notifications;
@@ -380,7 +381,108 @@ public class InboundEmailTests(PostgresFixture fixture) : TicketTestBase(fixture
         Assert.Empty(Fixture.Api.Mailbox.MarkedAsRead);
     }
 
+    // ----- Anexos da mensagem -----
+
+    private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4];
+
+    /// <summary>
+    /// O print colado no corpo e o PDF anexado entram no chamado, visíveis ao solicitante;
+    /// a marca <c>[cid:…]</c> do texto vira o nome do arquivo. O executável fica de fora,
+    /// pela mesma lista de tipos do portal, sem impedir o chamado.
+    /// </summary>
+    [Fact]
+    public async Task Anexos_e_imagens_do_corpo_entram_no_chamado_novo()
+    {
+        var world = await SetUpWithMailboxAsync();
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, await EmailOfAsync(world.RequesterId), "Erro no sistema",
+            "Veja o erro:\n\n[cid:ABC-123]\n\nAtenciosamente,\n[cid:nao-trazida]",
+            attachments:
+            [
+                new FetchedAttachment("print.png", "image/png", Png, IsInline: true, ContentId: "<abc-123>"),
+                new FetchedAttachment("relatorio.pdf", "application/pdf", [1, 2, 3], IsInline: false, ContentId: null),
+                new FetchedAttachment("virus.exe", "application/x-msdownload", [1, 2], IsInline: false, ContentId: null)
+            ]);
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        var ticket = await db.Tickets.SingleAsync(t => t.Source == TicketSource.Email);
+
+        Assert.Contains("[imagem: print.png]", ticket.Description);
+        Assert.Contains("[imagem]", ticket.Description);
+        Assert.DoesNotContain("[cid:", ticket.Description);
+
+        var attachments = await ListAttachmentsAsync(world.Requester, ticket.Id);
+        Assert.Equal(["print.png", "relatorio.pdf"], attachments.Select(a => a.FileName).Order().ToArray());
+        Assert.All(attachments, a =>
+        {
+            Assert.Null(a.CommentId);
+            Assert.False(a.IsInternal);
+            Assert.Equal(world.RequesterId, a.UploadedById);
+        });
+        Assert.True(attachments.Single(a => a.FileName == "print.png").IsImage);
+    }
+
+    /// <summary>
+    /// A imagem da assinatura volta em toda resposta. No chamado que já a tem, ela não entra
+    /// de novo; o print novo da resposta entra, no comentário.
+    /// </summary>
+    [Fact]
+    public async Task Resposta_traz_o_print_novo_e_nao_repete_a_imagem_da_assinatura()
+    {
+        var world = await SetUpWithMailboxAsync();
+        var from = await EmailOfAsync(world.RequesterId);
+        var signature = new FetchedAttachment("logo.png", "image/png", Png, IsInline: true, ContentId: "logo");
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, from, "VPN", "Não conecta.\n[cid:logo]", attachments: [signature]);
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        var ticket = await db.Tickets.SingleAsync(t => t.Source == TicketSource.Email);
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, from, $"RE: [{ticket.Code}] VPN", "Segue o print.\n[cid:tela]\n[cid:logo]",
+            attachments:
+            [
+                new FetchedAttachment("tela.png", "image/png", [0x89, 0x50, 9, 9, 9], IsInline: true, ContentId: "tela"),
+                signature
+            ]);
+        await SyncAsync();
+
+        var attachments = await ListAttachmentsAsync(world.Requester, ticket.Id);
+        Assert.Equal(2, attachments.Count);
+        Assert.Null(attachments.Single(a => a.FileName == "logo.png").CommentId);
+
+        var comment = await db.TicketComments.SingleAsync(c => c.TicketId == ticket.Id);
+        Assert.Equal(comment.Id, attachments.Single(a => a.FileName == "tela.png").CommentId);
+        Assert.Contains("[imagem: tela.png]", comment.Content);
+    }
+
+    /// <summary>Resposta automática, spam e duplicata não baixam anexo nenhum.</summary>
+    [Fact]
+    public async Task Mensagem_retida_nao_baixa_anexos()
+    {
+        var world = await SetUpWithMailboxAsync();
+
+        Fixture.Api.Mailbox.Deliver(Mailbox, await EmailOfAsync(world.RequesterId), "Ausente", "Estou de férias.",
+            headers: new Dictionary<string, string> { ["auto-submitted"] = "auto-replied" },
+            attachments: [new FetchedAttachment("foto.png", "image/png", Png, IsInline: true, ContentId: "foto")]);
+        await SyncAsync();
+
+        await using var db = Fixture.CreateContext();
+        Assert.False(await db.Tickets.AnyAsync(t => t.Source == TicketSource.Email));
+        Assert.Empty(Fixture.Api.Mailbox.AttachmentsFetched);
+        Assert.False(await db.TicketAttachments.AnyAsync());
+    }
+
     // ----- Atalhos -----
+
+    private static async Task<List<AttachmentItem>> ListAttachmentsAsync(HttpClient client, Guid ticketId)
+    {
+        var response = await client.GetAsync($"/api/tickets/{ticketId}/attachments");
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadJsonAsync<List<AttachmentItem>>())!;
+    }
 
     private async Task<World> SetUpWithMailboxAsync(bool sendingEnabled = true)
     {

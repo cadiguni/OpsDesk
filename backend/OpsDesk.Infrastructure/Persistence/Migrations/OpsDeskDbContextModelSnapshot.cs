@@ -313,6 +313,11 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("processing_error");
 
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("provider_id");
+
                     b.Property<DateTimeOffset>("ReceivedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("received_at");
@@ -1237,13 +1242,13 @@ namespace OpsDesk.Infrastructure.Persistence.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<string>("NewValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("new_value");
 
                     b.Property<string>("PreviousValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("previous_value");
 
                     b.Property<Guid>("UserId")

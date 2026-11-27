@@ -21,6 +21,12 @@ public class InboundEmail : IHasCreatedAt
     /// <summary>Cabeçalho Message-ID. É o que identifica reentrega do mesmo e-mail.</summary>
     public string? MessageId { get; set; }
 
+    /// <summary>
+    /// Identificador da mensagem no provedor, para baixar os anexos na entrega. Nulo nas
+    /// mensagens lidas antes de os anexos serem trazidos.
+    /// </summary>
+    public string? ProviderId { get; set; }
+
     public string? InReplyTo { get; set; }
 
     public string? References { get; set; }

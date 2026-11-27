@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Copy, History, KeyRound, Search, UserPlus } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Copy, History, KeyRound, Pencil, Search, UserPlus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { TicketStatusBadge } from '@/components/ticket-badges'
@@ -15,6 +15,7 @@ import { blockingTickets, type AccessGranted, type ManagedUser, type UserAuditAc
 import {
   useChangeActivation,
   useChangeJobTitle,
+  useChangeName,
   useChangeRole,
   useCreateUser,
   useManagedUsers,
@@ -306,6 +307,7 @@ const auditLabels: Record<UserAuditAction, string> = {
   PasswordSetByLink: 'Senha definida pelo link do e-mail',
   MicrosoftAccountLinked: 'Passou a entrar com a conta Microsoft',
   JobTitleChanged: 'Cargo alterado',
+  NameChanged: 'Nome alterado',
 }
 
 function UserHistory({ userId }: { userId: string }) {
@@ -332,6 +334,12 @@ function UserHistory({ userId }: { userId: string }) {
             <> de {roleLabel(entry.previousValue)} para {roleLabel(entry.newValue)}</>
           )}
           {entry.action === 'Created' && entry.newValue && <> como {roleLabel(entry.newValue)}</>}
+          {entry.action === 'NameChanged' && (
+            <>
+              {' '}
+              de {entry.previousValue} para {entry.newValue}
+            </>
+          )}
           {entry.action === 'JobTitleChanged' && (
             <>
               {' '}
@@ -385,8 +393,11 @@ function JobTitleSelect({
 }
 
 function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOption[] }) {
-  const { user: me } = useSession()
+  const { user: me, updateOwnName } = useSession()
   const changeRole = useChangeRole()
+  const changeName = useChangeName()
+  const [editingName, setEditingName] = useState(false)
+  const [draftName, setDraftName] = useState(user.name)
   const changeJobTitle = useChangeJobTitle()
   const changeActivation = useChangeActivation()
   const resetPassword = useResetUserPassword()
@@ -398,8 +409,13 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
   const isSelf = me?.id === user.id
   const hasOpenTickets = user.openAssignedTickets > 0
   const pending =
-    changeRole.isPending || changeActivation.isPending || resetPassword.isPending || changeJobTitle.isPending
-  const error = changeRole.error ?? changeActivation.error ?? resetPassword.error ?? changeJobTitle.error
+    changeRole.isPending ||
+    changeActivation.isPending ||
+    resetPassword.isPending ||
+    changeJobTitle.isPending ||
+    changeName.isPending
+  const error =
+    changeRole.error ?? changeActivation.error ?? resetPassword.error ?? changeJobTitle.error ?? changeName.error
   const blocking = blockingTickets(error)
 
   function onRoleChange(role: UserRole) {
@@ -412,6 +428,28 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
 
     changeActivation.reset()
     changeRole.mutate({ userId: user.id, role })
+  }
+
+  function onSaveName(event: FormEvent) {
+    event.preventDefault()
+    const name = draftName.trim()
+
+    if (!name || name === user.name) {
+      setEditingName(false)
+      return
+    }
+
+    changeName.mutate(
+      { userId: user.id, name },
+      {
+        onSuccess: (saved) => {
+          setEditingName(false)
+          if (isSelf) {
+            updateOwnName(saved.name)
+          }
+        },
+      },
+    )
   }
 
   function onToggleActive() {
@@ -430,12 +468,53 @@ function UserRow({ user, jobTitles }: { user: ManagedUser; jobTitles: JobTitleOp
     <li className="space-y-3 p-4">
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-56 flex-1">
-          <p className="flex flex-wrap items-center gap-2 font-medium">
-            {user.name}
-            {isSelf && <Badge variant="secondary">Você</Badge>}
-            {!user.isActive && <Badge variant="outline">Desativado</Badge>}
-            {user.mustChangePassword && <Badge variant="outline">Senha provisória</Badge>}
-          </p>
+          {editingName ? (
+            <form className="flex flex-wrap items-center gap-2" onSubmit={onSaveName}>
+              <Input
+                value={draftName}
+                maxLength={200}
+                autoFocus
+                aria-label={`Novo nome de ${user.name}`}
+                className="h-8 max-w-72"
+                onChange={(event) => setDraftName(event.target.value)}
+              />
+              <Button type="submit" size="sm" disabled={pending || !draftName.trim()}>
+                Salvar
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setEditingName(false)
+                  changeName.reset()
+                }}
+              >
+                Cancelar
+              </Button>
+            </form>
+          ) : (
+            <p className="flex flex-wrap items-center gap-2 font-medium">
+              {user.name}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label={`Editar o nome de ${user.name}`}
+                title="Editar nome"
+                disabled={pending}
+                onClick={() => {
+                  setDraftName(user.name)
+                  setEditingName(true)
+                }}
+              >
+                <Pencil />
+              </Button>
+              {isSelf && <Badge variant="secondary">Você</Badge>}
+              {!user.isActive && <Badge variant="outline">Desativado</Badge>}
+              {user.mustChangePassword && <Badge variant="outline">Senha provisória</Badge>}
+            </p>
+          )}
           <p className="text-muted-foreground truncate text-sm">{user.email}</p>
           <p className="text-muted-foreground mt-1 text-xs">
             Desde {formatDate(user.createdAt)}

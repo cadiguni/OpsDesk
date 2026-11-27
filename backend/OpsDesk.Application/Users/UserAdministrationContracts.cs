@@ -37,6 +37,9 @@ public record ChangeActivationRequest(bool IsActive);
 /// </summary>
 public record CreateUserRequest(string Name, string Email, UserRole Role, Guid? JobTitleId = null);
 
+/// <summary>Troca o nome exibido. O e-mail, que identifica a conta, não muda por aqui.</summary>
+public record ChangeNameRequest(string Name);
+
 /// <summary>Troca o cargo. Nulo tira o cargo da pessoa.</summary>
 public record ChangeJobTitleRequest(Guid? JobTitleId);
 

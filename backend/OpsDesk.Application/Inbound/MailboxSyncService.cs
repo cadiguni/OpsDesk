@@ -138,6 +138,7 @@ public class MailboxSyncService(
     {
         EmailAccountId = account.Id,
         MessageId = Limit(message.MessageId?.Trim(), 998),
+        ProviderId = message.ProviderId.Length <= 512 ? message.ProviderId : null,
         InReplyTo = Limit(message.InReplyTo, 998),
         References = Limit(message.References, 8000),
         FromName = Limit(message.FromName, 200) ?? "",

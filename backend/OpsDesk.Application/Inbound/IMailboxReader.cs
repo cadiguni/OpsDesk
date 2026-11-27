@@ -18,6 +18,11 @@ public record FetchedMessage(
     DateTimeOffset ReceivedAt,
     IReadOnlyDictionary<string, string> Headers);
 
+/// <summary>Anexo de uma mensagem, já com o conteúdo.</summary>
+/// <param name="IsInline">Imagem no corpo do e-mail (print colado, imagem da assinatura).</param>
+/// <param name="ContentId">O <c>cid</c> pelo qual o corpo se refere à imagem inline.</param>
+public record FetchedAttachment(string FileName, string ContentType, byte[] Content, bool IsInline, string? ContentId);
+
 /// <summary>
 /// Leitura da caixa monitorada (docs/integracao-email.md, seção 4.1). A implementação de
 /// produção fala com o Microsoft Graph; os testes trocam por uma em memória.
@@ -34,4 +39,16 @@ public interface IMailboxReader
     /// </summary>
     Task MarkAsReadAsync(
         EmailSenderCredentials credentials, string mailbox, string providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Anexos de arquivo da mensagem com até <paramref name="maxSizeInBytes"/>; os maiores
+    /// nem são baixados. Mensagem que não existe mais na caixa devolve lista vazia: o
+    /// chamado sai sem os anexos em vez de não sair.
+    /// </summary>
+    Task<IReadOnlyList<FetchedAttachment>> FetchAttachmentsAsync(
+        EmailSenderCredentials credentials,
+        string mailbox,
+        string providerId,
+        long maxSizeInBytes,
+        CancellationToken cancellationToken = default);
 }

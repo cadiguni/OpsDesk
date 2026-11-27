@@ -9,6 +9,11 @@ public class FakeMailboxReader : IMailboxReader
 {
     private readonly ConcurrentDictionary<string, List<FetchedMessage>> _unread = new();
 
+    private readonly ConcurrentDictionary<string, IReadOnlyList<FetchedAttachment>> _attachments = new();
+
+    /// <summary>Mensagens cujos anexos foram pedidos, pelo identificador do provedor.</summary>
+    public ConcurrentBag<string> AttachmentsFetched { get; } = [];
+
     public List<string> MarkedAsRead { get; } = [];
 
     /// <summary>Quando preenchido, a leitura falha com esta mensagem.</summary>
@@ -17,6 +22,8 @@ public class FakeMailboxReader : IMailboxReader
     public void Reset()
     {
         _unread.Clear();
+        _attachments.Clear();
+        AttachmentsFetched.Clear();
         MarkedAsRead.Clear();
         FailWith = null;
     }
@@ -29,7 +36,8 @@ public class FakeMailboxReader : IMailboxReader
         string? fromName = null,
         string? messageId = null,
         string? inReplyTo = null,
-        IReadOnlyDictionary<string, string>? headers = null)
+        IReadOnlyDictionary<string, string>? headers = null,
+        IReadOnlyList<FetchedAttachment>? attachments = null)
     {
         var message = new FetchedMessage(
             Guid.NewGuid().ToString("N"),
@@ -45,6 +53,11 @@ public class FakeMailboxReader : IMailboxReader
             headers ?? new Dictionary<string, string>());
 
         _unread.GetOrAdd(mailbox.ToLowerInvariant(), _ => []).Add(message);
+
+        if (attachments is not null)
+        {
+            _attachments[message.ProviderId] = attachments;
+        }
 
         return message;
     }
@@ -73,5 +86,21 @@ public class FakeMailboxReader : IMailboxReader
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<FetchedAttachment>> FetchAttachmentsAsync(
+        EmailSenderCredentials credentials,
+        string mailbox,
+        string providerId,
+        long maxSizeInBytes,
+        CancellationToken cancellationToken = default)
+    {
+        AttachmentsFetched.Add(providerId);
+
+        IReadOnlyList<FetchedAttachment> found = _attachments.TryGetValue(providerId, out var list)
+            ? [.. list.Where(a => a.Content.Length <= maxSizeInBytes)]
+            : [];
+
+        return Task.FromResult(found);
     }
 }

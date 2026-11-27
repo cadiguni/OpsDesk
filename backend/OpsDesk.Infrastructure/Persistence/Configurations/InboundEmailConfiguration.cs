@@ -12,6 +12,7 @@ public class InboundEmailConfiguration : IEntityTypeConfiguration<InboundEmail>
 
         // 998 é o limite de linha de cabeçalho da RFC 5322.
         builder.Property(e => e.MessageId).HasMaxLength(998);
+        builder.Property(e => e.ProviderId).HasMaxLength(512);
         builder.Property(e => e.InReplyTo).HasMaxLength(998);
         builder.Property(e => e.References).HasMaxLength(8000);
         builder.Property(e => e.FromName).HasMaxLength(200).IsRequired();

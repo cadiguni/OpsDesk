@@ -40,6 +40,10 @@ public static class UserAdministrationEndpoints
             .ValidatingBody<ChangeRoleRequest>()
             .WithSummary("Troca o perfil. Rebaixar derruba as sessões da pessoa.");
 
+        group.MapPost("/{id:guid}/name", ChangeName)
+            .ValidatingBody<ChangeNameRequest>()
+            .WithSummary("Troca o nome exibido. Vale também para a própria conta.");
+
         group.MapPost("/{id:guid}/job-title", ChangeJobTitle)
             .ValidatingBody<ChangeJobTitleRequest>()
             .WithSummary("Troca o cargo, só informativo. Vale também para a própria conta.");
@@ -97,6 +101,14 @@ public static class UserAdministrationEndpoints
         ICurrentUser currentUser,
         CancellationToken cancellationToken) =>
         ToResult(await users.ChangeRoleAsync(id, request, currentUser.Viewer, cancellationToken));
+
+    private static async Task<IResult> ChangeName(
+        Guid id,
+        ChangeNameRequest request,
+        UserAdministrationService users,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken) =>
+        ToResult(await users.ChangeNameAsync(id, request, currentUser.Viewer, cancellationToken));
 
     private static async Task<IResult> ChangeJobTitle(
         Guid id,

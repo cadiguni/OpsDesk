@@ -49,6 +49,13 @@ export async function changeRole(userId: string, role: UserRole): Promise<Manage
   return data
 }
 
+/** Troca o nome exibido. Vale também para a própria conta. */
+export async function changeName(userId: string, name: string): Promise<ManagedUser> {
+  const { data } = await api.post<ManagedUser>(`/api/admin/users/${userId}/name`, { name })
+
+  return data
+}
+
 /** Troca o cargo; `null` tira. Vale também para a própria conta. */
 export async function changeJobTitle(userId: string, jobTitleId: string | null): Promise<ManagedUser> {
   const { data } = await api.post<ManagedUser>(`/api/admin/users/${userId}/job-title`, { jobTitleId })
@@ -84,6 +91,7 @@ export type UserAuditAction =
   | 'PasswordSetByLink'
   | 'MicrosoftAccountLinked'
   | 'JobTitleChanged'
+  | 'NameChanged'
 
 export type UserAuditItem = {
   action: UserAuditAction

@@ -199,6 +199,42 @@ public class UserAdministrationService(
         return await ChangedAsync(user.Id, cancellationToken);
     }
 
+    /// <summary>
+    /// Troca o nome exibido. Como o cargo, vale também para a própria conta: o nome não dá
+    /// permissão. É o caminho para corrigir o nome do administrador do bootstrap, que nasce
+    /// com um nome genérico.
+    /// </summary>
+    public async Task<ChangeUserResult> ChangeNameAsync(
+        Guid userId,
+        ChangeNameRequest request,
+        TicketViewer actor,
+        CancellationToken cancellationToken = default)
+    {
+        if (!await IsActiveManagerAsync(actor, cancellationToken))
+        {
+            return new ChangeUserResult.NotAllowed();
+        }
+
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user is null)
+        {
+            return new ChangeUserResult.UserNotFound();
+        }
+
+        var name = request.Name.Trim();
+
+        if (user.Name != name)
+        {
+            user.Name = name;
+            await db.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Nome de {UserId} alterado por {ActorId}.", user.Id, actor.UserId);
+        }
+
+        return await ChangedAsync(user.Id, cancellationToken);
+    }
+
     private Task<bool> IsSelectableJobTitleAsync(Guid jobTitleId, CancellationToken cancellationToken) =>
         db.JobTitles.AnyAsync(j => j.Id == jobTitleId && j.IsActive, cancellationToken);
 

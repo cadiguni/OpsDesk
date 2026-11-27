@@ -199,6 +199,19 @@ Prioridade nunca é inferida do conteúdo. Remetente ansioso escreve "URGENTE" n
 
 O `InboundEmail` passa a `Processed` com `TicketId` preenchido.
 
+### 4.7.1 Anexos e imagens da mensagem
+
+Os anexos de arquivo da mensagem entram no chamado: na abertura, quando a mensagem vira chamado novo, ou no comentário, quando é resposta. Isso inclui as imagens **inline**, como o print colado no corpo do e-mail.
+
+* **Caminho:** é o mesmo do portal (invariante 9 do CLAUDE.md). Cada arquivo é gravado como anexo pendente do remetente e vinculado na mesma entrega; o comentário vindo de e-mail é sempre público.
+* **Limites:** a mesma lista de tipos, os mesmos 10 MB por arquivo e o mesmo teto por chamado do portal. O que não serve fica de fora sem impedir o chamado. Arquivo grande demais nem é baixado.
+* **Quando baixa:** na entrega, e não na leitura da caixa. Duplicata, resposta automática e spam não ocupam armazenamento. Mensagem liberada da caixa de SPAM baixa os anexos nesse momento; se ela já tiver sido apagada da caixa de correio, o chamado sai sem eles. Falha do Graph ao baixar falha o processamento, que volta à fila (4.8) antes de o chamado existir.
+* **Marca no texto:** no texto puro que o Graph entrega, cada imagem inline aparece como `[cid:…]`. A marca vira `[imagem: nome.png]`, e o arquivo aparece como miniatura logo abaixo. A marca de imagem que não foi trazida vira só `[imagem]`.
+* **Assinatura repetida:** a imagem inline da assinatura volta em toda resposta. Num chamado que já tem uma imagem inline com o mesmo nome e tamanho, ela não entra de novo.
+* **Imagem externa:** a imagem que a assinatura carrega de um site, como um GIF hospedado no servidor da empresa, não é anexo. Ela continua como o endereço entre colchetes no texto e não é carregada, pelo mesmo motivo do corpo em texto puro (seção 9): carregar imagem externa avisa o remetente de quem abriu e quando. O nome técnico disso é *pixel de rastreamento*.
+
+Mensagens lidas antes desta versão não guardaram o identificador do provedor (`ProviderId`) e são reprocessadas sem anexos.
+
 ### 4.8 Falhas
 
 Erro durante o processamento grava status `Failed` e a mensagem em `ProcessingError`, sem perder o `InboundEmail`. Há reprocessamento manual pela interface e tentativa automática com espera crescente — 1, 5 e 15 minutos —, até três vezes.
@@ -372,7 +385,6 @@ Comentários internos nunca são enviados por e-mail. Essa é a mesma regra da s
 
 ## 7. Fora do escopo desta integração
 
-* anexos de e-mail. A entrega de anexos existe desde a 1.0, mas trazer os da mensagem ficou para depois (seção 10);
 * criptografia de mensagem, S/MIME ou PGP;
 * classificação por aprendizado de máquina;
 * múltiplos idiomas na detecção de conteúdo;
@@ -413,6 +425,5 @@ Todos têm teste de integração, em `InboundEmailTests`.
 
 ## 10. Para depois
 
-* **anexos da mensagem.** Entrariam pelo caminho de anexo pendente e vinculado, ligados ao comentário ou à abertura que a mensagem virar, com os mesmos limites de tipo e tamanho;
 * **IMAP**, se aparecer caixa fora do Microsoft 365. É outra implementação de `IMailboxReader`;
 * **assinatura de webhook do Graph** no lugar da consulta a cada minuto, se o atraso incomodar.

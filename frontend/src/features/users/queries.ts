@@ -63,6 +63,15 @@ export function useChangeRole() {
   })
 }
 
+export function useChangeName() {
+  const invalidate = useInvalidateUsers()
+
+  return useMutation({
+    mutationFn: ({ userId, name }: { userId: string; name: string }) => usersApi.changeName(userId, name),
+    onSettled: invalidate,
+  })
+}
+
 export function useChangeJobTitle() {
   const invalidate = useInvalidateUsers()
   const queryClient = useQueryClient()

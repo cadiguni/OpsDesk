@@ -95,6 +95,12 @@ public class UserAuditInterceptor(ICurrentUser currentUser, IClock clock) : Save
                 null, null, actor, now);
         }
 
+        var name = entry.Property(u => u.Name);
+        if (name.IsModified && name.OriginalValue != name.CurrentValue)
+        {
+            yield return New(user.Id, UserAuditAction.NameChanged, name.OriginalValue, name.CurrentValue, actor, now);
+        }
+
         var jobTitle = entry.Property(u => u.JobTitleId);
         if (jobTitle.IsModified && jobTitle.OriginalValue != jobTitle.CurrentValue)
         {

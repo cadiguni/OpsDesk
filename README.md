@@ -926,6 +926,7 @@ Só administrador. Lista todos os usuários, ativos e desativados, com busca por
 Ações:
 
 * **cadastrar** uma pessoa, com nome, e-mail, perfil e, opcionalmente, cargo;
+* **trocar o nome** exibido, inclusive o da própria conta — é assim que o administrador do bootstrap deixa de se chamar pelo nome genérico. O e-mail, que identifica a conta, não muda;
 * **trocar o cargo**, inclusive o da própria conta — cargo não dá permissão, então a trava da própria conta não se aplica a ele;
 * **redefinir a senha** de alguém;
 * **trocar o perfil** entre Usuário, Técnico e Administrador;
@@ -1627,7 +1628,6 @@ O que ficou para depois, com o que precisa ser decidido antes:
 | Item | A decidir |
 | --- | --- |
 | Agrupar e-mails de chamado muito ativo | se incomodar no uso real, segurar o e-mail alguns minutos e juntar o que chegar. Atrasar o aviso também custa (versão 1.2, acima) |
-| Anexos de e-mail recebido | entram pelo caminho de anexo pendente e vinculado; falta decidir o que fazer com tipo não aceito e com imagem embutida em assinatura |
 | Sincronização contínua com Freshdesk ou Freshservice | só faz sentido se as duas ferramentas forem conviver. Para migrar, a importação por arquivo resolve |
 | Importação do GLPI | a origem já existe no modelo; falta o mapeamento das colunas da exportação |
 | Leitura de caixa por IMAP | só se aparecer caixa fora do Microsoft 365 |
