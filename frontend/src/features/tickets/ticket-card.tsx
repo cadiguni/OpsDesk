@@ -45,7 +45,7 @@ export function TicketCard({ ticket, showRequester }: { ticket: TicketListItem; 
     <Link
       to={`/chamados/${ticket.id}`}
       className={cn(
-        'group relative flex gap-4 overflow-hidden rounded-xl border bg-card p-4 pl-5 shadow-sm',
+        'group relative flex h-full gap-4 overflow-hidden rounded-xl border bg-card p-4 pl-5 shadow-sm',
         'transition-colors hover:border-primary/40 hover:bg-accent/40',
         'focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
       )}
@@ -55,19 +55,24 @@ export function TicketCard({ ticket, showRequester }: { ticket: TicketListItem; 
         className={cn('absolute inset-y-0 left-0 w-1.5', priorityAccent[ticket.priority])}
       />
 
-      <div className="min-w-0 flex-1 space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-          <div className="min-w-0 space-y-1">
+      {/* Coluna com o rodapé de SLA preso embaixo: na grade, cartões vizinhos ficam com a
+          mesma altura e as mesmas linhas no mesmo lugar, seja o título curto ou longo. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="space-y-1">
+          {/* Código e selos dividem a primeira linha. Ao lado do título, os selos desciam
+              ou não conforme o tamanho dele, e cada cartão saía num formato. */}
+          <div className="flex items-center justify-between gap-3">
             <p className="text-muted-foreground font-mono text-xs">{ticket.code}</p>
-            <h2 className="leading-snug font-medium break-words group-hover:underline">
-              {ticket.title}
-            </h2>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <TicketStatusBadge status={ticket.status} />
+              <TicketPriorityBadge priority={ticket.priority} />
+            </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-            <TicketStatusBadge status={ticket.status} />
-            <TicketPriorityBadge priority={ticket.priority} />
-          </div>
+          {/* Duas linhas no máximo; o título inteiro fica na dica e no detalhe. */}
+          <h2 title={ticket.title} className="line-clamp-2 leading-snug font-medium break-words group-hover:underline">
+            {ticket.title}
+          </h2>
         </div>
 
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
@@ -87,7 +92,7 @@ export function TicketCard({ ticket, showRequester }: { ticket: TicketListItem; 
         </div>
 
         {tracksSla && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2.5 text-xs">
+          <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2.5 text-xs">
             <span className="text-muted-foreground">
               Resposta{' '}
               <span className={deadlineToneClasses[response.tone]}>{response.short}</span>

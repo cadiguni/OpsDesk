@@ -44,7 +44,8 @@ export async function importTickets(input: {
 }
 
 export type ReconciliationNote = {
-  spiceworksNumber: number
+  /** Número no Spiceworks; nulo para chamado do OpsDesk ausente da exportação. */
+  spiceworksNumber: number | null
   /** Código do chamado no OpsDesk, quando há correspondente. */
   code: string | null
   message: string
@@ -61,6 +62,8 @@ export type SpiceworksReconciliationReport = {
   datesFixed: number
   closed: number
   stillOpen: number
+  /** Chamados de e-mail em andamento no OpsDesk que a exportação não tem. */
+  openOnlyHere: number
   notes: ReconciliationNote[]
 }
 

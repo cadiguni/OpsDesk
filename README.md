@@ -1049,6 +1049,7 @@ Os passos são os mesmos da importação: conferir e depois aplicar. Para cada c
 * **aberto lá:** continua como está. Se aqui o chamado já terminou, a conferência aponta para ser revisto à mão, assim como o chamado aberto lá que não tem correspondente aqui;
 * **sem aviso e sem linha no histórico:** é correção de origem, não atendimento. Fechar pelo caminho normal mandaria um aviso a cada solicitante de chamados atendidos meses atrás. A gravação passa ao largo dos interceptores, como a recuperação de anexos (docs/integracao-email.md, 4.7.1);
 * **aplicar de novo não muda nada;**
+* **em andamento aqui e ausente lá:** o chamado de e-mail do OpsDesk que a exportação não tem — chegou depois dela, ou o Spiceworks não o conhece — não muda, e a conferência o lista, com link para o chamado, para ser revisto à mão;
 * fica de fora o chamado aberto no Spiceworks sem e-mail, que não tem Message-ID para casar. O arquivo pode ter até 25 MB.
 
 ### 13.15 E-mails recebidos e caixa de SPAM

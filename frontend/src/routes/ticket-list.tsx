@@ -440,13 +440,13 @@ export function TicketList() {
 
           {tickets.data.items.map((ticket) =>
             isStaff ? (
-              <div key={ticket.id} className="flex items-start gap-2">
+              <div key={ticket.id} className="flex items-stretch gap-2">
                 {/* Fora do cartão, que é um link inteiro: controle dentro de link é ambíguo
                     para teclado e leitor de tela, e o clique abriria o chamado. */}
                 <input
                   type="checkbox"
                   aria-label={`Selecionar ${ticket.code}`}
-                  className="accent-primary mt-5 size-4 shrink-0"
+                  className="accent-primary mt-4 size-4 shrink-0 self-start"
                   checked={selectedIds.includes(ticket.id)}
                   onChange={() => toggleSelected(ticket.id)}
                 />

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { FileCheck2, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -95,7 +96,9 @@ export function SpiceworksReconciliation() {
             {report.notFound > 0 &&
               `${plural(report.notFound, 'chamado de e-mail não tem', 'chamados de e-mail não têm')} correspondente no OpsDesk. `}
             {report.withoutMessageId > 0 &&
-              `${plural(report.withoutMessageId, 'foi aberto', 'foram abertos')} sem e-mail no Spiceworks e não ${report.withoutMessageId === 1 ? 'entra' : 'entram'} na conciliação.`}
+              `${plural(report.withoutMessageId, 'foi aberto', 'foram abertos')} sem e-mail no Spiceworks e não ${report.withoutMessageId === 1 ? 'entra' : 'entram'} na conciliação. `}
+            {report.openOnlyHere > 0 &&
+              `${plural(report.openOnlyHere, 'chamado de e-mail em andamento', 'chamados de e-mail em andamento')} no OpsDesk não ${report.openOnlyHere === 1 ? 'aparece' : 'aparecem'} na exportação: ou ${report.openOnlyHere === 1 ? 'chegou' : 'chegaram'} depois dela, ou o Spiceworks não ${report.openOnlyHere === 1 ? 'o' : 'os'} tem. A conciliação não mexe neles — estão na lista abaixo.`}
           </p>
 
           {report.notes.length > 0 && (
@@ -103,10 +106,16 @@ export function SpiceworksReconciliation() {
               <p className="text-sm font-medium">Para conferir à mão:</p>
               <ul className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-3 text-sm">
                 {report.notes.map((note) => (
-                  <li key={note.spiceworksNumber}>
+                  <li key={`${note.spiceworksNumber ?? ''}-${note.code ?? ''}`}>
                     <span className="text-muted-foreground font-mono">
-                      #{note.spiceworksNumber}
-                      {note.code && ` · ${note.code}`}:{' '}
+                      {note.spiceworksNumber !== null && `#${note.spiceworksNumber}`}
+                      {note.spiceworksNumber !== null && note.code && ' · '}
+                      {note.code && (
+                        <Link to={`/chamados?search=${encodeURIComponent(note.code)}`} className="hover:text-foreground underline">
+                          {note.code}
+                        </Link>
+                      )}
+                      :{' '}
                     </span>
                     {note.message}
                   </li>

@@ -88,6 +88,24 @@ public class SpiceworksReconciliationTests(PostgresFixture fixture) : TicketTest
     }
 
     [Fact]
+    public async Task Chamado_em_andamento_ausente_da_exportacao_vai_para_conferencia()
+    {
+        var world = await SetUpAsync();
+        await EmailTicketAsync(world, "<par@outlook.com>");
+        var orphan = await EmailTicketAsync(world, "<orfao@outlook.com>");
+        var finished = await EmailTicketAsync(world, "<terminado@outlook.com>");
+        await ChangeStatusAsync(world.Technician, finished, TicketStatus.Closed);
+
+        var report = await ReconcileAsync(world.Manager, Export(Item(1, "par@outlook.com", "Closed", January)), dryRun: true);
+
+        // Só o órfão em andamento: o fechado aqui não pede nada.
+        Assert.Equal(1, report.OpenOnlyHere);
+        var note = Assert.Single(report.Notes);
+        Assert.Null(note.SpiceworksNumber);
+        Assert.Equal((await GetAsync(world.Technician, orphan)).Code, note.Code);
+    }
+
+    [Fact]
     public async Task So_administrador_concilia_e_arquivo_que_nao_e_do_spiceworks_e_recusado()
     {
         var world = await SetUpAsync();

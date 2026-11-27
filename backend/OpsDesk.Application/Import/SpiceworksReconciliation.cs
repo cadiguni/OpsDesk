@@ -9,7 +9,7 @@ using OpsDesk.Domain.Enums;
 namespace OpsDesk.Application.Import;
 
 /// <summary>Um chamado do OpsDesk que pede atenção à parte na conciliação.</summary>
-public record ReconciliationNote(int SpiceworksNumber, string? Code, string Message);
+public record ReconciliationNote(int? SpiceworksNumber, string? Code, string Message);
 
 /// <summary>O que a conciliação encontrou (e, fora da conferência, aplicou).</summary>
 public record SpiceworksReconciliationReport(
@@ -21,6 +21,7 @@ public record SpiceworksReconciliationReport(
     int DatesFixed,
     int Closed,
     int StillOpen,
+    int OpenOnlyHere,
     IReadOnlyList<ReconciliationNote> Notes);
 
 /// <summary>
@@ -196,6 +197,20 @@ public class SpiceworksReconciliation(
                 cancellationToken);
         }
 
+        // O que sobrou no dicionário não tem par na exportação. Os ainda em andamento são os que
+        // a conciliação não tem como resolver: ou chegaram depois da exportação, ou o Spiceworks
+        // não os conhece. A data deles é a da leitura da caixa, então não dá para separar os dois
+        // casos pela abertura — a lista vai para conferência à mão.
+        var openOnlyHere = tickets.Values
+            .Where(t => t.Status is not (TicketStatus.Resolved or TicketStatus.Closed or TicketStatus.Cancelled))
+            .OrderBy(t => t.Code)
+            .ToList();
+
+        foreach (var ticket in openOnlyHere)
+        {
+            Note(notes, null, ticket.Code, "em andamento no OpsDesk e ausente da exportação: chegou depois dela, ou o Spiceworks não o tem.");
+        }
+
         if (!dryRun)
         {
             logger.LogInformation(
@@ -204,10 +219,10 @@ public class SpiceworksReconciliation(
         }
 
         return new SpiceworksReconciliationReport(
-            dryRun, total, total - exported.Count, matched, notFound, datesFixed, closed, stillOpen, notes);
+            dryRun, total, total - exported.Count, matched, notFound, datesFixed, closed, stillOpen, openOnlyHere.Count, notes);
     }
 
-    private static void Note(List<ReconciliationNote> notes, int number, string? code, string message)
+    private static void Note(List<ReconciliationNote> notes, int? number, string? code, string message)
     {
         if (notes.Count < MaxNotes)
         {

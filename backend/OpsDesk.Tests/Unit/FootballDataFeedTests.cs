@@ -90,7 +90,19 @@ public class FootballDataFeedTests
     {
         var feed = Feed(new QueueHandler(new HttpResponseMessage(HttpStatusCode.InternalServerError)), out _);
 
-        await Assert.ThrowsAsync<FootballFeedUnavailableException>(() => feed.GetStandingsAsync());
+        var error = await Assert.ThrowsAsync<FootballFeedUnavailableException>(() => feed.GetStandingsAsync());
+        Assert.DoesNotContain("recusou", error.Message);
+    }
+
+    [Fact]
+    public async Task Chave_recusada_diz_que_o_problema_e_a_chave()
+    {
+        // É o que acontece enquanto o segredo do Key Vault guarda o valor provisório.
+        var feed = Feed(new QueueHandler(new HttpResponseMessage(HttpStatusCode.Forbidden)), out _, apiKey: "pendente");
+
+        var error = await Assert.ThrowsAsync<FootballFeedUnavailableException>(() => feed.GetStandingsAsync());
+
+        Assert.Contains("recusou a chave", error.Message);
     }
 
     [Fact]

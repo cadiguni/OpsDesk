@@ -22,7 +22,11 @@ function report(overrides: Partial<SpiceworksReconciliationReport> = {}): Spicew
     datesFixed: 2290,
     closed: 2270,
     stillOpen: 28,
-    notes: [{ spiceworksNumber: 2356, code: null, message: 'aberto no Spiceworks e sem chamado correspondente no OpsDesk.' }],
+    openOnlyHere: 1,
+    notes: [
+      { spiceworksNumber: 2356, code: null, message: 'aberto no Spiceworks e sem chamado correspondente no OpsDesk.' },
+      { spiceworksNumber: null, code: 'OPS-002435', message: 'em andamento no OpsDesk e ausente da exportação.' },
+    ],
     ...overrides,
   }
 }
@@ -55,6 +59,9 @@ describe('conciliação com o Spiceworks', () => {
     expect(vi.mocked(importApi.reconcileSpiceworks).mock.lastCall?.[0]).toEqual({ file, dryRun: true })
     expect(await screen.findByText('2.270')).toBeInTheDocument()
     expect(screen.getByText(/#2356/)).toBeInTheDocument()
+    // O chamado que só existe aqui leva à busca por ele na lista.
+    expect(screen.getByRole('link', { name: 'OPS-002435' })).toHaveAttribute('href', '/chamados?search=OPS-002435')
+    expect(screen.getByText(/1 chamado de e-mail em andamento no OpsDesk não aparece/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Aplicar conciliação' }))
 

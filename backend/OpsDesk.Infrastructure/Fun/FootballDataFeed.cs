@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
@@ -52,6 +53,9 @@ public class FootballDataFeed(
 
     /// <summary>Status que ainda vão acontecer, ou estão acontecendo.</summary>
     private static readonly HashSet<string> Pending = ["SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "POSTPONED", "SUSPENDED"];
+
+    private const string RejectedKey =
+        "A football-data.org recusou a chave. Confira o token em Football__ApiKey.";
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.CurrentValue.ApiKey);
 
@@ -151,6 +155,14 @@ public class FootballDataFeed(
             request.Headers.Add("X-Auth-Token", settings.ApiKey);
 
             using var response = await http.SendAsync(request, cancellationToken);
+
+            // Chave recusada não é instabilidade: dizer isso poupa procurar o problema no
+            // lugar errado. É o que se vê enquanto o segredo do Key Vault tem o valor provisório.
+            if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                throw new HttpRequestException(RejectedKey, null, response.StatusCode);
+            }
+
             response.EnsureSuccessStatusCode();
 
             var value = await response.Content.ReadFromJsonAsync<T>(Json, cancellationToken)
@@ -171,7 +183,9 @@ public class FootballDataFeed(
             }
 
             logger.LogWarning(exception, "football-data.org falhou em {Path}, sem cópia anterior.", path);
-            throw new FootballFeedUnavailableException("Não foi possível consultar os dados de futebol agora.", exception);
+            throw new FootballFeedUnavailableException(
+                exception.Message == RejectedKey ? RejectedKey : "Não foi possível consultar os dados de futebol agora.",
+                exception);
         }
     }
 
